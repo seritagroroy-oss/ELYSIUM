@@ -109,10 +109,18 @@ if (isset($_SESSION['user_id'])) {
     </style>
 </head>
 
+<?php
+$baseUrl = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+if ($baseUrl === '/') $baseUrl = '';
+$logoUrl = $baseUrl . '/frontend/public/elysium_logo.png';
+?>
 <body>
     <div class="card">
-        <h1>Création de compte</h1>
-        <p class="sub">Essai gratuit de 15 jours inclus.</p>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="<?php echo $logoUrl; ?>" alt="ELYSIUM Logo" style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid rgba(56,189,248,0.6); box-shadow: 0 0 12px rgba(56,189,248,0.4); object-fit: cover; margin-bottom: 12px;">
+            <h1 style="margin:0; font-size: 2rem; background: linear-gradient(135deg, #fff 0%, #38bdf8 60%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">ELYSIUM</h1>
+        </div>
+        <p class="sub" style="text-align: center;">Essai gratuit de 15 jours inclus.</p>
         <form id="register-form">
             <label for="service">Service</label>
             <input id="service" type="text" required placeholder="RH, Logistique, Comptabilité...">

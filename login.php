@@ -105,10 +105,18 @@ if (isset($_SESSION['user_id'])) {
     </style>
 </head>
 
+<?php
+$baseUrl = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+if ($baseUrl === '/') $baseUrl = '';
+$logoUrl = $baseUrl . '/frontend/public/elysium_logo.png';
+?>
 <body>
     <div class="card">
-        <h1>Connexion</h1>
-        <p class="sub">Connectez-vous à votre compte.</p>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="<?php echo $logoUrl; ?>" alt="ELYSIUM Logo" style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid rgba(56,189,248,0.6); box-shadow: 0 0 12px rgba(56,189,248,0.4); object-fit: cover; margin-bottom: 12px;">
+            <h1 style="margin:0; font-size: 2rem; background: linear-gradient(135deg, #fff 0%, #38bdf8 60%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">ELYSIUM</h1>
+        </div>
+        <p class="sub" style="text-align: center;">Connectez-vous à votre compte.</p>
         <form id="login-form">
             <label for="email">Email</label>
             <input id="email" type="email" required placeholder="nom@entreprise.com">

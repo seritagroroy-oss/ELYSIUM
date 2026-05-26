@@ -237,10 +237,18 @@ if (isset($_SESSION['user_id'])) {
     </style>
 </head>
 
+<?php
+$baseUrl = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+if ($baseUrl === '/') $baseUrl = '';
+$logoUrl = $baseUrl . '/frontend/public/elysium_logo.png';
+?>
 <body>
     <div class="wrap">
         <div class="top">
-            <div class="brand"><i class="fa-solid fa-shield-halved"></i>Pointage Pro</div>
+            <div class="brand" style="display:flex; align-items:center; gap:12px;">
+                <img src="<?php echo $logoUrl; ?>" alt="ELYSIUM Logo" style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(56,189,248,0.6); box-shadow: 0 0 10px rgba(56,189,248,0.4); object-fit: cover;">
+                <span style="font-weight: 900; letter-spacing: 1px; background: linear-gradient(135deg, #fff 0%, #38bdf8 60%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">ELYSIUM</span>
+            </div>
             <div class="lang-selector">
                 <select onchange="changeLanguage(this.value)">
                     <option value="fr" <?php echo $lang == 'fr' ? 'selected' : ''; ?>>FR</option>

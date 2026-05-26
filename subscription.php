@@ -257,11 +257,20 @@ $subscriptionState = $isLoggedIn ? getUserSubscriptionState($_SESSION['user_id']
     </style>
 </head>
 
+<?php
+$baseUrl = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+if ($baseUrl === '/') $baseUrl = '';
+$logoUrl = $baseUrl . '/frontend/public/elysium_logo.png';
+?>
 <body>
     <div class="card">
         <div class="card-inner">
+            <div style="text-align: center; margin-bottom: 16px;">
+                <img src="<?php echo $logoUrl; ?>" alt="ELYSIUM Logo" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid rgba(16,185,129,0.6); box-shadow: 0 0 12px rgba(16,185,129,0.4); object-fit: cover; margin-bottom: 8px;">
+                <h2 style="margin:0; font-size: 1.5rem; background: linear-gradient(135deg, #fff 0%, #10b981 60%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">ELYSIUM</h2>
+            </div>
             <div id="status-badge" class="badge">Verification abonnement...</div>
-            <h1>Abonnement Premium</h1>
+            <h1 style="text-align:center;">Abonnement Premium</h1>
             <p class="subtitle">Essai gratuit de 15 jours, puis choisissez la formule mensuelle ou annuelle pour
                 continuer
                 l'utilisation de la plateforme.</p>
