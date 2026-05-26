@@ -1,8 +1,16 @@
 <?php
 session_start();
 include 'db.php';
+require_once __DIR__ . '/backend/database.php';
 
 header('Content-Type: application/json');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header("Content-Security-Policy: default-src 'self'");
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 $action = $_GET['action'] ?? '';
 $data = json_decode(file_get_contents('php://input'), true);
@@ -403,6 +411,17 @@ if (!in_array($action, $subscriptionExemptActions, true) && isset($_SESSION['use
     }
 }
 
+// Validation CSRF sur les requêtes non-publiques et mutantes (en dehors de GET)
+$mutatingActions = ['add_site', 'add_special_site', 'update_site_icon', 'add_subsite', 'rename_site', 'rename_subsite', 'delete_subsite', 'add_agent', 'delete_agent', 'apply_mutation', 'update_attendance', 'bulk_update_attendance', 'init_site_period', 'apply_batch_rotation', 'update_agent_info', 'clear_site_mutations', 'archive_all_sites', 'delete_archive', 'update_agent_salary', 'update_salary_config', 'save_functions', 'publish_period', 'send_message', 'resolve_ticket', 'create_ticket', 'delete_message', 'pin_message', 'rate_ticket', 'assign_ticket'];
+if (in_array($action, $mutatingActions, true)) {
+    $providedToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $data['csrf_token'] ?? '';
+    if (!hash_equals($_SESSION['csrf_token'] ?? '', $providedToken)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Erreur CSRF: Token invalide']);
+        exit;
+    }
+}
+
 $permissionByAction = [
    'get_dashboard_init' => 'can_view_dashboard',
    'get_sites' => 'can_view_dashboard',
@@ -542,12 +561,19 @@ function updateUserActivity(&$db, $email) {
 
 switch ($action) {
     case 'login':
+       $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
        $email = trim(strtolower($data['email'] ?? ''));
        $password = $data['password'] ?? '';
+
+       if (!checkRateLimit($ip, $email, 5, 15)) {
+           echo json_encode(['success' => false, 'message' => 'Trop de tentatives échouées. Veuillez réessayer dans 15 minutes.']);
+           break;
+       }
 
        $user = getUserByEmail($email);
 
        if ($user && password_verify($password, $user['password'])) {
+           recordLoginAttempt($ip, $email, true);
            if ($email === 'admin@gmail.com') {
                $user['role'] = 'super_admin';
                $user['role_display_name'] = 'Directeur Général';
@@ -565,10 +591,13 @@ switch ($action) {
            echo json_encode([
                'success' => true,
                'subscription_required' => !empty($subscription['access_allowed']) ? false : true,
-               'subscription' => $subscription
+               'subscription' => $subscription,
+               'csrf_token' => $_SESSION['csrf_token']
             ]);
         } else {
-           echo json_encode(['success' => false, 'message' => 'Email ou mot de passe incorrect']);
+           recordLoginAttempt($ip, $email, false);
+           $rem = getRemainingAttempts($ip, 5, 15);
+           echo json_encode(['success' => false, 'message' => 'Email ou mot de passe incorrect. Il vous reste ' . $rem . ' tentative(s).']);
         }
         break;
 
@@ -3790,6 +3819,37 @@ switch ($action) {
        
        saveData($db);
        echo json_encode(['success' => true, 'message' => 'Permissions mises à jour']);
+       break;
+
+    case 'get_stats':
+       $period = $data['period'] ?? date('Y-m');
+       $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+       echo json_encode(getAttendanceStats($companyId, $period));
+       break;
+
+    case 'pointage_gps':
+       $agentId = $data['agent_id'] ?? '';
+       $lat = $data['lat'] ?? 0;
+       $lng = $data['lng'] ?? 0;
+       $period = date('Y-m');
+       // TODO: Valider lat/lng
+       echo json_encode(['success' => true, 'message' => 'Pointage GPS enregistré (Simulation)']);
+       break;
+
+    case 'validate_qr':
+       $token = $data['token'] ?? '';
+       // Basic validation mirroring client logic
+       $secret = 'ELYSIUM2026';
+       $now = floor(time());
+       $window30 = floor($now / 30);
+       $expected = substr(str_replace('=', '', base64_encode($secret . ':' . $window30)), 0, 24);
+       $expectedPrev = substr(str_replace('=', '', base64_encode($secret . ':' . ($window30 - 1))), 0, 24);
+
+       if ($token === $expected || $token === $expectedPrev) {
+           echo json_encode(['success' => true, 'message' => 'Pointage validé par QR Code']);
+       } else {
+           echo json_encode(['success' => false, 'message' => 'Token invalide ou expiré']);
+       }
        break;
 
     default:

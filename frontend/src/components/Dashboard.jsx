@@ -4,8 +4,10 @@ import { apiCall } from '../api';
 import { useAuth } from '../AuthContext';
 import { 
   Plus, CalendarDays, RefreshCw, Archive, UserPlus, 
-  Trash, Edit, Check, X, AlertTriangle, ArrowLeftRight, Clock, HelpCircle, Save, Loader2, ChevronLeft, ChevronRight, Star
+  Trash, Edit, Check, X, AlertTriangle, ArrowLeftRight, Clock, HelpCircle, Save, Loader2, ChevronLeft, ChevronRight, Star, TrendingUp, Shield
 } from 'lucide-react';
+import StatsPanel from './StatsPanel';
+import QRPointage from './QRPointage';
 
 export default function Dashboard({ isVerificationMode = false }) {
   const { user } = useAuth();
@@ -142,6 +144,9 @@ export default function Dashboard({ isVerificationMode = false }) {
   const [publishing, setPublishing] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [hasAutoSnapped, setHasAutoSnapped] = useState(false);
+  
+  const [showStats, setShowStats] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   // Form states
   const [newSiteName, setNewSiteName] = useState('');
@@ -1102,9 +1107,17 @@ export default function Dashboard({ isVerificationMode = false }) {
                   {publishedPeriods.includes(period) ? `Pointage publié ✅` : `Publier le pointage du mois`}
                 </button>
                 {!publishedPeriods.includes(period) ? (
-                  <button className="btn btn-primary" onClick={() => setShowAddSite(true)}>
-                    <Plus size={16} /> Nouveau Site
-                  </button>
+                  <>
+                    <button className="btn btn-primary" onClick={() => setShowStats(true)} style={{ background: '#6366f1' }}>
+                      <TrendingUp size={16} /> Stats
+                    </button>
+                    <button className="btn btn-primary" onClick={() => setShowQR(true)} style={{ background: '#10b981' }}>
+                      <Shield size={16} /> QR Code
+                    </button>
+                    <button className="btn btn-primary" onClick={() => setShowAddSite(true)}>
+                      <Plus size={16} /> Nouveau Site
+                    </button>
+                  </>
                 ) : (
                   <button 
                     className="btn btn-primary" 
@@ -3038,6 +3051,9 @@ export default function Dashboard({ isVerificationMode = false }) {
           </div>
         );
       })()}
+
+      {showStats && <StatsPanel companyId={user?.company_id} onClose={() => setShowStats(false)} />}
+      {showQR && <QRPointage onClose={() => setShowQR(false)} />}
 
     </div>
   );

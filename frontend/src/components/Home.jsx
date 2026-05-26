@@ -2,15 +2,25 @@ import React, { useState } from 'react';
 import { 
   Search, CalendarDays, Printer, FileText, TrendingUp, 
   Table, MessageSquareWarning, PlusCircle, Users, 
-  UserCheck, Package, Hammer, X
+  UserCheck, Package, Hammer, X, MapPin, Loader2, CheckCircle, AlertTriangle
 } from 'lucide-react';
+import { apiCall } from '../api';
 
 export default function Home({ setView }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showDevModal, setShowDevModal] = useState(false);
+  const [showGPSModal, setShowGPSModal] = useState(false);
 
   // Définition des 10 cartes demandées
   const cards = [
+    {
+      id: 'pointage_gps',
+      title: 'POINTAGE GPS',
+      description: 'Signalez votre présence avec votre position géographique.',
+      icon: MapPin,
+      color: '#10b981',
+      onClick: () => setShowGPSModal(true)
+    },
     {
       id: 'pointage',
       title: 'Pointage du mois',
@@ -242,6 +252,65 @@ export default function Home({ setView }) {
         </div>
       )}
       
+      {/* Modal GPS Pointage */}
+      {showGPSModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, animation: 'fadeIn 0.2s ease-out'
+        }} onClick={() => setShowGPSModal(false)}>
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.98)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '24px',
+            padding: '36px', maxWidth: '400px', width: '90%', textAlign: 'center',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)', position: 'relative'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              width: '80px', height: '80px', borderRadius: '50%', margin: '0 auto 20px auto',
+              background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: '1px solid rgba(16, 185, 129, 0.3)'
+            }}>
+              <MapPin size={40} color="#10b981" />
+            </div>
+            <h2 style={{ color: '#f8fafc', fontSize: '1.4rem', margin: '0 0 12px 0' }}>Enregistrement GPS</h2>
+            <p style={{ color: '#94a3b8', fontSize: '0.95rem', marginBottom: '24px' }}>
+              Votre position actuelle va être relevée pour valider votre pointage.
+            </p>
+            <button
+              onClick={async () => {
+                if (!navigator.geolocation) {
+                  alert('La géolocalisation n\'est pas supportée par votre navigateur.');
+                  return;
+                }
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                  try {
+                    const res = await apiCall('pointage_gps', {
+                      lat: pos.coords.latitude,
+                      lng: pos.coords.longitude
+                    });
+                    if (res.success) {
+                      alert('Pointage réussi !');
+                      setShowGPSModal(false);
+                    } else {
+                      alert('Erreur: ' + res.message);
+                    }
+                  } catch (e) {
+                    alert('Erreur réseau');
+                  }
+                }, () => {
+                  alert('Impossible de récupérer votre position. Veuillez autoriser la localisation.');
+                });
+              }}
+              style={{
+                width: '100%', padding: '14px', borderRadius: '12px', border: 'none',
+                background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white',
+                fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer'
+              }}
+            >
+              Confirmer ma position
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modal Fonctionnalité en cours de dev */}
       {showDevModal && (
         <div 
