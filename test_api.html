@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test API</title>
+</head>
+
+<body>
+    <h1>Test de l'API Pointage</h1>
+    <button onclick="testGetSites()">Test Get Sites</button>
+    <button onclick="testGetSiteData()">Test Get Site Data (Site 1)</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testGetSites() {
+            try {
+                const res = await fetch('api.php?action=get_sites');
+                const data = await res.json();
+                document.getElementById('output').textContent = 'GET SITES:\n' + JSON.stringify(data, null, 2);
+            } catch (e) {
+                document.getElementById('output').textContent = 'ERROR: ' + e.message;
+            }
+        }
+
+        async function testGetSiteData() {
+            try {
+                const period = new Date();
+                const periodStr = `${period.getFullYear()}-${String(period.getMonth() + 1).padStart(2, '0')}`;
+                const res = await fetch(`api.php?action=get_site_data&site_id=1&period=${periodStr}`);
+                const text = await res.text();
+                document.getElementById('output').textContent = 'GET SITE DATA (raw):\n' + text;
+
+                try {
+                    const data = JSON.parse(text);
+                    document.getElementById('output').textContent = 'GET SITE DATA (parsed):\n' + JSON.stringify(data, null, 2);
+                } catch (e) {
+                    document.getElementById('output').textContent = 'GET SITE DATA (parse error):\n' + text;
+                }
+            } catch (e) {
+                document.getElementById('output').textContent = 'ERROR: ' + e.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

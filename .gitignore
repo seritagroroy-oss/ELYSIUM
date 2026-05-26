@@ -1,0 +1,32 @@
+# Node
+frontend/node_modules/
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build (on garde dist/ car le serveur PHP le sert directement)
+# frontend/dist/
+
+# Données sensibles & locales
+.env
+pointage_db.json
+pointage_db_backup.json
+pointage_data.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+*.suo
+*.user
+
+# PHP cache
+*.cache
+
+# Scratch
+scratch/
