@@ -4,7 +4,7 @@ import { useAuth } from '../AuthContext';
 import {
   ReceiptText, ChevronLeft, Loader2, Printer, Building2,
   Users, CheckCircle2, Clock, ShieldOff,
-  BadgeCheck, Wallet, AlertCircle, MapPin, Eye, Archive, Lock
+  BadgeCheck, Wallet, AlertCircle, MapPin, Eye, Archive, Lock, Search
 } from 'lucide-react';
 
 const STATUSES = {
@@ -13,35 +13,62 @@ const STATUSES = {
   paye:      { label: 'Payé',      color: '#22c55e', bg: 'rgba(34,197,94,0.12)',    next: null },
 };
 
-const getPeriodsList = () => {
+const getPeriodsList = (currentPeriod = null) => {
   const list = [];
   const now = new Date();
+  
+  const generateLabel = (y, m) => {
+    // Note: use local time construction to avoid timezone shifts
+    const d = new Date();
+    d.setFullYear(y, parseInt(m, 10) - 1, 1);
+    d.setHours(12, 0, 0, 0); // Safe mid-day
+    return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  };
+
+  const periodSet = new Set();
+
   for (let i = -6; i <= 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    list.push({
-      value: d.toISOString().slice(0, 7),
-      label: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
-    });
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const val = `${y}-${m}`;
+    list.push({ value: val, label: generateLabel(y, m) });
+    periodSet.add(val);
   }
+
+  // Ensure currentPeriod is in the list
+  if (currentPeriod && !periodSet.has(currentPeriod)) {
+    const [y, m] = currentPeriod.split('-');
+    list.push({ value: currentPeriod, label: generateLabel(y, m) });
+    // Sort to keep it chronological
+    list.sort((a, b) => a.value.localeCompare(b.value));
+  }
+
   return list;
 };
 
 const ZONE_COLORS = ['#38bdf8','#a78bfa','#34d399','#fbbf24','#f472b6','#fb7185','#818cf8','#2dd4bf','#e879f9','#a3e635'];
 
-export default function PayrollView() {
+export default function PayrollView({ setView }) {
   const { user } = useAuth();
 
+  const sName = (user?.service || '').toLowerCase();
   const isAllowed =
     user?.role === 'admin' ||
-    ['comptabilite', 'comptabilité', 'rh', 'ressources humaines'].includes(
-      (user?.service || '').toLowerCase()
-    );
+    sName.includes('compta') ||
+    sName.includes('rh') ||
+    sName.includes('ressources humaines') ||
+    (user?.permissions && user.permissions.can_view_salaries);
 
-  const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
+  const [period, setPeriod] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const initialLoadRef = React.useRef(true);
   const [sites, setSites] = useState([]);
   const [salaries, setSalaries] = useState([]);
   const [functions, setFunctions] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [publishedPeriods, setPublishedPeriods] = useState([]);
   const [archivedPeriods, setArchivedPeriods] = useState([]);
   const [viewMode, setViewMode] = useState('current'); // 'current' ou 'archives'
@@ -49,10 +76,25 @@ export default function PayrollView() {
   const [selectedArchive, setSelectedArchive] = useState(null);
   const [archiveDetail, setArchiveDetail] = useState(null);
   const [archiveLoading, setArchiveLoading] = useState(false);
+  const [searchArchiveText, setSearchArchiveText] = useState('');
 
   // Navigation: null = sites | {id, name} = zones | {siteId, zoneName} = agents
-  const [activeSite, setActiveSite] = useState(null);   // {id, name}
-  const [activeZone, setActiveZone] = useState(null);   // string (name)
+  const [activeSite, setActiveSite] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pontage_payroll_activeSite')) || null; } catch { return null; }
+  });
+  const [activeZone, setActiveZone] = useState(() => {
+    return localStorage.getItem('pontage_payroll_activeZone') || null;
+  });
+
+  useEffect(() => {
+    if (activeSite) localStorage.setItem('pontage_payroll_activeSite', JSON.stringify(activeSite));
+    else localStorage.removeItem('pontage_payroll_activeSite');
+  }, [activeSite]);
+
+  useEffect(() => {
+    if (activeZone) localStorage.setItem('pontage_payroll_activeZone', activeZone);
+    else localStorage.removeItem('pontage_payroll_activeZone');
+  }, [activeZone]);
   const [expandedRow, setExpandedRow] = useState(null);
 
   const formatArchiveTitle = (p) => {
@@ -82,17 +124,32 @@ export default function PayrollView() {
     setLoading(true);
     try {
       const [sitesRes, salRes, funcRes, pubRes] = await Promise.all([
-        apiCall('get_sites', {}, 'GET'),
-        apiCall('get_salaries', { period }, 'GET'),
-        apiCall('get_functions', {}, 'GET'),
-        apiCall('get_published_periods', {}, 'GET')
+        apiCall('get_sites', { scope: 'company' }, 'GET'),
+        apiCall('get_salaries', { period, scope: 'company' }, 'GET'),
+        apiCall('get_functions', { scope: 'company' }, 'GET'),
+        apiCall('get_published_periods', { scope: 'company' }, 'GET')
       ]);
       if (Array.isArray(sitesRes)) setSites(sitesRes);
       if (Array.isArray(salRes)) setSalaries(salRes);
       if (Array.isArray(funcRes)) setFunctions(funcRes);
       if (pubRes?.success) {
-        setPublishedPeriods(pubRes.published_periods || []);
-        setArchivedPeriods(pubRes.archived_periods || []);
+        const pubs = pubRes.published_periods || [];
+        const archs = pubRes.archived_periods || [];
+        setPublishedPeriods(pubs);
+        setArchivedPeriods(archs);
+        
+        // Auto-jump to the latest publication on initial load, or if the current period is entirely missing
+        if (pubs.length > 0) {
+          const exactLatest = pubRes.latest_publication?.period;
+          const targetPeriod = exactLatest && pubs.includes(exactLatest) ? exactLatest : [...pubs].sort().reverse()[0];
+          
+          if (initialLoadRef.current) {
+             setPeriod(targetPeriod);
+             initialLoadRef.current = false;
+          } else if (!pubs.includes(period) && !archs.includes(period)) {
+             setPeriod(targetPeriod);
+          }
+        }
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -103,6 +160,24 @@ export default function PayrollView() {
   const isArchiveMode = viewMode === 'archives' && selectedArchive;
   const activeSalaries = isArchiveMode ? (archiveDetail?.salaries || []) : salaries;
   const activeStatuses = isArchiveMode ? (archiveDetail?.statuses || {}) : statuses;
+
+  // Déterminer la liste des sites à afficher et leur ordre
+  const activeSites = React.useMemo(() => {
+    if (isArchiveMode && archiveDetail?.sites) {
+      // En mode archive, on prend l'ordre historique figé dans l'archive
+      return archiveDetail.sites.map(s => ({ id: s.id, name: s.name }));
+    }
+    // En mode actuel, on trie avec l'ordre du localStorage (celui du Dashboard)
+    const siteOrder = JSON.parse(localStorage.getItem('pontage_site_order') || '[]');
+    return [...sites].sort((a, b) => {
+      const idxA = siteOrder.indexOf(a.id);
+      const idxB = siteOrder.indexOf(b.id);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return 0;
+    });
+  }, [sites, isArchiveMode, archiveDetail, user?.service_id]);
 
   const funcLabel = (id) => functions.find(fn => fn.id === id)?.name || id || '—';
 
@@ -150,7 +225,7 @@ export default function PayrollView() {
 
   const fetchArchives = async () => {
     try {
-      const res = await apiCall('get_payroll_archives', {}, 'GET');
+      const res = await apiCall('get_payroll_archives', { scope: 'company' }, 'GET');
       if (res?.success) setArchivesList(res.archives || []);
     } catch (e) { console.error(e); }
   };
@@ -164,7 +239,7 @@ export default function PayrollView() {
       const loadArch = async () => {
         setArchiveLoading(true);
         try {
-          const res = await apiCall(`get_payroll_archive_detail&period=${selectedArchive}`, {}, 'GET');
+          const res = await apiCall(`get_payroll_archive_detail&period=${selectedArchive}&scope=company`, {}, 'GET');
           if (res?.success) setArchiveDetail(res.archive);
         } catch (e) { console.error(e); } 
         finally { setArchiveLoading(false); }
@@ -182,7 +257,7 @@ export default function PayrollView() {
   const handleArchive = async () => {
     if (!window.confirm(`Êtes-vous sûr de vouloir archiver cet état de paie pour la période ${period} ?\nCeci figera les montants et statuts actuels.`)) return;
     try {
-      const res = await apiCall('archive_payroll', { period, salaries, statuses }, 'POST');
+      const res = await apiCall('archive_payroll', { period, salaries, statuses, sites: activeSites, scope: 'company' }, 'POST');
       if (res?.success) {
         alert('Archive créée avec succès.');
         setArchivedPeriods(prev => [...prev, period]);
@@ -205,7 +280,7 @@ export default function PayrollView() {
 
   const PeriodSelect = () => (
     <select className="form-input" style={{ background: 'rgba(0,0,0,0.3)', minWidth: '180px' }} value={period} onChange={(e) => setPeriod(e.target.value)}>
-      {getPeriodsList().map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+      {getPeriodsList(period).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
     </select>
   );
 
@@ -233,16 +308,62 @@ export default function PayrollView() {
     </div>
   );
 
+  // ─── CHARGEMENT GLOBAL ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '16px' }}>
+        <Loader2 className="animate-spin" size={40} style={{ color: 'var(--b)' }} />
+        <p style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>Chargement des données de l'état de paie...</p>
+      </div>
+    );
+  }
+
   // ─── VUE ARCHIVES (Liste) ───────────────────────────────────────────
   if (viewMode === 'archives' && !selectedArchive) {
+    const normalizeString = (str) => {
+      if (!str) return "";
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    };
+
+    const filteredArchives = archivesList.filter(a => {
+      let monthLabel = a.period;
+      if (a.period.includes('-')) {
+         const [y, m] = a.period.split('-');
+         const d = new Date(); d.setFullYear(y, parseInt(m, 10) - 1, 1); d.setHours(12, 0, 0, 0);
+         monthLabel = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      }
+      const searchable = `${a.period} ${monthLabel} ${a.archived_by} ${a.archived_at}`;
+      return normalizeString(searchable).includes(normalizeString(searchArchiveText));
+    });
+
     return (
       <div style={{ padding: '0 0 40px 0' }}>
-        <div className="top-bar glass-panel" style={{ flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="top-bar glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          
+          {/* Titre à gauche */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
             <ReceiptText size={24} style={{ color: 'var(--a)' }} />
-            <h2 style={{ fontSize: '1.4rem' }}>Archives de Paie</h2>
+            <h2 style={{ fontSize: '1.4rem', margin: 0, whiteSpace: 'nowrap' }}>Archives de Paie</h2>
           </div>
-          <ModeTabs />
+          
+          {/* Recherche centrée et élargie */}
+          <div style={{ flex: 2, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 16px', width: '100%', maxWidth: '600px', gap: '10px', transition: 'all 0.2s' }}>
+              <Search size={20} style={{ color: 'var(--muted)' }} />
+              <input 
+                type="text" 
+                placeholder="Rechercher une archive (mois, année, auteur)..." 
+                value={searchArchiveText}
+                onChange={e => setSearchArchiveText(e.target.value)}
+                style={{ background: 'transparent', border: 'none', color: 'white', width: '100%', outline: 'none', fontSize: '1rem' }}
+              />
+            </div>
+          </div>
+
+          {/* Onglets à droite */}
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+            <ModeTabs />
+          </div>
         </div>
         
         <div className="glass-panel" style={{ marginTop: '24px' }}>
@@ -263,50 +384,44 @@ export default function PayrollView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {archivesList.map((a, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight: '700', color: 'white' }}>{a.period}</td>
-                      <td>{a.archived_at}</td>
-                      <td>{a.archived_by}</td>
-                      <td>
-                        <button onClick={() => setSelectedArchive(a.period)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-                          Consulter
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredArchives.map((a, i) => {
+                    let monthLabel = a.period;
+                    if (a.period.includes('-')) {
+                       const [y, m] = a.period.split('-');
+                       const d = new Date(); d.setFullYear(y, parseInt(m, 10) - 1, 1); d.setHours(12, 0, 0, 0);
+                       monthLabel = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                       monthLabel = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+                    }
+                    
+                    let dateLabel = a.archived_at;
+                    if (dateLabel && dateLabel.includes('-')) {
+                       // format from YYYY-MM-DD HH:MM:SS to DD/MM/YYYY HH:MM:SS
+                       const parts = dateLabel.split(' ');
+                       if (parts.length > 0) {
+                          const dateParts = parts[0].split('-');
+                          if (dateParts.length === 3) {
+                             dateLabel = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}${parts[1] ? ' ' + parts[1] : ''}`;
+                          }
+                       }
+                    }
+
+                    return (
+                      <tr key={i}>
+                        <td style={{ fontWeight: '700', color: 'white' }}>{monthLabel}</td>
+                        <td>{dateLabel}</td>
+                        <td>{a.archived_by}</td>
+                        <td>
+                          <button onClick={() => setSelectedArchive(a.period)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+                            Consulter
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  // ─── BLOCAGE SI NON PUBLIÉ (Seulement en Actuel) ───────────────────────────
-  if (!isArchiveMode && !isPeriodPublished) {
-    return (
-      <div style={{ padding: '0 0 40px 0' }}>
-        <div className="top-bar glass-panel" style={{ flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <ReceiptText size={24} style={{ color: 'var(--a)' }} />
-            <h2 style={{ fontSize: '1.4rem' }}>État de Paie</h2>
-            <span style={{ background: 'rgba(56,189,248,0.1)', color: 'var(--b)', fontSize: '0.75rem', padding: '3px 10px', borderRadius: '20px', fontWeight: '600' }}>Comptabilité / RH</span>
-          </div>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <PeriodSelect />
-            <ModeTabs />
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 24px', textAlign: 'center', marginTop: '24px' }} className="glass-panel">
-          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(245,158,11,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
-            <Lock size={40} style={{ color: '#f59e0b' }} />
-          </div>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: '700', marginBottom: '12px', color: 'white' }}>Pointage non publié</h2>
-          <p style={{ color: 'var(--muted)', maxWidth: '480px', lineHeight: '1.6' }}>
-            L'état de paie de <strong>{period}</strong> n'est pas encore accessible. Le service en charge du pointage n'a pas encore validé ni publié les données pour cette période.
-          </p>
         </div>
       </div>
     );
@@ -344,6 +459,34 @@ export default function PayrollView() {
     );
   }
 
+  // ─── BLOCAGE SI NON PUBLIÉ (Seulement en Actuel) ───────────────────────────
+  if (!isArchiveMode && !isPeriodPublished) {
+    return (
+      <div style={{ padding: '0 0 40px 0' }}>
+        <div className="top-bar glass-panel" style={{ flexWrap: 'wrap', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <ReceiptText size={24} style={{ color: 'var(--a)' }} />
+            <h2 style={{ fontSize: '1.4rem' }}>État de Paie</h2>
+            <span style={{ background: 'rgba(56,189,248,0.1)', color: 'var(--b)', fontSize: '0.75rem', padding: '3px 10px', borderRadius: '20px', fontWeight: '600' }}>Comptabilité / RH</span>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <PeriodSelect />
+            <ModeTabs />
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 24px', textAlign: 'center', marginTop: '24px' }} className="glass-panel">
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(245,158,11,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
+            <Lock size={40} style={{ color: '#f59e0b' }} />
+          </div>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: '700', marginBottom: '12px', color: 'white' }}>Pointage non publié</h2>
+          <p style={{ color: 'var(--muted)', maxWidth: '480px', lineHeight: '1.6' }}>
+            L'état de paie de <strong>{period}</strong> n'est pas encore accessible. Le service en charge du pointage n'a pas encore validé ni publié les données pour cette période.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // ─── VUE 3 : Agents d'une Zone ───────────────────────────────────────────────
   if (activeSite && activeZone) {
     const agents = agentsForZone(activeSite.name, activeZone);
@@ -372,6 +515,21 @@ export default function PayrollView() {
                 Mode Lecture Seule
               </div>
             )}
+            <button className="btn btn-secondary" onClick={() => {
+              let csv = "data:text/csv;charset=utf-8,\uFEFFNom,Poste,Jours Trav,Absences,MAP,H.Sup,Base,Retenues,Gains,Remb. Prêt,Net,Statut\n";
+              agents.forEach(s => {
+                const stLabel = STATUSES[getAgentStatus(s.name, activeSite.id, activeZone)]?.label || '';
+                csv += `"${s.name}","${funcLabel(s.function)}",${s.days_worked ?? (30 - s.absences - (s.map_count||0))},${s.absences},${s.map_count||0},${s.sp_count||0},${s.base},${s.deductions},${s.gains},${s.remboursement_pret||0},${s.total},"${stLabel}"\n`;
+              });
+              const link = document.createElement("a");
+              link.setAttribute("href", encodeURI(csv));
+              link.setAttribute("download", `paie_${activeSite.name}_${activeZone}_${period}.csv`.replace(/ /g, '_'));
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--border)' }}>
+              <ReceiptText size={16} /> Exporter CSV
+            </button>
             <button className="btn btn-secondary" onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Printer size={16} /> Imprimer
             </button>
@@ -385,15 +543,40 @@ export default function PayrollView() {
             { label: 'Brouillons', value: agents.filter(s => getAgentStatus(s.name, activeSite.id, activeZone) === 'brouillon').length, color: '#94a3b8', icon: Clock },
             { label: 'Validés', value: agents.filter(s => getAgentStatus(s.name, activeSite.id, activeZone) === 'valide').length, color: '#38bdf8', icon: BadgeCheck },
             { label: 'Payés', value: agents.filter(s => getAgentStatus(s.name, activeSite.id, activeZone) === 'paye').length, color: '#22c55e', icon: Wallet },
-          ].map(({ label, value, color, icon: Icon }) => (
-            <div key={label} className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
-              <div style={{ background: `${color}20`, borderRadius: '8px', padding: '8px', color }}><Icon size={18} /></div>
-              <div>
-                <p style={{ color: 'var(--muted)', fontSize: '0.72rem', margin: 0, fontWeight: 600, textTransform: 'uppercase' }}>{label}</p>
-                <h4 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, color: 'white' }}>{value}</h4>
+            { label: 'MAP', value: agents.reduce((a, s) => a + (s.map_count || 0), 0), color: '#f97316', icon: AlertCircle },
+            { isLink: true, label: 'Consulter Pointage', color: '#a855f7', icon: Clock }
+          ].map((item, idx) => {
+            if (item.isLink) {
+              return (
+                <div key={item.label} className="glass-panel" 
+                  onClick={() => {
+                     localStorage.setItem('pontage_activeSiteId', activeSite.id);
+                     localStorage.setItem('pontage_activeSiteName', activeSite.name);
+                     localStorage.setItem('pontage_period', period);
+                     if (typeof setView === 'function') setView('verification');
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', cursor: 'pointer', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', transition: 'all 0.2s', borderRadius: '12px' }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 5px 15px rgba(168,85,247,0.2)'; e.currentTarget.style.background = 'rgba(168,85,247,0.15)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+                >
+                  <div style={{ background: `${item.color}20`, borderRadius: '8px', padding: '8px', color: item.color }}><item.icon size={18} /></div>
+                  <div>
+                    <h4 style={{ fontSize: '0.90rem', fontWeight: 800, margin: 0, color: 'white', textTransform: 'uppercase' }}>{item.label}</h4>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.72rem', margin: 0 }}>Aller au traitement</p>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={item.label} className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
+                <div style={{ background: `${item.color}20`, borderRadius: '8px', padding: '8px', color: item.color }}><item.icon size={18} /></div>
+                <div>
+                  <p style={{ color: 'var(--muted)', fontSize: '0.72rem', margin: 0, fontWeight: 600, textTransform: 'uppercase' }}>{item.label}</p>
+                  <h4 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, color: 'white' }}>{item.value}</h4>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {agents.length === 0 ? (
@@ -412,10 +595,13 @@ export default function PayrollView() {
                     <th>Poste</th>
                     <th style={{ textAlign: 'center' }}>Jours Trav.</th>
                     <th style={{ textAlign: 'center' }}>Absences</th>
+                    <th style={{ textAlign: 'center', color: '#f97316' }}>MAP</th>
                     <th style={{ textAlign: 'center', color: 'var(--b)' }}>H. Sup.</th>
                     <th style={{ textAlign: 'right' }}>Base (XOF)</th>
                     <th style={{ textAlign: 'right', color: 'var(--danger)' }}>Retenues</th>
+                    <th style={{ textAlign: 'right', color: '#a855f7' }}>Prime Site</th>
                     <th style={{ textAlign: 'right', color: 'var(--b)' }}>Supplémentaire</th>
+                    <th style={{ textAlign: 'right', color: '#f43f5e' }}>Remb. Prêt</th>
                     <th style={{ textAlign: 'right', color: 'var(--a)' }}>Net à Payer</th>
                     <th style={{ textAlign: 'center' }}>Statut</th>
                   </tr>
@@ -435,7 +621,7 @@ export default function PayrollView() {
                              {funcLabel(s.function)}
                            </span>
                          </td>
-                         <td style={{ textAlign: 'center', fontWeight: '600' }}>{s.days_worked ?? (30 - s.absences)}</td>
+                         <td style={{ textAlign: 'center', fontWeight: '600' }}>{s.days_worked ?? (30 - s.absences - (s.map_count||0))}</td>
                          <td style={{ textAlign: 'center' }}>
                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                              <span style={{ color: s.absences > 0 ? 'var(--danger)' : 'var(--muted)' }}>
@@ -446,6 +632,22 @@ export default function PayrollView() {
                                  onClick={() => toggleRow(isOpen && expandedRow === idx ? null : idx)}
                                  title="Voir les jours d'absence"
                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: isOpen ? 'var(--danger)' : 'rgba(239,68,68,0.4)', padding: '2px', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }}
+                               >
+                                 <Eye size={14} />
+                               </button>
+                             )}
+                           </div>
+                         </td>
+                         <td style={{ textAlign: 'center' }}>
+                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                             <span style={{ color: (s.map_count||0) > 0 ? '#f97316' : 'var(--muted)' }}>
+                               {(s.map_count||0) > 0 ? s.map_count : '—'}
+                             </span>
+                             {(s.map_count||0) > 0 && (
+                               <button
+                                 onClick={() => toggleRow(isOpen && expandedRow === idx ? null : idx)}
+                                 title="Voir les jours de mise à pied"
+                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: isOpen ? '#f97316' : 'rgba(249,115,22,0.4)', padding: '2px', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }}
                                >
                                  <Eye size={14} />
                                </button>
@@ -470,7 +672,9 @@ export default function PayrollView() {
                          </td>
                          <td style={{ textAlign: 'right' }}>{s.base.toLocaleString()}</td>
                          <td style={{ textAlign: 'right', color: s.deductions > 0 ? 'var(--danger)' : 'var(--muted)' }}>{s.deductions > 0 ? `-${s.deductions.toLocaleString()}` : '—'}</td>
+                         <td style={{ textAlign: 'right', color: (s.prime_site||0) > 0 ? '#a855f7' : 'var(--muted)', fontWeight: (s.prime_site||0) > 0 ? '700' : '400' }}>{(s.prime_site||0) > 0 ? `+${s.prime_site.toLocaleString()}` : '—'}</td>
                          <td style={{ textAlign: 'right', color: s.gains > 0 ? 'var(--b)' : 'var(--muted)', fontWeight: s.gains > 0 ? '700' : '400' }}>{s.gains > 0 ? `+${s.gains.toLocaleString()}` : '—'}</td>
+                         <td style={{ textAlign: 'right', color: (s.remboursement_pret||0) > 0 ? '#f43f5e' : 'var(--muted)', fontWeight: (s.remboursement_pret||0) > 0 ? '700' : '400' }}>{(s.remboursement_pret||0) > 0 ? `-${s.remboursement_pret.toLocaleString()}` : '—'}</td>
                          <td style={{ textAlign: 'right', fontWeight: '800', color: 'var(--a)', fontSize: '1.05rem' }}>{s.total.toLocaleString()}</td>
                          <td style={{ textAlign: 'center' }}>
                            <button
@@ -485,8 +689,8 @@ export default function PayrollView() {
                        </tr>
                        {isOpen && (
                          <tr>
-                           <td colSpan={11} style={{ background: 'rgba(255,255,255,0.02)', padding: '14px 20px' }}>
-                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                           <td colSpan={12} style={{ background: 'rgba(255,255,255,0.02)', padding: '14px 20px' }}>
+                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
                                {/* Détails Absences */}
                                <div>
                                  <h4 style={{ color: 'var(--danger)', marginBottom: '8px', fontSize: '0.88rem', fontWeight: 700 }}>
@@ -498,6 +702,23 @@ export default function PayrollView() {
                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                      {s.absence_details.map((a, i) => (
                                        <span key={i} style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', padding: '3px 8px', borderRadius: '4px', fontSize: '0.78rem' }}>
+                                         {new Date(a.date).toLocaleDateString('fr-FR')} ({a.shift})
+                                       </span>
+                                     ))}
+                                   </div>
+                                 )}
+                               </div>
+                               {/* Détails MAP */}
+                               <div>
+                                 <h4 style={{ color: '#f97316', marginBottom: '8px', fontSize: '0.88rem', fontWeight: 700 }}>
+                                   Mises à pied ({s.map_count || 0})
+                                 </h4>
+                                 {(s.map_details || []).length === 0 ? (
+                                   <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>Aucune mise à pied</p>
+                                 ) : (
+                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                     {s.map_details.map((a, i) => (
+                                       <span key={i} style={{ background: 'rgba(249,115,22,0.1)', color: '#f97316', padding: '3px 8px', borderRadius: '4px', fontSize: '0.78rem' }}>
                                          {new Date(a.date).toLocaleDateString('fr-FR')} ({a.shift})
                                        </span>
                                      ))}
@@ -530,12 +751,14 @@ export default function PayrollView() {
                   })}
                 </tbody>
                 <tfoot>
-                  <tr style={{ borderTop: '2px solid var(--border)' }}>
-                    <td colSpan={6} style={{ fontWeight: '700', padding: '14px 16px' }}>TOTAL ZONE</td>
-                    <td style={{ textAlign: 'right', fontWeight: '700' }}>{agents.reduce((a, s) => a + s.base, 0).toLocaleString()}</td>
-                    <td style={{ textAlign: 'right', fontWeight: '700', color: 'var(--danger)' }}>-{agents.reduce((a, s) => a + s.deductions, 0).toLocaleString()}</td>
-                    <td style={{ textAlign: 'right', fontWeight: '700', color: 'var(--b)' }}>+{agents.reduce((a, s) => a + s.gains, 0).toLocaleString()}</td>
-                    <td style={{ textAlign: 'right', fontWeight: '800', color: 'var(--a)', fontSize: '1.1rem' }}>{totalNet.toLocaleString()} XOF</td>
+                  <tr style={{ background: 'linear-gradient(90deg, rgba(34,197,94,0.1) 0%, rgba(34,197,94,0.02) 100%)', borderTop: '2px solid #22c55e', borderBottom: '1px solid #22c55e' }}>
+                    <td colSpan={7} style={{ fontWeight: '800', padding: '16px 16px', color: '#22c55e', fontSize: '0.95rem' }}>TOTAL ZONE</td>
+                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#22c55e' }}>{agents.reduce((a, s) => a + s.base, 0).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#ef4444' }}>-{agents.reduce((a, s) => a + s.deductions, 0).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#a855f7' }}>+{agents.reduce((a, s) => a + (s.prime_site||0), 0).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#38bdf8' }}>+{agents.reduce((a, s) => a + s.gains, 0).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#f43f5e' }}>-{agents.reduce((a, s) => a + (s.remboursement_pret||0), 0).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: '900', color: '#22c55e', fontSize: '1.2rem' }}>{totalNet.toLocaleString()} XOF</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -590,15 +813,39 @@ export default function PayrollView() {
             { label: 'Zones', value: zones.length, color: '#a78bfa', icon: MapPin },
             { label: 'Validés', value: allAgents.filter(s => getAgentStatus(s.name, activeSite.id, s.subsite) === 'valide').length, color: '#38bdf8', icon: BadgeCheck },
             { label: 'Payés', value: allAgents.filter(s => getAgentStatus(s.name, activeSite.id, s.subsite) === 'paye').length, color: '#22c55e', icon: Wallet },
-          ].map(({ label, value, color, icon: Icon }) => (
-            <div key={label} className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
-              <div style={{ background: `${color}20`, borderRadius: '8px', padding: '8px', color }}><Icon size={18} /></div>
-              <div>
-                <p style={{ color: 'var(--muted)', fontSize: '0.72rem', margin: 0, fontWeight: 600, textTransform: 'uppercase' }}>{label}</p>
-                <h4 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, color: 'white' }}>{value}</h4>
+            { isLink: true, label: 'Consulter Pointage', color: '#a855f7', icon: Clock }
+          ].map((item, idx) => {
+            if (item.isLink) {
+              return (
+                <div key={item.label} className="glass-panel" 
+                  onClick={() => {
+                     localStorage.setItem('pontage_activeSiteId', activeSite.id);
+                     localStorage.setItem('pontage_activeSiteName', activeSite.name);
+                     localStorage.setItem('pontage_period', period);
+                     if (typeof setView === 'function') setView('verification');
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', cursor: 'pointer', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', transition: 'all 0.2s', borderRadius: '12px' }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 5px 15px rgba(168,85,247,0.2)'; e.currentTarget.style.background = 'rgba(168,85,247,0.15)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+                >
+                  <div style={{ background: `${item.color}20`, borderRadius: '8px', padding: '8px', color: item.color }}><item.icon size={18} /></div>
+                  <div>
+                    <h4 style={{ fontSize: '0.90rem', fontWeight: 800, margin: 0, color: 'white', textTransform: 'uppercase' }}>{item.label}</h4>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.72rem', margin: 0 }}>Aller au traitement</p>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={item.label} className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
+                <div style={{ background: `${item.color}20`, borderRadius: '8px', padding: '8px', color: item.color }}><item.icon size={18} /></div>
+                <div>
+                  <p style={{ color: 'var(--muted)', fontSize: '0.72rem', margin: 0, fontWeight: 600, textTransform: 'uppercase' }}>{item.label}</p>
+                  <h4 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, color: 'white' }}>{item.value}</h4>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {loading ? (
@@ -719,22 +966,51 @@ export default function PayrollView() {
             Sélectionnez un site pour accéder à ses zones, puis aux états de paie.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-            {sites.map((site, idx) => {
+            {activeSites.map((site, idx) => {
               const { agentsCount, total, paid, validated, zones } = siteSummary(site);
               const progress = agentsCount > 0 ? Math.round((paid / agentsCount) * 100) : 0;
+              const isAllPaid = agentsCount > 0 && paid === agentsCount;
+              const isAllValidatedOrPaid = agentsCount > 0 && (validated + paid === agentsCount) && !isAllPaid;
+
+              let cardBg = '';
+              let cardBorderColor = 'var(--border)';
+              let cardHoverBorderColor = 'rgba(56,189,248,0.4)';
+              let cardHoverShadow = '0 12px 30px -10px rgba(56,189,248,0.3)';
+              let radialGradientColor = 'rgba(56,189,248,0.15)';
+              let iconBgColor = 'rgba(56,189,248,0.12)';
+              let iconColor = 'var(--b)';
+
+              if (isAllPaid) {
+                cardBg = 'linear-gradient(135deg, rgba(34,197,94,0.1) 0%, rgba(34,197,94,0.02) 100%)';
+                cardBorderColor = 'rgba(34,197,94,0.3)';
+                cardHoverBorderColor = 'rgba(34,197,94,0.7)';
+                cardHoverShadow = '0 12px 30px -10px rgba(34,197,94,0.4)';
+                radialGradientColor = 'rgba(34,197,94,0.2)';
+                iconBgColor = 'rgba(34,197,94,0.2)';
+                iconColor = '#22c55e';
+              } else if (isAllValidatedOrPaid) {
+                cardBg = 'linear-gradient(135deg, rgba(56,189,248,0.15) 0%, rgba(56,189,248,0.02) 100%)';
+                cardBorderColor = 'rgba(56,189,248,0.4)';
+                cardHoverBorderColor = 'rgba(56,189,248,0.8)';
+                cardHoverShadow = '0 12px 30px -10px rgba(56,189,248,0.5)';
+                radialGradientColor = 'rgba(56,189,248,0.25)';
+                iconBgColor = 'rgba(56,189,248,0.2)';
+                iconColor = '#38bdf8';
+              }
+
               return (
                 <div
                   key={site.id}
                   onClick={() => setActiveSite({ id: site.id, name: site.name })}
                   className="glass-panel"
-                  style={{ cursor: 'pointer', borderRadius: '16px', padding: '24px', position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease', animation: `slideUp 0.4s ease-out forwards`, animationDelay: `${idx * 0.06}s`, opacity: 0 }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 30px -10px rgba(56,189,248,0.3)'; e.currentTarget.style.borderColor = 'rgba(56,189,248,0.4)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+                  style={{ cursor: 'pointer', borderRadius: '16px', padding: '24px', position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease', animation: `slideUp 0.4s ease-out forwards`, animationDelay: `${idx * 0.06}s`, opacity: 0, background: cardBg || undefined, borderColor: cardBorderColor }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = cardHoverShadow; e.currentTarget.style.borderColor = cardHoverBorderColor; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = cardBorderColor; }}
                 >
-                  <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '80px', height: '80px', background: 'radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%)', borderRadius: '50%' }} />
+                  <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '80px', height: '80px', background: `radial-gradient(circle, ${radialGradientColor} 0%, transparent 70%)`, borderRadius: '50%' }} />
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                    <div style={{ background: 'rgba(56,189,248,0.12)', borderRadius: '10px', padding: '10px', color: 'var(--b)' }}>
+                    <div style={{ background: iconBgColor, borderRadius: '10px', padding: '10px', color: iconColor }}>
                       <Building2 size={22} />
                     </div>
                     <div>

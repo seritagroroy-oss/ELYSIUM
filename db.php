@@ -2,6 +2,7 @@
 // data.php - Simple JSON-based data store to avoid SQLite dependency issues
 define('DATA_FILE', __DIR__ . '/pointage_db.json');
 
+if (!function_exists('loadEnvFile')) {
 function loadEnvFile($path = null)
 {
     static $loaded = false;
@@ -49,6 +50,7 @@ function loadEnvFile($path = null)
         $_SERVER[$key] = $value;
     }
 }
+} // end if !function_exists('loadEnvFile')
 
 loadEnvFile();
 
@@ -59,32 +61,19 @@ function getDefaultServicePermissions()
         'can_edit_dashboard' => true,
         'can_view_archives' => true,
         'can_view_salaries' => true,
-        'can_view_settings' => false,
-        'communication' => true
+        'can_view_settings' => false
     ];
 }
 
 function getAdminPermissions()
 {
     return [
-        'dashboard' => true,
-        'verification' => true,
-        'payroll' => true,
-        'kiosk' => true,
-        'salaries' => true,
-        'fluctuation' => true,
-        'archives' => true,
-        'settings' => true,
-        'services' => true,
-        'communication' => true
+        'can_view_dashboard' => true,
+        'can_edit_dashboard' => true,
+        'can_view_archives' => true,
+        'can_view_salaries' => true,
+        'can_view_settings' => true
     ];
-}
-
-function getSuperAdminPermissions()
-{
-    $perms = getAdminPermissions();
-    $perms['can_manage_workspaces'] = true;
-    return $perms;
 }
 
 function getSubscriptionConfig()
@@ -407,12 +396,8 @@ function ensureDataShape($data)
         $data['site_revenues'] = [];
         $changed = true;
     }
-    if (!isset($data['inter_service_messages']) || !is_array($data['inter_service_messages'])) {
-        $data['inter_service_messages'] = [];
-        $changed = true;
-    }
-    if (!isset($data['tickets']) || !is_array($data['tickets'])) {
-        $data['tickets'] = [];
+    if (!isset($data['reclamations']) || !is_array($data['reclamations'])) {
+        $data['reclamations'] = [];
         $changed = true;
     }
 
@@ -441,17 +426,8 @@ function ensureDataShape($data)
     }
 
     foreach ($data['users'] as $email => &$user) {
-        if ($email === 'admin@gmail.com' && (!isset($user['role']) || $user['role'] !== 'super_admin')) {
-            $user['role'] = 'super_admin';
-            $changed = true;
-        } elseif (!isset($user['role'])) {
-            $user['role'] = 'user';
-            $changed = true;
-        }
-        if (!isset($user['role_display_name'])) {
-            if ($user['role'] === 'super_admin') $user['role_display_name'] = 'Directeur Général';
-            elseif ($user['role'] === 'admin') $user['role_display_name'] = 'Chef de Service';
-            else $user['role_display_name'] = 'Agent';
+        if (!isset($user['role'])) {
+            $user['role'] = ($email === 'admin@gmail.com') ? 'admin' : 'user';
             $changed = true;
         }
         if (!isset($user['service'])) {
@@ -462,11 +438,11 @@ function ensureDataShape($data)
             $user['permissions'] = getAdminPermissions();
             $changed = true;
         }
-        if ($user['role'] === 'super_admin' && !isset($user['permissions'])) {
-            $user['permissions'] = getSuperAdminPermissions();
+        if (ensureUserSubscriptionData($user)) {
             $changed = true;
         }
-        if (ensureUserSubscriptionData($user)) {
+        if (!isset($user['has_seen_onboarding'])) {
+            $user['has_seen_onboarding'] = false;
             $changed = true;
         }
 
@@ -524,17 +500,13 @@ function getUserPermissionsByEmail($email)
     if (!$user) {
         return getDefaultServicePermissions();
     }
-    if (($user['role'] ?? '') === 'super_admin') {
-        return getSuperAdminPermissions();
+    if (($user['role'] ?? '') === 'admin') {
+        return getAdminPermissions();
     }
-    
-    $basePerms = ($user['role'] ?? '') === 'admin' ? getAdminPermissions() : getDefaultServicePermissions();
 
     if (isset($user['permissions']) && is_array($user['permissions'])) {
-        return array_merge($basePerms, $user['permissions']);
+        return array_merge(getDefaultServicePermissions(), $user['permissions']);
     }
-
-    return $basePerms;
 
     return getServicePermissions($db, $user['service_id'] ?? '', $user['service'] ?? '');
 }
@@ -546,18 +518,16 @@ function getData()
             'admin@gmail.com' => [
                 'password' => password_hash('admin123', PASSWORD_DEFAULT),
                 'name' => 'Administrateur',
-                'role' => 'super_admin',
-                'role_display_name' => 'Directeur Général',
+                'role' => 'admin',
                 'service' => 'Direction Générale'
             ]
         ],
         'sites' => [],
         'attendance' => [],
         'messages' => [],
-        'inter_service_messages' => [],
-        'tickets' => [],
         'settings' => ['cycle_start' => 21, 'cycle_end' => 20],
-        'payments' => []
+        'payments' => [],
+        'reclamations' => []
     ];
 
     if (!file_exists(DATA_FILE)) {
@@ -655,35 +625,6 @@ function addSite($name)
     return true;
 }
 
-// ─── ENTREPRISES (COMPANIES) ────────────────────────────────────────────────
-function getCompanyById($db, $company_id)
-{
-    if (!isset($db['companies']) || !is_array($db['companies'])) {
-        return null;
-    }
-    foreach ($db['companies'] as $comp) {
-        if ($comp['id'] === $company_id) {
-            return $comp;
-        }
-    }
-    return null;
-}
-
-function createCompany(&$db, $name, $owner_email)
-{
-    if (!isset($db['companies'])) {
-        $db['companies'] = [];
-    }
-    $company_id = 'comp_' . substr(md5($name . microtime(true)), 0, 8);
-    $db['companies'][] = [
-        'id' => $company_id,
-        'name' => trim($name),
-        'created_at' => date('c'),
-        'owner_email' => $owner_email
-    ];
-    return $company_id;
-}
-
 function addPaymentRecord($provider, $externalId, $email, $amount, $currency, $meta = [])
 {
     $db = getData();
@@ -741,4 +682,43 @@ function getPaymentByProviderExternalId($provider, $externalId)
         }
     }
     return null;
+}
+
+// Helpers for reclamations
+function getReclamations()
+{
+    $data = getData();
+    return $data['reclamations'] ?? [];
+}
+
+function addReclamation($record)
+{
+    $data = getData();
+    if (!isset($data['reclamations']) || !is_array($data['reclamations'])) {
+        $data['reclamations'] = [];
+    }
+    $record['id'] = 'rec_' . time() . '_' . rand(1000, 9999);
+    $record['created_at'] = date('Y-m-d H:i:s');
+    $data['reclamations'][] = $record;
+    saveData($data);
+    return $record;
+}
+
+function updateReclamationStatus($id, $updates)
+{
+    $data = getData();
+    if (!isset($data['reclamations']) || !is_array($data['reclamations'])) return false;
+    $changed = false;
+    foreach ($data['reclamations'] as &$rec) {
+        if ($rec['id'] === $id) {
+            foreach ($updates as $k => $v) {
+                $rec[$k] = $v;
+            }
+            $rec['updated_at'] = date('Y-m-d H:i:s');
+            $changed = true;
+            break;
+        }
+    }
+    if ($changed) saveData($data);
+    return $changed;
 }

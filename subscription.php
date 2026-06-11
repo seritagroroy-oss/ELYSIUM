@@ -260,7 +260,7 @@ $subscriptionState = $isLoggedIn ? getUserSubscriptionState($_SESSION['user_id']
 <?php
 $baseUrl = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
 if ($baseUrl === '/') $baseUrl = '';
-$logoUrl = $baseUrl . '/frontend/public/elysium_logo.png';
+$logoUrl = $baseUrl . '/elysium_logo.png';
 ?>
 <body>
     <div class="card">

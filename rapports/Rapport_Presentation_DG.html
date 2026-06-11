@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport d'État - Projet ELYSIUM</title>
+    <style>
+        :root {
+            --primary: #1F2937;
+            --accent: #0ea5e9;
+            --success: #10B981;
+            --text-main: #333333;
+            --text-light: #666666;
+            --border: #e5e7eb;
+            --highlight: #38bdf8;
+            --pending: #f59e0b;
+        }
+
+        @page {
+            size: A4;
+            margin: 15mm 15mm;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-main);
+            line-height: 1.4;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .document-container {
+            width: 210mm;
+            padding: 15mm;
+            margin: 20px auto;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+        }
+
+        @media print {
+            body { background-color: white; }
+            .document-container { margin: 0; padding: 0; box-shadow: none; width: 100%; }
+            .page-break { page-break-before: always; margin-top: 15mm; }
+        }
+
+        header {
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .header-title h1 {
+            color: var(--primary);
+            font-size: 26px;
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .header-title h2 {
+            color: var(--accent);
+            font-size: 15px;
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .header-meta {
+            text-align: right;
+            color: var(--text-light);
+            font-size: 11px;
+        }
+
+        .intro-box {
+            background-color: #f8fafc;
+            border-left: 4px solid var(--accent);
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            font-style: italic;
+            color: #475569;
+            font-size: 13px;
+        }
+
+        .section-title {
+            color: var(--primary);
+            font-size: 18px;
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 4px;
+            margin-top: 20px;
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .progress-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 20px;
+            margin-bottom: 20px;
+        }
+        
+        .progress-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .progress-label {
+            width: 140px;
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 12.5px;
+        }
+
+        .progress-bar-bg {
+            flex-grow: 1;
+            background-color: var(--border);
+            height: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 0 10px;
+        }
+
+        .progress-bar-fill { height: 100%; background-color: var(--success); }
+        .progress-bar-fill.orange { background-color: var(--pending); }
+
+        .progress-percentage {
+            width: 40px;
+            text-align: right;
+            font-weight: bold;
+            color: var(--success);
+            font-size: 12.5px;
+        }
+        .progress-percentage.orange { color: var(--pending); }
+
+        .module-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .module-card {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #ffffff;
+        }
+
+        .module-header {
+            background-color: var(--primary);
+            color: white;
+            padding: 8px 12px;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+            font-size: 13.5px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .module-header .status {
+            background-color: var(--success);
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            text-transform: uppercase;
+        }
+        .module-header .status.pending { background-color: var(--pending); }
+
+        .module-body {
+            padding: 10px 12px;
+        }
+
+        .module-body ul {
+            margin: 0;
+            padding-left: 16px;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .module-body li {
+            margin-bottom: 4px;
+        }
+
+        .impact-section {
+            background-color: var(--primary);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .impact-section h3 {
+            color: var(--highlight);
+            margin-top: 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 6px;
+            font-size: 15px;
+            margin-bottom: 10px;
+        }
+
+        .impact-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .impact-item {
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .impact-icon {
+            font-size: 16px;
+            margin-right: 10px;
+            background: rgba(255,255,255,0.1);
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .impact-text h5 { margin: 0 0 2px 0; font-size: 12px; color: white; }
+        .impact-text p { margin: 0; font-size: 11px; color: #cbd5e1; }
+
+        .signature-block {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .signature-space {
+            width: 220px;
+            border-top: 1px solid var(--text-light);
+            text-align: center;
+            padding-top: 5px;
+            font-size: 11px;
+            color: var(--text-light);
+        }
+
+        footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 9px;
+            color: var(--text-light);
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="document-container">
+    <header>
+        <div class="header-title">
+            <h1>Plateforme ELYSIUM</h1>
+            <h2>Bilan d'Architecture Globale de l'ERP</h2>
+        </div>
+        <div class="header-meta">
+            <strong>Date :</strong> 1er Juin 2026<br>
+            <strong>Statut du Projet :</strong> Phase de Déploiement<br>
+            <strong>Audience :</strong> Direction Générale (PDG / DG)
+        </div>
+    </header>
+
+    <div class="intro-box">
+        La plateforme <strong>ELYSIUM</strong> n'est pas un simple outil de pointage, c'est un <strong>ERP (Progiciel de Gestion Intégré) sur-mesure</strong> complet. Il a été conçu pour centraliser l'intégralité des flux opérationnels : de l'agent sur le terrain (QR Code) jusqu'à l'édition automatique des bulletins de paie, tout en passant par les Ressources Humaines et les statistiques analytiques.
+    </div>
+
+    <h3 class="section-title">1. Avancement Global des Pôles de l'ERP</h3>
+    <div class="progress-grid">
+        <div class="progress-container">
+            <div class="progress-label">Coeur (Interface & Sécurité)</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 100%;"></div></div>
+            <div class="progress-percentage">100%</div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-label">Moteur de Pointage Intelligent</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 100%;"></div></div>
+            <div class="progress-percentage">100%</div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-label">Pointage Terrain (Kiosque/QR)</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill orange" style="width: 60%;"></div></div>
+            <div class="progress-percentage orange">60%</div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-label">Tableau de Bord & Stats (BI)</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 95%;"></div></div>
+            <div class="progress-percentage">95%</div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-label">Dossier RH & Employés</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill orange" style="width: 75%;"></div></div>
+            <div class="progress-percentage orange">75%</div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-label">Paie, Salaires & Exports</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill orange" style="width: 85%;"></div></div>
+            <div class="progress-percentage orange">85%</div>
+        </div>
+    </div>
+
+    <h3 class="section-title">2. Inventaire Exhaustif des Modules Intégrés</h3>
+    
+    <div class="module-grid">
+        
+        <!-- MODULE POINTAGE -->
+        <div class="module-card">
+            <div class="module-header">
+                1. Moteur de Pointage Central <span class="status">Opérationnel</span>
+            </div>
+            <div class="module-body">
+                <ul>
+                    <li>Prise en charge de tous les cycles (Jour, Nuit, 24h, 48h, 72h).</li>
+                    <li>Saisie rapide : clics multiples pour appliquer un motif (Présence, Repos, Absences).</li>
+                    <li><strong>Smart Fusion :</strong> Suivi des mutations inter-sites des agents pour empêcher les doublons et les fraudes.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- MODULE QR KIOSK -->
+        <div class="module-card">
+            <div class="module-header">
+                2. Module "Kiosque" & QR Code <span class="status pending">En Dév.</span>
+            </div>
+            <div class="module-body">
+                <ul>
+                    <li>Système moderne de pointage autonome pour les agents sur le terrain.</li>
+                    <li>Génération de QR Codes uniques et scan sécurisé.</li>
+                    <li>Remontée en temps réel des présences sur l'application centrale pour les superviseurs.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- MODULE STATS -->
+        <div class="module-card">
+            <div class="module-header">
+                3. Business Intelligence & Statistiques <span class="status">Opérationnel</span>
+            </div>
+            <div class="module-body">
+                <ul>
+                    <li>Tableau de bord de type <i>BI (Business Intelligence)</i> pour l'analyse des données.</li>
+                    <li>Suivi visuel des fluctuations d'effectifs et du turnover.</li>
+                    <li>Visualisation globale des statistiques par site et par type de contrat.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- MODULE SITES -->
+        <div class="module-card">
+            <div class="module-header">
+                4. Gestion des Sites et Services <span class="status">Opérationnel</span>
+            </div>
+            <div class="module-body">
+                <ul>
+                    <li>Création instantanée de Sites Spéciaux, de Zones, et de Services.</li>
+                    <li>Réorganisation par simple "Glisser-Déposer" (Drag & Drop).</li>
+                    <li>Espaces de travail avec droits restreints selon le rôle (Admin, Contrôleur, Superviseur).</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- MODULE PAIE -->
+        <div class="module-card">
+            <div class="module-header">
+                5. Gestion de Paie & Salaires <span class="status pending">En Dév.</span>
+            </div>
+            <div class="module-body">
+                <ul>
+                    <li><strong>Exports Excel Natifs :</strong> Génération automatique du pointage avec sous-totaux pour intégration comptable.</li>
+                    <li><strong>Module Fiches de Paie :</strong> Préparation, gestion des salaires, et pré-édition des bulletins (Payslip Print View).</li>
+                    <li>Réduction drastique du temps de traitement mensuel.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- MODULE RH / ARCHIVES -->
+        <div class="module-card">
+            <div class="module-header">
+                6. Ressources Humaines & Archives <span class="status pending">En Dév.</span>
+            </div>
+            <div class="module-body">
+                <ul>
+                    <li><strong>Dossier Complet :</strong> Fiche numérique pour chaque employé.</li>
+                    <li><strong>Visionneuse de Documents :</strong> Aperçu instantané des PDF/images d'identité (<i>Audit-ready</i>).</li>
+                    <li>Module d'Archives légales pour le maintien sécurisé des historiques.</li>
+                    <li>Canal de Communication interne.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="impact-section">
+        <h3>3. Valeur Ajoutée pour le Comité de Direction</h3>
+        <div class="impact-list">
+            <div class="impact-item">
+                <div class="impact-icon">📈</div>
+                <div class="impact-text">
+                    <h5>Transition Numérique Complète</h5>
+                    <p>ELYSIUM propulse l'entreprise dans l'ère du digital. La chaîne de valeur (Terrain -> Pointage -> Paie) est 100% numérisée.</p>
+                </div>
+            </div>
+            <div class="impact-item">
+                <div class="impact-icon">🛡️</div>
+                <div class="impact-text">
+                    <h5>Traçabilité et Zéro Perte</h5>
+                    <p>Fini les fiches Excel volantes et les feuilles papiers perdues. Les données sont sauvegardées en base de données et traçables par les archives.</p>
+                </div>
+            </div>
+            <div class="impact-item">
+                <div class="impact-icon">💰</div>
+                <div class="impact-text">
+                    <h5>Protection Financière</h5>
+                    <p>L'élimination des doubles facturations (Smart Fusion) et l'automatisation des pointages empêchent les déperditions budgétaires (erreurs de paie).</p>
+                </div>
+            </div>
+            <div class="impact-item">
+                <div class="impact-icon">⭐</div>
+                <div class="impact-text">
+                    <h5>Premium & Marque Employeur</h5>
+                    <p>L'interface au design luxueux modernise l'image de la société auprès de ses collaborateurs (pointage QR) et de ses clients.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="signature-block">
+        <div class="signature-space">Directeur Technique / Chef de Projet</div>
+        <div class="signature-space">Direction Générale (Visa)</div>
+    </div>
+
+    <footer>
+        Rapport Synthétique ELYSIUM généré automatiquement.<br>Document strictement confidentiel.
+    </footer>
+</div>
+
+</body>
+</html>

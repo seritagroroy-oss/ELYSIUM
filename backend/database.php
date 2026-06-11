@@ -83,7 +83,7 @@ class ElysiumStmt
         }
         $result = $this->stmt->execute();
         $this->lastResult = [];
-        if ($result) {
+        if ($result && $result->numColumns() > 0) {
             while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
                 $this->lastResult[] = $row;
             }
@@ -124,20 +124,27 @@ function initSchema(ElysiumDb $pdo): void
             logo_url    TEXT,
             plan        TEXT DEFAULT 'trial',
             settings    TEXT DEFAULT '{}',
+            owner_email TEXT,
             created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS users (
-            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-            email               TEXT UNIQUE NOT NULL,
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
             password            TEXT NOT NULL,
             name                TEXT,
             role                TEXT DEFAULT 'user',
             role_display_name   TEXT,
             service             TEXT,
             service_id          TEXT,
+            workspace_type      TEXT DEFAULT 'AUTRE',
+            phone               TEXT,
+            profile_photo       TEXT,
             company_id          TEXT DEFAULT 'comp_default_1',
             permissions         TEXT DEFAULT '{}',
+            settings            TEXT DEFAULT '{}',
+            status              TEXT DEFAULT 'active',
+            maintenance_mode    INTEGER DEFAULT 0,
             trial_started_at    DATETIME,
             trial_ends_at       DATETIME,
             subscription_until  DATETIME,
@@ -147,6 +154,17 @@ function initSchema(ElysiumDb $pdo): void
             last_activity       DATETIME,
             created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (company_id) REFERENCES entreprises(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS private_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_email TEXT NOT NULL,
+            receiver_email TEXT NOT NULL,
+            message TEXT,
+            file_url TEXT,
+            file_name TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            is_read INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS services (
@@ -180,11 +198,22 @@ function initSchema(ElysiumDb $pdo): void
             shift_type      TEXT,
             has_sp          INTEGER DEFAULT 0,
             hire_date       TEXT,
+            exit_date       TEXT,
             recruitment_cost INTEGER DEFAULT 0,
             subsite_id      TEXT,
             service_id      TEXT,
             company_id      TEXT,
-            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+            shift_offset    INTEGER,
+            work_days       INTEGER,
+            shift_cycle     TEXT,
+            repos_day_of_week INTEGER,
+            repos_segments  TEXT,
+            salary          INTEGER,
+            has_cnps        INTEGER,
+            bank_account    TEXT,
+            notes           TEXT,
+            shift_history   TEXT
         );
 
         CREATE TABLE IF NOT EXISTS attendance (
@@ -211,6 +240,7 @@ function initSchema(ElysiumDb $pdo): void
             company_id  TEXT,
             tags        TEXT DEFAULT '[]',
             rating      INTEGER,
+            rating_comment TEXT,
             sla_hours   INTEGER DEFAULT 48,
             created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -242,9 +272,12 @@ function initSchema(ElysiumDb $pdo): void
             amount      INTEGER,
             currency    TEXT DEFAULT 'XOF',
             provider    TEXT,
+            external_id TEXT,
             status      TEXT DEFAULT 'pending',
+            meta        TEXT DEFAULT '{}',
             company_id  TEXT,
-            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS archives (
@@ -265,12 +298,195 @@ function initSchema(ElysiumDb $pdo): void
             UNIQUE(service_id, config_key)
         );
 
+        CREATE TABLE IF NOT EXISTS service_data (
+            service_id  TEXT,
+            data_key    TEXT,
+            data_value  TEXT,
+            PRIMARY KEY(service_id, data_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS inter_service_messages (
+            id              TEXT PRIMARY KEY,
+            from_service    TEXT NOT NULL,
+            to_service      TEXT NOT NULL,
+            sender          TEXT NOT NULL,
+            content         TEXT,
+            attachment      TEXT,
+            attachment_name TEXT,
+            reply_to        TEXT,
+            is_pinned       INTEGER DEFAULT 0,
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS typing_states (
+            from_service    TEXT NOT NULL,
+            to_service      TEXT NOT NULL,
+            user_email      TEXT NOT NULL,
+            timestamp       INTEGER NOT NULL,
+            PRIMARY KEY(from_service, to_service, user_email)
+        );
+
+        CREATE TABLE IF NOT EXISTS message_reactions (
+            message_id      TEXT NOT NULL,
+            emoji           TEXT NOT NULL,
+            user_email      TEXT NOT NULL,
+            user_name       TEXT NOT NULL,
+            PRIMARY KEY(message_id, emoji, user_email)
+        );
+
+        CREATE TABLE IF NOT EXISTS ticket_comments (
+            id              TEXT PRIMARY KEY,
+            ticket_id       TEXT NOT NULL,
+            user_name       TEXT NOT NULL,
+            user_email      TEXT NOT NULL,
+            content         TEXT NOT NULL,
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS ticket_tags (
+            ticket_id       TEXT NOT NULL,
+            tag             TEXT NOT NULL,
+            PRIMARY KEY(ticket_id, tag)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_attendance_agent_date ON attendance(agent_id, date);
         CREATE INDEX IF NOT EXISTS idx_attendance_service ON attendance(service_id, period);
         CREATE INDEX IF NOT EXISTS idx_messages_ticket ON messages(ticket_id);
         CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip, created_at);
         CREATE INDEX IF NOT EXISTS idx_users_company ON users(company_id);
         CREATE INDEX IF NOT EXISTS idx_agents_service ON agents(service_id);
+        CREATE INDEX IF NOT EXISTS idx_ism_services ON inter_service_messages(from_service, to_service);
+
+        /* NOUVELLES TABLES POUR FLUCTUATION SALARIALE & BI */
+        CREATE TABLE IF NOT EXISTS salary_grid (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id  TEXT,
+            poste       TEXT NOT NULL,
+            taux_horaire INTEGER DEFAULT 0,
+            UNIQUE(company_id, poste)
+        );
+
+        CREATE TABLE IF NOT EXISTS site_contracts (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id      TEXT,
+            site_name       TEXT NOT NULL,
+            budget_mensuel  INTEGER DEFAULT 0,
+            charges_percent REAL DEFAULT 0,
+            frais_fixes     INTEGER DEFAULT 0,
+            prime_site      INTEGER DEFAULT 0,
+            prime_function  TEXT DEFAULT '',
+            UNIQUE(company_id, site_name)
+        );
+
+        CREATE TABLE IF NOT EXISTS monthly_variables (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id      TEXT,
+            period          TEXT NOT NULL,
+            primes_globales INTEGER DEFAULT 0,
+            charges_globales_percent REAL DEFAULT 0,
+            UNIQUE(company_id, period)
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_loans (
+            id                 TEXT PRIMARY KEY,
+            company_id         TEXT,
+            agent_name         TEXT NOT NULL,
+            agent_function     TEXT,
+            total_amount       INTEGER DEFAULT 0,
+            motif              TEXT,
+            date_granted       TEXT,
+            monthly_deduction  INTEGER DEFAULT 0,
+            start_period       TEXT,
+            remaining_balance  INTEGER DEFAULT 0,
+            status             TEXT DEFAULT 'active',
+            created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_adjustments (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id       TEXT,
+            agent_id         TEXT NOT NULL,
+            period           TEXT NOT NULL,
+            type             TEXT NOT NULL, /* PRIME, AVANCE, RETENUE */
+            amount           INTEGER DEFAULT 0,
+            comment          TEXT,
+            date_application TEXT,
+            created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        /* NOUVELLES TABLES POUR LE MODULE DE GESTION DES CONGÉS */
+        CREATE TABLE IF NOT EXISTS leave_types (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id      TEXT,
+            name            TEXT NOT NULL,
+            is_paid         INTEGER DEFAULT 1,
+            requires_proof  INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS leave_balances (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id      TEXT,
+            agent_id        TEXT NOT NULL,
+            year            INTEGER NOT NULL,
+            acquired        REAL DEFAULT 0.0,
+            taken           REAL DEFAULT 0.0,
+            pending         REAL DEFAULT 0.0,
+            UNIQUE(company_id, agent_id, year)
+        );
+
+        CREATE TABLE IF NOT EXISTS leave_requests (
+            id              TEXT PRIMARY KEY,
+            company_id      TEXT,
+            service_id      TEXT,
+            agent_id        TEXT NOT NULL,
+            leave_type_id   INTEGER NOT NULL,
+            start_date      TEXT NOT NULL,
+            end_date        TEXT NOT NULL,
+            total_days      REAL NOT NULL,
+            reason          TEXT,
+            attachment_url  TEXT,
+            status          TEXT DEFAULT 'pending', /* pending, approved, rejected */
+            reviewed_by     TEXT,
+            reviewed_at     DATETIME,
+            review_comment  TEXT,
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(leave_type_id) REFERENCES leave_types(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS leave_settings (
+            company_id      TEXT PRIMARY KEY,
+            auto_increment  INTEGER DEFAULT 0,
+            increment_rate  REAL DEFAULT 2.0
+        );
+
+        CREATE TABLE IF NOT EXISTS absences_permissions (
+            id              TEXT PRIMARY KEY,
+            company_id      TEXT NOT NULL,
+            agent_id        TEXT NOT NULL,
+            reason          TEXT NOT NULL,
+            start_datetime  TEXT NOT NULL,
+            end_datetime    TEXT NOT NULL,
+            duration_hours  REAL,
+            recorded_by     TEXT,
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS contracts (
+            id              TEXT PRIMARY KEY,
+            company_id      TEXT NOT NULL,
+            agent_id        TEXT NOT NULL,
+            contract_type   TEXT NOT NULL DEFAULT 'CDI',
+            start_date      TEXT NOT NULL,
+            end_date        TEXT,
+            trial_end_date  TEXT,
+            salary          REAL DEFAULT 0,
+            position        TEXT,
+            department      TEXT,
+            status          TEXT DEFAULT 'active',
+            notes           TEXT,
+            created_by      TEXT,
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
     ");
 }
 

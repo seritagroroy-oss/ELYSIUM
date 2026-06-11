@@ -2,6 +2,23 @@ import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { UserPlus, Loader2, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
+const calculatePasswordStrength = (pwd) => {
+  if (!pwd) return { score: 0, label: '', color: 'transparent', width: '0%' };
+  let score = 0;
+  if (pwd.length > 0) score += 1;
+  if (pwd.length >= 8) score += 1;
+  if (/[A-Z]/.test(pwd)) score += 1;
+  if (/[0-9]/.test(pwd)) score += 1;
+  if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+  
+  if (score === 1) return { score, label: 'Très faible', color: '#ef4444', width: '20%' };
+  if (score === 2) return { score, label: 'Faible', color: '#f97316', width: '40%' };
+  if (score === 3) return { score, label: 'Moyen', color: '#eab308', width: '60%' };
+  if (score === 4) return { score, label: 'Fort', color: '#84cc16', width: '80%' };
+  if (score >= 5) return { score, label: 'Très fort', color: '#22c55e', width: '100%' };
+  return { score: 0, label: '', color: 'transparent', width: '0%' };
+};
+
 export default function Register({ setView }) {
   const { register } = useAuth();
   const [serviceName, setServiceName] = useState('');
@@ -17,8 +34,8 @@ export default function Register({ setView }) {
     setError('');
     setLoading(true);
 
-    if (password.length < 6) {
-      setError("Le mot de passe doit faire au moins 6 caractères.");
+    if (password.length < 8) {
+      setError("Le mot de passe doit faire au moins 8 caractères.");
       setLoading(false);
       return;
     }
@@ -126,7 +143,7 @@ export default function Register({ setView }) {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 className="form-input"
-                placeholder="•••••••• (Min 6 caractères)"
+                placeholder="•••••••• (Min 8 caractères)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -141,6 +158,24 @@ export default function Register({ setView }) {
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
+            {password && (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Force du mot de passe</span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: calculatePasswordStrength(password).color }}>
+                    {calculatePasswordStrength(password).label}
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ 
+                    height: '100%', 
+                    width: calculatePasswordStrength(password).width, 
+                    backgroundColor: calculatePasswordStrength(password).color,
+                    transition: 'all 0.3s ease'
+                  }}></div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

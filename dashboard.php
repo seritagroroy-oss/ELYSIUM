@@ -21,6 +21,7 @@ if (($_SESSION['user_role'] ?? '') !== 'admin' && empty($__perms['can_view_dashb
 }
 $subscriptionState = getUserSubscriptionState($_SESSION['user_id']);
 $db = getData();
+$has_seen_onboarding = $db['users'][$_SESSION['user_id']]['has_seen_onboarding'] ?? false;
 $all_services = [];
 $current_switched = $_SESSION['switched_service_id'] ?? '';
 if (($_SESSION['user_role'] ?? '') === 'super_admin') {
@@ -1396,7 +1397,7 @@ if (($_SESSION['user_role'] ?? '') === 'super_admin') {
 
         async function changeLanguage(lang) {
             try {
-                await fetch('api.phpaction=set_lang', {
+                await fetch('api.php?action=set_lang', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ lang })
@@ -1407,6 +1408,64 @@ if (($_SESSION['user_role'] ?? '') === 'super_admin') {
             }
         }
     </script>
+    
+    <!-- Modale Onboarding -->
+    <div id="onboarding-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; text-align: center;">
+            <div class="modal-header">
+                <h2>Bienvenue sur Pointage Pro ! 🎉</h2>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Découvrez comment utiliser l'application en quelques secondes.</p>
+                <!-- Image de remplacement temporaire pour la vidéo -->
+                <div style="background: rgba(0,0,0,0.5); border-radius: 12px; padding: 40px; border: 1px solid var(--border);">
+                    <i class="fas fa-play-circle" style="font-size: 4rem; color: var(--primary); margin-bottom: 15px;"></i>
+                    <p>Vidéo de présentation à venir...</p>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="completeOnboarding()" style="width: 100%;">Commencer à utiliser l'application</button>
+        </div>
+    </div>
+
+    <script>
+        const HAS_SEEN_ONBOARDING = <?php echo $has_seen_onboarding ? 'true' : 'false'; ?>;
+        
+        // Exécution immédiate (le DOM est déjà chargé à ce stade)
+        alert("Bienvenue ! Statut Onboarding : " + HAS_SEEN_ONBOARDING);
+        console.log("Statut Onboarding :", HAS_SEEN_ONBOARDING);
+        
+        if (!HAS_SEEN_ONBOARDING) {
+            const modal = document.getElementById('onboarding-modal');
+            if (modal) {
+                alert("La modale a été trouvée, affichage en cours...");
+                modal.style.display = 'flex';
+                modal.style.opacity = '1';
+                modal.style.visibility = 'visible';
+                modal.style.zIndex = '999999';
+                modal.style.background = 'rgba(255, 0, 0, 0.5)'; // Fond rouge temporaire pour forcer la visibilité
+                modal.classList.add('active');
+            } else {
+                alert("Erreur: La modale onboarding-modal est introuvable !");
+            }
+        }
+
+        async function completeOnboarding() {
+            const modal = document.getElementById('onboarding-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+            
+            try {
+                await fetch('api.php?action=complete_onboarding', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (err) {
+                console.error('Error saving onboarding status:', err);
+            }
+        }
+    </script>
+
     <script src="assets/js/subscription-banner.js?v=<?= time() ?>"></script>
     <script src="assets/js/app.js?v=<?= time() ?>"></script>
 </body>

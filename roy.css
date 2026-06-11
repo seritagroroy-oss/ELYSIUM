@@ -1,0 +1,26 @@
+h1{
+text-align: center;
+color:blueviolet
+}
+.wizard-card {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.6);
+  padding: 20px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wizard-card:hover {
+  transform: translateY(-5px);
+  border: 1px solid white;
+  background: rgba(255,255,255,0.1);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+}
+.wizard-card.active {
+  border: 1px solid white;
+  background: rgba(255,255,255,0.15);
+  box-shadow: 0 0 15px rgba(255,255,255,0.2);
+}

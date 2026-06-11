@@ -1,12 +1,7 @@
-self.addEventListener('install', event => {
-    // Basic SW install
-});
-
+// Service Worker désactivé pour éviter les problèmes de cache en développement
+// Le SW est en mode passthrough : réseau first, pas de cache
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', () => self.clients.claim());
 self.addEventListener('fetch', event => {
-    // Network first strategy to prevent caching issues with PHP/API
-    event.respondWith(
-        fetch(event.request).catch(() => {
-            return caches.match(event.request);
-        })
-    );
+    event.respondWith(fetch(event.request));
 });

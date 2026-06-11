@@ -178,7 +178,6 @@
 .app-layout {
   display: flex;
   min-height: 100vh;
-  margin: -24px; /* offset body padding */
   position: relative;
 }
 
@@ -206,7 +205,7 @@
 
 .main-content {
   flex: 1;
-  padding: 12px 8px;
+  padding: 24px;
   overflow-y: auto;
   width: 100%;
 }

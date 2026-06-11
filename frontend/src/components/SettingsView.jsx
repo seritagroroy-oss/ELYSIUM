@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { apiCall } from '../api';
-import { Settings, Plus, Trash, Save, Loader2, Monitor, Sun, Sparkles, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings, Plus, Trash, Save, Loader2, Monitor, Sun, Sparkles, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp, Bell, FileSpreadsheet, Users, SortAsc } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 
 export default function SettingsView() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isRH = user?.workspace_type === 'RH';
+  const isComptable = user?.workspace_type === 'COMPTABLE';
+  const isSecretariat = user?.workspace_type === 'SECRETARIAT';
 
   const [cycleStart, setCycleStart] = useState(21);
   const [cycleEnd, setCycleEnd] = useState(20);
@@ -15,6 +18,8 @@ export default function SettingsView() {
   const [savedFuncs, setSavedFuncs] = useState(false);
   const [newFuncId, setNewFuncId] = useState('');
   const [newFuncName, setNewFuncName] = useState('');
+  const [newFuncSalary, setNewFuncSalary] = useState('');
+  const [salaryConfig, setSalaryConfig] = useState({});
   const [theme, setTheme] = useState(() => localStorage.getItem('pontage_theme') || 'modern');
   const [statsCardSize, setStatsCardSize] = useState(() => parseFloat(localStorage.getItem('pontage_stats_card_size') || '1'));
   const [savedStatsSize, setSavedStatsSize] = useState(false);
@@ -26,6 +31,116 @@ export default function SettingsView() {
   const [showSectionCouleurs, setShowSectionCouleurs] = useState(false);
   const [showSectionCards, setShowSectionCards] = useState(false);
   const [showSectionModes, setShowSectionModes] = useState(false);
+  const [showSectionRH, setShowSectionRH] = useState(false);
+  const [showSectionComptable, setShowSectionComptable] = useState(false);
+
+  // Comptable-specific preferences
+  const [comptTaxMode, setComptTaxMode] = useState(() => localStorage.getItem('pontage_compt_tax_mode') || 'simplifie');
+  const [comptCnpsSalarial, setComptCnpsSalarial] = useState(() => parseFloat(localStorage.getItem('pontage_compt_cnps_sal') || '6.3'));
+  const [comptCnpsPatronal, setComptCnpsPatronal] = useState(() => parseFloat(localStorage.getItem('pontage_compt_cnps_pat') || '7.7'));
+  const [comptExportFormat, setComptExportFormat] = useState(() => localStorage.getItem('pontage_compt_export') || 'excel');
+  const [comptFiscalYear, setComptFiscalYear] = useState(() => localStorage.getItem('pontage_compt_fiscal_year') || 'jan');
+  const [comptAutoCalc, setComptAutoCalc] = useState(() => localStorage.getItem('pontage_compt_auto_calc') !== 'false');
+
+  // Cat 1: Paie & Calculs
+  const [comptHsJour, setComptHsJour] = useState(() => parseInt(localStorage.getItem('pontage_compt_hs_jour') || '15'));
+  const [comptHsNuit, setComptHsNuit] = useState(() => parseInt(localStorage.getItem('pontage_compt_hs_nuit') || '50'));
+  const [comptHsDimanche, setComptHsDimanche] = useState(() => parseInt(localStorage.getItem('pontage_compt_hs_dim') || '75'));
+  const [comptHsFerie, setComptHsFerie] = useState(() => parseInt(localStorage.getItem('pontage_compt_hs_ferie') || '100'));
+  const [comptPrimeAnciennete, setComptPrimeAnciennete] = useState(() => localStorage.getItem('pontage_compt_prime_anc') !== 'false');
+  const [comptSeuilMinimal, setComptSeuilMinimal] = useState(() => parseInt(localStorage.getItem('pontage_compt_seuil_min') || '60000'));
+  const [comptJourVirement, setComptJourVirement] = useState(() => parseInt(localStorage.getItem('pontage_compt_jour_vir') || '25'));
+
+  // Cat 2: Alertes Comptables
+  const [comptAlerteVariationMasse, setComptAlerteVariationMasse] = useState(() => parseInt(localStorage.getItem('pontage_compt_alerte_var_masse') || '10'));
+  const [comptAlerteSansRib, setComptAlerteSansRib] = useState(() => localStorage.getItem('pontage_compt_alerte_rib') !== 'false');
+  const [comptAlerteInfSmig, setComptAlerteInfSmig] = useState(() => localStorage.getItem('pontage_compt_alerte_smig') !== 'false');
+
+  // Cat 3: Bulletins de Paie
+  const [comptEnteteBulletin, setComptEnteteBulletin] = useState(() => localStorage.getItem('pontage_compt_entete') || 'Elysium Sécurité CI');
+  const [comptMentionLegale, setComptMentionLegale] = useState(() => localStorage.getItem('pontage_compt_mention') || 'Document Confidentiel');
+  const [comptFormatNum, setComptFormatNum] = useState(() => localStorage.getItem('pontage_compt_format_num') || 'ELYS-YYYY-XXXX');
+  const [comptHideLignesVides, setComptHideLignesVides] = useState(() => localStorage.getItem('pontage_compt_hide_vides') !== 'false');
+
+  // Cat 4: Tableau de Bord Comptable
+  const [comptComparePeriod, setComptComparePeriod] = useState(() => localStorage.getItem('pontage_compt_compare') || 'prev_month');
+  const [comptModeConfidentiel, setComptModeConfidentiel] = useState(() => localStorage.getItem('pontage_compt_confid') === 'true');
+  const [comptDevise, setComptDevise] = useState(() => localStorage.getItem('pontage_compt_devise') || 'XOF');
+
+  const [savedCompt, setSavedCompt] = useState(false);
+
+  // RH-specific preferences
+  const [rhAlertContract, setRhAlertContract] = useState(() => parseInt(localStorage.getItem('pontage_rh_alert_contract') || '15'));
+  const [rhAlertAbsence, setRhAlertAbsence] = useState(() => parseInt(localStorage.getItem('pontage_rh_alert_absence') || '3'));
+  const [rhExportFormat, setRhExportFormat] = useState(() => localStorage.getItem('pontage_rh_export_format') || 'excel');
+  const [rhExportFull, setRhExportFull] = useState(() => localStorage.getItem('pontage_rh_export_full') !== 'false');
+  const [rhSortOrder, setRhSortOrder] = useState(() => localStorage.getItem('pontage_rh_sort_order') || 'name');
+  const [rhHideInactive, setRhHideInactive] = useState(() => localStorage.getItem('pontage_rh_hide_inactive') === 'true');
+  const [savedRH, setSavedRH] = useState(false);
+
+  // Secretariat-specific preferences
+  const [secAutoCheckout, setSecAutoCheckout] = useState(() => localStorage.getItem('pontage_sec_auto_checkout') || '19:00');
+  const [secBadgeMax, setSecBadgeMax] = useState(() => parseInt(localStorage.getItem('pontage_sec_badge_max') || '50'));
+  const [secAlertColis, setSecAlertColis] = useState(() => localStorage.getItem('pontage_sec_alert_colis') !== 'false');
+  const [secRoomDuration, setSecRoomDuration] = useState(() => parseInt(localStorage.getItem('pontage_sec_room_duration') || '60'));
+  const [savedSec, setSavedSec] = useState(false);
+  const [showSectionSecretariat, setShowSectionSecretariat] = useState(false);
+
+  const handleSaveSecPrefs = () => {
+    localStorage.setItem('pontage_sec_auto_checkout', secAutoCheckout);
+    localStorage.setItem('pontage_sec_badge_max', String(secBadgeMax));
+    localStorage.setItem('pontage_sec_alert_colis', String(secAlertColis));
+    localStorage.setItem('pontage_sec_room_duration', String(secRoomDuration));
+    window.dispatchEvent(new Event('pontage_sec_prefs_changed'));
+    setSavedSec(true);
+    setTimeout(() => setSavedSec(false), 3000);
+  };
+
+  const handleSaveComptPrefs = () => {
+    localStorage.setItem('pontage_compt_tax_mode', comptTaxMode);
+    localStorage.setItem('pontage_compt_cnps_sal', String(comptCnpsSalarial));
+    localStorage.setItem('pontage_compt_cnps_pat', String(comptCnpsPatronal));
+    localStorage.setItem('pontage_compt_export', comptExportFormat);
+    localStorage.setItem('pontage_compt_fiscal_year', comptFiscalYear);
+    localStorage.setItem('pontage_compt_auto_calc', String(comptAutoCalc));
+
+    localStorage.setItem('pontage_compt_hs_jour', String(comptHsJour));
+    localStorage.setItem('pontage_compt_hs_nuit', String(comptHsNuit));
+    localStorage.setItem('pontage_compt_hs_dim', String(comptHsDimanche));
+    localStorage.setItem('pontage_compt_hs_ferie', String(comptHsFerie));
+    localStorage.setItem('pontage_compt_prime_anc', String(comptPrimeAnciennete));
+    localStorage.setItem('pontage_compt_seuil_min', String(comptSeuilMinimal));
+    localStorage.setItem('pontage_compt_jour_vir', String(comptJourVirement));
+
+    localStorage.setItem('pontage_compt_alerte_var_masse', String(comptAlerteVariationMasse));
+    localStorage.setItem('pontage_compt_alerte_rib', String(comptAlerteSansRib));
+    localStorage.setItem('pontage_compt_alerte_smig', String(comptAlerteInfSmig));
+
+    localStorage.setItem('pontage_compt_entete', comptEnteteBulletin);
+    localStorage.setItem('pontage_compt_mention', comptMentionLegale);
+    localStorage.setItem('pontage_compt_format_num', comptFormatNum);
+    localStorage.setItem('pontage_compt_hide_vides', String(comptHideLignesVides));
+
+    localStorage.setItem('pontage_compt_compare', comptComparePeriod);
+    localStorage.setItem('pontage_compt_confid', String(comptModeConfidentiel));
+    localStorage.setItem('pontage_compt_devise', comptDevise);
+
+    window.dispatchEvent(new Event('pontage_compt_prefs_changed'));
+    setSavedCompt(true);
+    setTimeout(() => setSavedCompt(false), 3000);
+  };
+
+  const handleSaveRHPrefs = () => {
+    localStorage.setItem('pontage_rh_alert_contract', String(rhAlertContract));
+    localStorage.setItem('pontage_rh_alert_absence', String(rhAlertAbsence));
+    localStorage.setItem('pontage_rh_export_format', rhExportFormat);
+    localStorage.setItem('pontage_rh_export_full', String(rhExportFull));
+    localStorage.setItem('pontage_rh_sort_order', rhSortOrder);
+    localStorage.setItem('pontage_rh_hide_inactive', String(rhHideInactive));
+    window.dispatchEvent(new Event('pontage_rh_prefs_changed'));
+    setSavedRH(true);
+    setTimeout(() => setSavedRH(false), 3000);
+  };
 
   const [modeExtras, setModeExtras] = useState(() => localStorage.getItem('pontage_display_mode_extras') || 'auto_individual');
   const [modeReleves, setModeReleves] = useState(() => localStorage.getItem('pontage_display_mode_releves') || 'auto_individual');
@@ -69,9 +184,10 @@ export default function SettingsView() {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const [settings, funcs] = await Promise.all([
+      const [settings, funcs, salCfg] = await Promise.all([
         apiCall('get_settings', {}, 'GET'),
-        apiCall('get_functions', {}, 'GET')
+        apiCall('get_functions', {}, 'GET'),
+        apiCall('get_salary_config', {}, 'GET')
       ]);
       if (settings && settings.cycle_start) {
         setCycleStart(settings.cycle_start);
@@ -79,6 +195,9 @@ export default function SettingsView() {
       }
       if (Array.isArray(funcs)) {
         setFunctions(funcs);
+      }
+      if (salCfg && typeof salCfg === 'object') {
+        setSalaryConfig(salCfg);
       }
     } catch (e) {
       console.error(e);
@@ -106,15 +225,44 @@ export default function SettingsView() {
     }
   };
 
-  const handleAddFunction = () => {
+  const handleAddFunction = async () => {
     if (!newFuncId.trim() || !newFuncName.trim()) return;
-    setFunctions(prev => [...prev, { id: newFuncId.toUpperCase().trim(), name: newFuncName.trim() }]);
+    const newFunc = { id: newFuncId.toUpperCase().trim(), name: newFuncName.trim() };
+    const updated = [...functions, newFunc];
+    setFunctions(updated);
+
+    // Update salary_config with the new function's salary
+    const salary = parseInt(newFuncSalary) || 75000;
+    const updatedSalaryConfig = { ...salaryConfig, [newFunc.id]: salary };
+    setSalaryConfig(updatedSalaryConfig);
+
     setNewFuncId('');
     setNewFuncName('');
+    setNewFuncSalary('');
+    // Auto-save immediately to backend
+    try {
+      const [res1, res2] = await Promise.all([
+        apiCall('save_functions', { functions: updated }),
+        apiCall('save_salary_grid', { grid: updatedSalaryConfig })
+      ]);
+      if (res1.success && res2.success) {
+        setSavedFuncs(true);
+        setTimeout(() => setSavedFuncs(false), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleDeleteFunction = (id) => {
-    setFunctions(prev => prev.filter(f => f.id !== id));
+  const handleDeleteFunction = async (id) => {
+    const updated = functions.filter(f => f.id !== id);
+    setFunctions(updated);
+    // Auto-save immediately to backend
+    try {
+      await apiCall('save_functions', { functions: updated });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleSaveFunctions = async () => {
@@ -160,7 +308,262 @@ export default function SettingsView() {
         </div>
       ) : (
         <>
+          {/* === SECTION RH UNIQUEMENT === */}
+          {isRH && (
+          <div className="glass-panel" style={{ marginTop: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionRH ? '8px' : 0 }}>
+              <h3 style={{ fontSize: '1.15rem', margin: 0 }}>⚙️ Préférences de l'Espace RH</h3>
+              <button
+                onClick={() => setShowSectionRH(v => !v)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px' }}
+                title={showSectionRH ? 'Masquer' : 'Afficher'}
+              >
+                {showSectionRH ? <EyeOff size={16} /> : <Eye size={16} />}
+                <span>{showSectionRH ? 'Masquer' : 'Afficher'}</span>
+              </button>
+            </div>
+            {showSectionRH && (
+              <>
+                <p className="subtitle" style={{ marginBottom: '24px' }}>
+                  Configurez les alertes, le format d'export et l'affichage du personnel pour votre espace RH.
+                </p>
+
+                {/* ---- 1. Alertes & Notifications ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: 'var(--a)', display: 'flex', alignItems: 'center', gap: '8px' }}><Bell size={18} /> Alertes & Notifications</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>🔔 Alerte fin de contrat (jours avant échéance)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input
+                          type="range" min="5" max="90" step="5" value={rhAlertContract}
+                          onChange={(e) => setRhAlertContract(parseInt(e.target.value))}
+                          style={{ flex: 1, accentColor: 'var(--b)' }}
+                        />
+                        <span style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: '700', minWidth: '60px', textAlign: 'center' }}>{rhAlertContract} j</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Vous serez alerté {rhAlertContract} jours avant l'expiration d'un contrat CDD ou période d'essai.</p>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>⚠️ Seuil d'alerte absentéisme (jours / mois)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input
+                          type="range" min="1" max="15" step="1" value={rhAlertAbsence}
+                          onChange={(e) => setRhAlertAbsence(parseInt(e.target.value))}
+                          style={{ flex: 1, accentColor: '#f59e0b' }}
+                        />
+                        <span style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: '700', minWidth: '60px', textAlign: 'center' }}>{rhAlertAbsence} j</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Un agent dépassant {rhAlertAbsence} jours d'absence sur le mois sera signalé.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---- 2. Format & Préférences d'Export ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: 'var(--a)', display: 'flex', alignItems: 'center', gap: '8px' }}><FileSpreadsheet size={18} /> Format & Préférences d'Export</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>Format d'export par défaut</label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {[{id: 'excel', label: '📊 Excel (.xlsx)', color: '#10b981'}, {id: 'csv', label: '📄 CSV (.csv)', color: '#38bdf8'}, {id: 'pdf', label: '📑 PDF', color: '#a78bfa'}].map(fmt => (
+                          <button
+                            key={fmt.id}
+                            onClick={() => setRhExportFormat(fmt.id)}
+                            style={{
+                              flex: 1, padding: '10px 8px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s',
+                              background: rhExportFormat === fmt.id ? `${fmt.color}22` : 'rgba(255,255,255,0.03)',
+                              border: `2px solid ${rhExportFormat === fmt.id ? fmt.color : 'var(--border)'}`,
+                              color: rhExportFormat === fmt.id ? fmt.color : 'var(--muted)',
+                              fontSize: '0.85rem', fontWeight: rhExportFormat === fmt.id ? '700' : '400'
+                            }}
+                          >{fmt.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>Contenu de l'export</label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => setRhExportFull(true)}
+                          style={{
+                            flex: 1, padding: '10px 8px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s',
+                            background: rhExportFull ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.03)',
+                            border: `2px solid ${rhExportFull ? '#10b981' : 'var(--border)'}`,
+                            color: rhExportFull ? '#10b981' : 'var(--muted)',
+                            fontSize: '0.85rem', fontWeight: rhExportFull ? '700' : '400'
+                          }}
+                        >📋 Complet</button>
+                        <button
+                          onClick={() => setRhExportFull(false)}
+                          style={{
+                            flex: 1, padding: '10px 8px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s',
+                            background: !rhExportFull ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.03)',
+                            border: `2px solid ${!rhExportFull ? '#38bdf8' : 'var(--border)'}`,
+                            color: !rhExportFull ? '#38bdf8' : 'var(--muted)',
+                            fontSize: '0.85rem', fontWeight: !rhExportFull ? '700' : '400'
+                          }}
+                        >📝 Simplifié</button>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>{rhExportFull ? 'Toutes les colonnes seront incluses dans l\'export.' : 'Seules les colonnes essentielles (Nom, Fonction, Site, Salaire) seront exportées.'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---- 3. Affichage du Personnel ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: 'var(--a)', display: 'flex', alignItems: 'center', gap: '8px' }}><Users size={18} /> Affichage du Personnel</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}><SortAsc size={14} style={{ display: 'inline', marginRight: '6px' }}/>Tri par défaut du vivier</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {[{id: 'name', label: '🔤 Par nom (A → Z)'}, {id: 'function', label: '🏷️ Par poste / fonction'}, {id: 'date', label: '📅 Par date d\'embauche'}].map(opt => (
+                          <label
+                            key={opt.id}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s',
+                              background: rhSortOrder === opt.id ? 'rgba(56,189,248,0.1)' : 'rgba(255,255,255,0.02)',
+                              border: `1px solid ${rhSortOrder === opt.id ? 'rgba(56,189,248,0.3)' : 'rgba(255,255,255,0.05)'}`,
+                            }}
+                          >
+                            <input type="radio" name="rhSortOrder" value={opt.id} checked={rhSortOrder === opt.id} onChange={() => setRhSortOrder(opt.id)} style={{ accentColor: 'var(--b)' }} />
+                            <span style={{ color: rhSortOrder === opt.id ? 'white' : 'var(--muted)', fontSize: '0.9rem' }}>{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>Visibilité des agents inactifs</label>
+                      <div
+                        onClick={() => setRhHideInactive(!rhHideInactive)}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
+                          background: rhHideInactive ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
+                          border: `1px solid ${rhHideInactive ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)'}`,
+                        }}
+                      >
+                        <div>
+                          <span style={{ display: 'block', color: 'white', fontSize: '0.95rem', fontWeight: '600' }}>{rhHideInactive ? 'Agents inactifs masqués' : 'Tous les agents visibles'}</span>
+                          <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px' }}>{rhHideInactive ? 'Les agents dont le contrat est expiré ou suspendu ne s\'afficheront pas.' : 'Tous les agents apparaissent, y compris les inactifs.'}</span>
+                        </div>
+                        <div style={{
+                          width: '48px', height: '26px', borderRadius: '13px', padding: '3px', cursor: 'pointer', transition: 'all 0.3s',
+                          background: rhHideInactive ? '#ef4444' : '#10b981',
+                        }}>
+                          <div style={{
+                            width: '20px', height: '20px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s',
+                            transform: rhHideInactive ? 'translateX(22px)' : 'translateX(0)',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                          }} />
+                        </div>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '12px', fontStyle: 'italic' }}>💡 Un agent est considéré "inactif" si son contrat est arrivé à échéance ou s'il a été marqué comme sorti.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bouton Sauvegarder */}
+                {isAdmin && (
+                  <button
+                    className={`btn ${savedRH ? 'btn-success' : 'btn-primary'}`}
+                    onClick={handleSaveRHPrefs}
+                    style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <Save size={16} />
+                    <span>{savedRH ? '✓ Préférences RH sauvegardées !' : 'Sauvegarder les Préférences RH'}</span>
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          )}
+
+          {/* === SECTION SECRÉTARIAT UNIQUEMENT === */}
+          {isSecretariat && (
+          <div className="glass-panel" style={{ marginTop: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionSecretariat ? '8px' : 0 }}>
+              <h3 style={{ fontSize: '1.15rem', margin: 0 }}>⚙️ Préférences Secrétariat & Accueil</h3>
+              <button
+                onClick={() => setShowSectionSecretariat(v => !v)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px' }}
+                title={showSectionSecretariat ? 'Masquer' : 'Afficher'}
+              >
+                {showSectionSecretariat ? <EyeOff size={16} /> : <Eye size={16} />}
+                <span>{showSectionSecretariat ? 'Masquer' : 'Afficher'}</span>
+              </button>
+            </div>
+            {showSectionSecretariat && (
+              <>
+                <p className="subtitle" style={{ marginBottom: '24px' }}>
+                  Configurez les règles de la réception, de l'annuaire et de la gestion du courrier.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                    <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>⏰ Heure de Check-out automatique</label>
+                    <input
+                      type="time" className="form-input"
+                      value={secAutoCheckout}
+                      onChange={(e) => setSecAutoCheckout(e.target.value)}
+                    />
+                    <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Les visiteurs n'ayant pas pointé leur départ seront automatiquement marqués partis à cette heure.</p>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                    <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>🎫 Nombre Max de Badges Visiteurs</label>
+                    <input
+                      type="number" className="form-input" min="1" max="500"
+                      value={secBadgeMax}
+                      onChange={(e) => setSecBadgeMax(parseInt(e.target.value))}
+                    />
+                    <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Le nombre de badges physiques disponibles à l'accueil pour les visiteurs.</p>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: 0 }}>📦 Notifications de Colis</label>
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                        <div style={{ position: 'relative' }}>
+                          <input type="checkbox" checked={secAlertColis} onChange={(e) => setSecAlertColis(e.target.checked)} style={{ srOnly: true, opacity: 0, position: 'absolute' }} />
+                          <div style={{ width: '36px', height: '20px', background: secAlertColis ? 'var(--b)' : 'var(--border)', borderRadius: '10px', transition: 'all 0.2s', position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: '2px', left: secAlertColis ? '18px' : '2px', width: '16px', height: '16px', background: 'white', borderRadius: '50%', transition: 'all 0.2s' }}></div>
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--muted)', fontStyle: 'italic' }}>Avertir automatiquement le destinataire lorsqu'un courrier/colis est réceptionné.</p>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                    <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>⏱️ Durée standard d'une réservation de salle</label>
+                    <select
+                      className="form-input"
+                      value={secRoomDuration}
+                      onChange={(e) => setSecRoomDuration(parseInt(e.target.value))}
+                    >
+                      <option value="30">30 minutes</option>
+                      <option value="60">1 heure</option>
+                      <option value="90">1h 30mins</option>
+                      <option value="120">2 heures</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  className={`btn ${savedSec ? 'btn-success' : 'btn-primary'}`}
+                  onClick={handleSaveSecPrefs}
+                  style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Save size={16} />
+                  <span>{savedSec ? '✓ Préférences sauvegardées !' : 'Sauvegarder les Préférences'}</span>
+                </button>
+              </>
+            )}
+          </div>
+          )}
+
           {/* Cycle de Paie */}
+          {!isRH && !isSecretariat && (
           <div className="glass-panel" style={{ marginTop: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionCycle ? '8px' : 0 }}>
               <h3 style={{ fontSize: '1.15rem', margin: 0 }}>📅 Cycle de Paie</h3>
@@ -218,76 +621,9 @@ export default function SettingsView() {
               </>
             )}
           </div>
+          )}
 
-          {/* Gestion des Postes / Fonctions */}
-          <div className="glass-panel" style={{ marginTop: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionFonctions ? '8px' : 0 }}>
-              <h3 style={{ fontSize: '1.15rem', margin: 0 }}>🏷️ Postes / Fonctions des Agents</h3>
-              <button
-                onClick={() => setShowSectionFonctions(v => !v)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px' }}
-                title={showSectionFonctions ? 'Masquer' : 'Afficher'}
-              >
-                {showSectionFonctions ? <EyeOff size={16} /> : <Eye size={16} />}
-                <span>{showSectionFonctions ? 'Masquer' : 'Afficher'}</span>
-              </button>
-            </div>
-            {showSectionFonctions && (
-              <>
-                <p className="subtitle" style={{ marginBottom: '20px' }}>
-                  Gérez les types de postes disponibles (utilisé dans la configuration des salaires).
-                </p>
-                {/* Liste des postes */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-                  {functions.map(f => (
-                    <div key={f.id} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 16px',
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '10px'
-                    }}>
-                      <div>
-                        <span style={{ fontWeight: '700', color: 'var(--b)', marginRight: '8px' }}>{f.id}</span>
-                        <span style={{ color: 'var(--text)' }}>{f.name}</span>
-                      </div>
-                      {isAdmin && (
-                        <button
-                          className="btn-logout"
-                          onClick={() => handleDeleteFunction(f.id)}
-                          style={{ padding: '4px', borderRadius: '6px', cursor: 'pointer', background: 'none', border: 'none' }}
-                        >
-                          <Trash size={14} style={{ color: 'var(--danger)' }} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {/* Ajouter un nouveau poste */}
-                {isAdmin && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '12px', alignItems: 'end' }}>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Code (ex: CP)</label>
-                        <input type="text" className="form-input" placeholder="CP" maxLength={10} value={newFuncId} onChange={(e) => setNewFuncId(e.target.value)} />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Nom complet</label>
-                        <input type="text" className="form-input" placeholder="ex: Chef de Poste" value={newFuncName} onChange={(e) => setNewFuncName(e.target.value)} />
-                      </div>
-                      <button className="btn btn-secondary" onClick={handleAddFunction}><Plus size={16} /> Ajouter</button>
-                    </div>
-                    <button className={`btn ${savedFuncs ? 'btn-success' : 'btn-primary'}`} style={{ marginTop: '16px' }} onClick={handleSaveFunctions}>
-                      <Save size={16} />
-                      <span>{savedFuncs ? '✓ Sauvegardé !' : 'Sauvegarder les Postes'}</span>
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
+
           {/* Apparence & Interface */}
           <div className="glass-panel" style={{ marginTop: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionApparence ? '8px' : 0 }}>
@@ -541,8 +877,309 @@ export default function SettingsView() {
             )}
           </div>
 
-          {/* Couleurs des Extras & Relèves */}
-          <div className="glass-panel" style={{ marginTop: '24px' }}>
+          {/* === SECTION COMPTABILITÉ UNIQUEMENT === */}
+          {isComptable && (
+          <div className="glass-panel" style={{ marginTop: '24px', border: '1px solid rgba(34,197,94,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionComptable ? '8px' : 0 }}>
+              <h3 style={{ fontSize: '1.15rem', margin: 0 }}>🧮 Préférences de l'Espace Comptabilité</h3>
+              <button
+                onClick={() => setShowSectionComptable(v => !v)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px' }}
+              >
+                {showSectionComptable ? <EyeOff size={16} /> : <Eye size={16} />}
+                <span>{showSectionComptable ? 'Masquer' : 'Afficher'}</span>
+              </button>
+            </div>
+            {showSectionComptable && (
+              <>
+                <p className="subtitle" style={{ marginBottom: '24px' }}>
+                  Configurez les paramètres de calcul de paie, les taux sociaux et les préférences d'export pour votre espace comptabilité.
+                </p>
+
+                {/* ---- 1. Mode de Calcul Fiscal ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>📐 Mode de Calcul Fiscal</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>Régime fiscal par défaut</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {[
+                          { id: 'simplifie', label: '⚡ ITS Simplifié (1.2%)', desc: 'Calcul rapide, taux forfaitaire' },
+                          { id: 'reel_ci', label: '🏛️ IGR Réel Côte d\'Ivoire', desc: 'Barème progressif IS+CN+IGR' }
+                        ].map(opt => (
+                          <label key={opt.id} style={{
+                            display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s',
+                            background: comptTaxMode === opt.id ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.02)',
+                            border: `1px solid ${comptTaxMode === opt.id ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.05)'}`,
+                          }}>
+                            <input type="radio" name="comptTaxMode" value={opt.id} checked={comptTaxMode === opt.id} onChange={() => setComptTaxMode(opt.id)} style={{ accentColor: '#22c55e', marginTop: '2px' }} />
+                            <div>
+                              <span style={{ color: comptTaxMode === opt.id ? 'white' : 'var(--muted)', fontSize: '0.9rem', fontWeight: 600, display: 'block' }}>{opt.label}</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{opt.desc}</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>🗓️ Début de l'exercice fiscal</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {[
+                          { id: 'jan', label: 'Janvier' }, { id: 'avr', label: 'Avril' },
+                          { id: 'jul', label: 'Juillet' }, { id: 'oct', label: 'Octobre' }
+                        ].map(m => (
+                          <button key={m.id} onClick={() => setComptFiscalYear(m.id)} style={{
+                            flex: '1 1 calc(50% - 6px)', padding: '10px 8px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.85rem', fontWeight: comptFiscalYear === m.id ? 700 : 400,
+                            background: comptFiscalYear === m.id ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.03)',
+                            border: `2px solid ${comptFiscalYear === m.id ? '#22c55e' : 'var(--border)'}`,
+                            color: comptFiscalYear === m.id ? '#22c55e' : 'var(--muted)'
+                          }}>{m.label}</button>
+                        ))}
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '10px', fontStyle: 'italic' }}>Utilisé pour les rapports DISA et bilans annuels.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---- 2. Paie & Calculs ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>💰 Paie & Calculs</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>⏱️ Taux Heures Supplémentaires (%)</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '0.8rem', width: '70px', color: 'var(--muted)' }}>Jour</span>
+                          <input type="range" min="0" max="50" step="5" value={comptHsJour} onChange={e => setComptHsJour(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#22c55e' }} />
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, width: '40px' }}>+{comptHsJour}%</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '0.8rem', width: '70px', color: 'var(--muted)' }}>Nuit</span>
+                          <input type="range" min="0" max="100" step="5" value={comptHsNuit} onChange={e => setComptHsNuit(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#22c55e' }} />
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, width: '40px' }}>+{comptHsNuit}%</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '0.8rem', width: '70px', color: 'var(--muted)' }}>Dimanche</span>
+                          <input type="range" min="0" max="150" step="5" value={comptHsDimanche} onChange={e => setComptHsDimanche(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#22c55e' }} />
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, width: '40px' }}>+{comptHsDimanche}%</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '0.8rem', width: '70px', color: 'var(--muted)' }}>Férié</span>
+                          <input type="range" min="0" max="200" step="5" value={comptHsFerie} onChange={e => setComptHsFerie(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#22c55e' }} />
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, width: '40px' }}>+{comptHsFerie}%</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>👴 Prime d'ancienneté</label>
+                        <div onClick={() => setComptPrimeAnciennete(!comptPrimeAnciennete)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                          <span style={{ fontSize: '0.9rem', color: comptPrimeAnciennete ? 'white' : 'var(--muted)' }}>{comptPrimeAnciennete ? 'Activée (+2%/an)' : 'Désactivée'}</span>
+                          <div style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptPrimeAnciennete ? '#22c55e' : 'var(--border)', padding: '2px' }}>
+                            <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptPrimeAnciennete ? 'translateX(18px)' : 'translateX(0)' }} />
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>💸 Seuil minimal de versement</label>
+                        <input type="number" className="form-input" value={comptSeuilMinimal} onChange={e => setComptSeuilMinimal(parseInt(e.target.value) || 0)} style={{ width: '100%', marginBottom: '8px' }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Alerte si net &lt; {comptSeuilMinimal} XOF</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>📆 Jour de virement</label>
+                        <input type="number" min="1" max="31" className="form-input" value={comptJourVirement} onChange={e => setComptJourVirement(parseInt(e.target.value) || 1)} style={{ width: '100%', marginBottom: '8px' }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Sera le {comptJourVirement} du mois</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---- 3. Taux Cotisations Sociales ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>🏦 Taux des Cotisations Sociales (CNPS)</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>👤 CNPS Salarial (%)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input type="range" min="3" max="15" step="0.1" value={comptCnpsSalarial}
+                          onChange={e => setComptCnpsSalarial(parseFloat(e.target.value))}
+                          style={{ flex: 1, accentColor: '#22c55e' }} />
+                        <span style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, minWidth: '60px', textAlign: 'center' }}>{comptCnpsSalarial.toFixed(1)}%</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Taux légal actuel : 6.3%</p>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>🏢 CNPS Patronal (%)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input type="range" min="5" max="20" step="0.1" value={comptCnpsPatronal}
+                          onChange={e => setComptCnpsPatronal(parseFloat(e.target.value))}
+                          style={{ flex: 1, accentColor: '#f59e0b' }} />
+                        <span style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, minWidth: '60px', textAlign: 'center' }}>{comptCnpsPatronal.toFixed(1)}%</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Taux légal actuel : 7.7%</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---- 4. Alertes Comptables ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>🔔 Alertes Comptables</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>⚠️ Variation Masse Salariale (%)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input type="range" min="1" max="50" step="1" value={comptAlerteVariationMasse} onChange={e => setComptAlerteVariationMasse(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#f59e0b' }} />
+                        <span style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, minWidth: '60px', textAlign: 'center' }}>±{comptAlerteVariationMasse}%</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Alerte si la masse varie de plus de {comptAlerteVariationMasse}% vs mois N-1.</p>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>Alerte Virement sans RIB</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Bloque l'export si RIB manquant</span>
+                        </div>
+                        <div onClick={() => setComptAlerteSansRib(!comptAlerteSansRib)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptAlerteSansRib ? '#f59e0b' : 'var(--border)', padding: '2px', cursor: 'pointer' }}>
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptAlerteSansRib ? 'translateX(18px)' : 'translateX(0)' }} />
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>Alerte salaire &lt; SMIG</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Signale les paies sous 75 000</span>
+                        </div>
+                        <div onClick={() => setComptAlerteInfSmig(!comptAlerteInfSmig)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptAlerteInfSmig ? '#ef4444' : 'var(--border)', padding: '2px', cursor: 'pointer' }}>
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptAlerteInfSmig ? 'translateX(18px)' : 'translateX(0)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---- 5. Bulletins de Paie ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>🖨️ Bulletins de Paie</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Entête (Entreprise)</label>
+                        <input type="text" className="form-input" value={comptEnteteBulletin} onChange={e => setComptEnteteBulletin(e.target.value)} style={{ width: '100%' }} />
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Mention légale personnalisée</label>
+                        <input type="text" className="form-input" value={comptMentionLegale} onChange={e => setComptMentionLegale(e.target.value)} style={{ width: '100%' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Format numérotation</label>
+                        <select className="form-input" value={comptFormatNum} onChange={e => setComptFormatNum(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.4)' }}>
+                          <option value="ELYS-YYYY-XXXX">ELYS-YYYY-XXXX</option>
+                          <option value="PAIE-YY-MM-XXX">PAIE-YY-MM-XXX</option>
+                          <option value="000XXX">000XXX</option>
+                        </select>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>Masquer lignes vides</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Cacher les rubriques à 0</span>
+                        </div>
+                        <div onClick={() => setComptHideLignesVides(!comptHideLignesVides)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptHideLignesVides ? '#22c55e' : 'var(--border)', padding: '2px', cursor: 'pointer' }}>
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptHideLignesVides ? 'translateX(18px)' : 'translateX(0)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---- 6. Tableau de Bord Comptable ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>📊 Tableau de Bord</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Période de comparaison</label>
+                      <select className="form-input" value={comptComparePeriod} onChange={e => setComptComparePeriod(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.4)' }}>
+                        <option value="prev_month">Mois précédent</option>
+                        <option value="prev_year">Même mois N-1</option>
+                        <option value="avg_3m">Moyenne 3 mois</option>
+                      </select>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Devise</label>
+                      <select className="form-input" value={comptDevise} onChange={e => setComptDevise(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.4)' }}>
+                        <option value="XOF">XOF (Franc CFA)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="USD">USD ($)</option>
+                      </select>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>Mode Confidentiel</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Masquer montants (••••)</span>
+                        </div>
+                        <div onClick={() => setComptModeConfidentiel(!comptModeConfidentiel)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptModeConfidentiel ? '#a855f7' : 'var(--border)', padding: '2px', cursor: 'pointer' }}>
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptModeConfidentiel ? 'translateX(18px)' : 'translateX(0)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---- 7. Export & Automatisation ---- */}
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>📤 Export & Automatisation</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>Format d'export préféré</label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {[{id: 'excel', label: '📊 Excel', color: '#10b981'}, {id: 'csv', label: '📄 CSV', color: '#38bdf8'}, {id: 'pdf', label: '📑 PDF', color: '#a78bfa'}].map(fmt => (
+                          <button key={fmt.id} onClick={() => setComptExportFormat(fmt.id)} style={{
+                            flex: 1, padding: '10px 6px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s',
+                            background: comptExportFormat === fmt.id ? `${fmt.color}22` : 'rgba(255,255,255,0.03)',
+                            border: `2px solid ${comptExportFormat === fmt.id ? fmt.color : 'var(--border)'}`,
+                            color: comptExportFormat === fmt.id ? fmt.color : 'var(--muted)',
+                            fontSize: '0.82rem', fontWeight: comptExportFormat === fmt.id ? 700 : 400
+                          }}>{fmt.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>🔄 Recalcul automatique</label>
+                      <div onClick={() => setComptAutoCalc(!comptAutoCalc)} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
+                        background: comptAutoCalc ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.05)',
+                        border: `1px solid ${comptAutoCalc ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.15)'}`
+                      }}>
+                        <div>
+                          <span style={{ display: 'block', color: 'white', fontSize: '0.9rem', fontWeight: 600 }}>{comptAutoCalc ? '✅ Calcul en temps réel' : '⏸️ Calcul manuel'}</span>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--muted)', marginTop: '4px' }}>{comptAutoCalc ? 'Les bulletins sont recalculés à chaque modification.' : 'Cliquez sur "Calculer" pour déclencher le calcul.'}</span>
+                        </div>
+                        <div style={{ width: '48px', height: '26px', borderRadius: '13px', padding: '3px', background: comptAutoCalc ? '#22c55e' : 'var(--border)' }}>
+                          <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptAutoCalc ? 'translateX(22px)' : 'translateX(0)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {isAdmin && (
+                  <button className={`btn ${savedCompt ? 'btn-success' : 'btn-primary'}`} onClick={handleSaveComptPrefs}
+                    style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', background: savedCompt ? undefined : 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 14px rgba(34,197,94,0.3)' }}>
+                    <Save size={16} />
+                    <span>{savedCompt ? '✓ Préférences Comptabilité sauvegardées !' : 'Sauvegarder les Préférences Comptabilité'}</span>
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          )}
+
+          {/* Sections masquées pour l'Espace RH et Comptabilité */}
+          {!isRH && !isComptable && !isSecretariat && (
+            <>
+              {/* Couleurs des Extras & Relèves */}
+              <div className="glass-panel" style={{ marginTop: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionCouleurs ? '8px' : 0 }}>
               <h3 style={{ fontSize: '1.15rem', margin: 0 }}>🎨 Couleurs des Extras &amp; Relèves</h3>
               <button
@@ -954,6 +1591,9 @@ export default function SettingsView() {
               </>
             )}
           </div>
+          </>
+          )}
+          {/* Sections Apparence toujours disponibles pour la Comptabilité */}
         </>
       )}
     </div>

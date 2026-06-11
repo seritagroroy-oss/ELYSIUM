@@ -188,12 +188,17 @@ export default function QRPointage({ onClose }) {
             : '0 0 0 4px rgba(99,102,241,0.2)',
           transition: 'box-shadow 0.3s',
         }}>
-          <QRCode
-            value={qrValue}
-            size={200}
-            level="M"
-            style={{ display: 'block' }}
-          />
+          {(() => {
+            const QRCodeComponent = (QRCode && typeof QRCode === 'object' && QRCode.default) ? QRCode.default : QRCode;
+            return (
+              <QRCodeComponent
+                value={qrValue}
+                size={200}
+                level="M"
+                style={{ display: 'block' }}
+              />
+            );
+          })()}
         </div>
 
         {/* Token lisible (saisie manuelle) */}
