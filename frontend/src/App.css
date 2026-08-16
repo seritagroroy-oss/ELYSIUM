@@ -1,54 +1,600 @@
-/* ─── Site Selection Cards ─────────────────────────────────────────── */
-.site-card {
-  position: relative;
-  border-radius: 18px;
-  padding: 2px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s;
-  background: rgba(255, 255, 255, 0.03);
-  /* Glow color variable — override per card if needed */
-  --card-glow: var(--b);
+/* ═══════════════════════════════════════════════════════════════
+   Responsive Dashboard — "Mes Sites" Header
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Conteneur principal de la barre d'en-tête */
+.sites-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  align-content: flex-start;
+  margin-bottom: 24px;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 4px 24px 16px 24px;
+  margin: -24px -24px 24px -24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* The rotating conic-gradient border light */
-.site-card::before {
+[data-theme="classic"] .sites-header {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Colonne gauche : titre + contrôles */
+.sites-header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Ligne du titre (Mes Sites + Actuel/Archives) */
+.sites-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.sites-title-row h2 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Ligne des filtres (Trier + Design) */
+.sites-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* Colonne droite : navigateur de mois + boutons d'action */
+.sites-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* Navigateur de mois */
+.month-navigator {
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Groupe de boutons d'action */
+.sites-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Grille des cartes de sites */
+.sites-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+/* ── Responsive : grand écran (1400px+) ───────────────────────── */
+@media (min-width: 1400px) {
+  .sites-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 24px;
+  }
+  .sites-title-row h2 { font-size: 1.8rem; }
+}
+
+/* ── Responsive : écran moyen (1024px – 1400px) ───────────────── */
+@media (max-width: 1200px) {
+  .sites-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sites-actions-bar {
+    justify-content: flex-start;
+  }
+  .sites-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+}
+
+/* ── Responsive : tablette (768px – 1024px) ─────────────────────  */
+@media (max-width: 900px) {
+  .sites-title-row h2 { font-size: 1.3rem; }
+  .sites-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+  }
+  .sites-controls-row { gap: 8px; }
+  .sites-actions-bar { gap: 8px; }
+}
+
+/* ── Responsive : mobile (< 600px) ──────────────────────────────  */
+@media (max-width: 600px) {
+  .sites-title-row h2 { font-size: 1.1rem; }
+  .sites-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .sites-controls-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .sites-actions-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    width: 100%;
+  }
+  .sites-action-buttons {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .sites-action-buttons .btn {
+    font-size: 0.8rem;
+    padding: 6px 10px !important;
+  }
+  .month-navigator span {
+    min-width: 100px !important;
+  }
+  /* Modals responsiveness */
+  .next-month-modal-container {
+    width: 95vw;
+    padding: 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .next-month-buttons {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  .next-month-buttons button {
+    width: 100% !important;
+  }
+  .welcome-toast-container {
+    width: 95vw;
+    padding: 15px !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+}
+
+/* Modals general */
+.next-month-modal-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 24px;
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+}
+
+.next-month-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Responsive : très petit écran (< 380px) ─────────────────── */
+@media (max-width: 380px) {
+  .sites-grid {
+    grid-template-columns: 1fr;
+  }
+  .sites-title-row h2 { font-size: 1rem; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Responsive Modals & Toasts
+   ═══════════════════════════════════════════════════════════════ */
+.next-month-modal-container {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(145deg, #0f1a2e 0%, #111827 50%, #0a1628 100%);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: 24px;
+  padding: 24px 32px;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.7), 0 0 60px rgba(245,158,11,0.1), inset 0 1px 0 rgba(255,255,255,0.05);
+  animation: fadeInUp 0.3s ease;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.next-month-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.welcome-month-toast-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.92);
+  z-index: 2147483647;
+  width: 62vw;
+  min-width: 520px;
+  max-width: 90vw;
+  background: linear-gradient(145deg, #060d1a 0%, #0f2744 55%, #081526 100%);
+  border: 1px solid rgba(34,197,94,0.4);
+  border-radius: 24px;
+  padding: 24px 32px 32px;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.9), 0 0 0 1px rgba(34,197,94,0.12), 0 0 80px rgba(34,197,94,0.06);
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  opacity: 0;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.welcome-toast-buttons-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+@media (max-width: 768px) {
+  .next-month-modal-container {
+    padding: 24px 20px;
+    border-radius: 16px;
+  }
+  .next-month-buttons {
+    flex-direction: column;
+  }
+  .next-month-buttons button {
+    width: 100%;
+  }
+
+  .welcome-month-toast-container {
+    width: 95vw !important;
+    min-width: 0 !important;
+    padding: 24px 20px !important;
+    border-radius: 16px !important;
+  }
+  .welcome-toast-buttons-row {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+  .welcome-month-toast-container .toast-header-icon {
+    width: 70px !important;
+    height: 70px !important;
+    font-size: 2.2rem !important;
+    margin-bottom: 12px !important;
+  }
+  .welcome-month-toast-container .toast-header-title {
+    font-size: 1.4rem !important;
+  }
+  .welcome-month-toast-container .toast-header-subtitle {
+    font-size: 0.75rem !important;
+  }
+}
+
+/* ─── Base Site Selection Cards ────── */
+.site-card {
+  position: relative;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  --card-glow: var(--b);
+  overflow: visible;
+}
+
+.site-card-inner {
+  position: relative;
+  z-index: 1;
+  padding: 16px;
+  height: 100%;
+  border-radius: 15px;
+  transition: all 0.4s ease;
+}
+
+/* Affichage du compteur de zones et agents au survol */
+.site-card:hover .zone-count-hover {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+/* 1. Design: Dark Minimal & Neon (Option 2) */
+.site-card.design-neon {
+  padding: 1px;
+  background: #334155;
+}
+.site-card.design-neon::before { display: none; }
+.site-card.design-neon:hover {
+  transform: translateY(-5px) !important;
+  background: var(--card-glow) !important;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.6), 0 0 20px var(--card-glow) !important;
+  border: none !important;
+}
+.site-card.design-neon .site-card-inner {
+  background: #0f172a !important;
+}
+.site-card.design-neon:hover .site-card-inner {
+  background: #1e293b !important;
+}
+
+/* 2. Design: Glassmorphism Premium (Option 1) */
+.site-card.design-glass {
+  padding: 2px;
+  background: rgba(255,255,255,0.03);
+  overflow: hidden;
+}
+.site-card.design-glass::before {
   content: "";
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: conic-gradient(
-    transparent 0deg,
-    var(--card-glow) 60deg,
-    transparent 120deg
-  );
+  top: -50%; left: -50%; width: 200%; height: 200%;
+  background: conic-gradient(transparent 0deg, var(--card-glow) 60deg, transparent 120deg);
   animation: rotate-bg 3s linear infinite;
   opacity: 0.55;
   transition: opacity 0.4s;
   pointer-events: none;
   z-index: 0;
 }
-
-.site-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 40px -8px rgba(56, 189, 248, 0.35);
+.site-card.design-glass:hover {
+  transform: translateY(-6px) !important;
+  box-shadow: 0 16px 40px -8px rgba(56, 189, 248, 0.35) !important;
 }
-
-.site-card:hover::before {
+.site-card.design-glass:hover::before {
   opacity: 1;
   animation-duration: 1.5s;
 }
+.site-card.design-glass .site-card-inner {
+  background: rgba(13, 20, 38, 0.96) !important;
+}
 
-/* Inner content sits above the rotating light */
-.site-card-inner {
-  position: relative;
-  z-index: 1;
-  background: rgba(13, 20, 38, 0.96);
-  border-radius: 16px;
-  padding: 24px;
-  height: 100%;
+/* 3. Design: Cartes 3D Dégradées (Option 3) */
+.site-card.design-gradient {
+  background: linear-gradient(135deg, rgba(30,41,59,1) 0%, rgba(15,23,42,1) 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 4px 8px 24px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.1);
+  padding: 0;
+}
+.site-card.design-gradient::before { display: none; }
+.site-card.design-gradient .site-card-inner {
+  background: transparent !important;
+}
+.site-card.design-gradient:hover {
+  transform: translateY(-6px) scale(1.02) !important;
+  border-color: var(--card-glow) !important;
+  box-shadow: 0 16px 32px rgba(0,0,0,0.4), inset 0 0 15px rgba(255,255,255,0.05), 0 0 20px var(--card-glow) !important;
+  background: linear-gradient(135deg, rgba(30,41,59,1) 0%, rgba(15,23,42,1) 60%, var(--card-glow) 150%) !important;
+}
+
+/* 4. Design: Simple & Classique (Option 4) */
+.site-card.design-classic {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 0;
+}
+.site-card.design-classic::before { display: none; }
+.site-card.design-classic .site-card-inner {
+  background: transparent !important;
+}
+.site-card.design-classic:hover {
+  transform: translateY(-4px) !important;
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.2) !important;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important;
+}
+
+/* 5. Design: Holographique */
+.site-card.design-holographic {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+}
+.site-card.design-holographic::before { display: none; }
+.site-card.design-holographic .site-card-inner { background: transparent !important; }
+.site-card.design-holographic:hover {
+  transform: translateY(-4px) !important;
+  background: linear-gradient(120deg, rgba(255,255,255,0.05), rgba(255,255,255,0.1)) !important;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(255,255,255,0.2) !important;
+  border-color: rgba(255,255,255,0.4) !important;
+}
+
+/* 6. Design: Aurora Borealis */
+.site-card.design-aurora {
+  background: #0f172a;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.site-card.design-aurora::before {
+  content: ""; position: absolute;
+  top: -50%; left: -50%; width: 200%; height: 200%;
+  background: radial-gradient(circle at 50% 50%, var(--card-glow), transparent 60%);
+  opacity: 0.15; filter: blur(40px);
+  z-index: 0; transition: all 0.8s ease;
+}
+.site-card.design-aurora:hover::before { opacity: 0.5; transform: scale(1.2); }
+.site-card.design-aurora:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+}
+.site-card.design-aurora .site-card-inner {
+  background: transparent !important; backdrop-filter: blur(10px);
+}
+
+/* 7. Design: Cyberpunk */
+.site-card.design-cyberpunk {
+  background: #000;
+  border: 1px solid #f43f5e;
+  border-radius: 0;
+}
+.site-card.design-cyberpunk::before { display: none; }
+.site-card.design-cyberpunk .site-card-inner {
+  background: #09090b !important; border-radius: 0 !important;
+}
+.site-card.design-cyberpunk:hover {
+  transform: translate(2px, -2px) !important;
+  box-shadow: -4px 4px 0 #f43f5e, 0 0 15px rgba(244,63,94,0.4) !important;
+  border-color: #0ff !important;
+}
+.site-card.design-cyberpunk:hover .site-card-inner { background: #18181b !important; }
+
+/* 8. Design: Neumorphism */
+.site-card.design-neumorphism {
+  background: #1e293b; border: none;
+  box-shadow: 8px 8px 16px rgba(0,0,0,0.4), -8px -8px 16px rgba(255,255,255,0.05);
+}
+.site-card.design-neumorphism::before { display: none; }
+.site-card.design-neumorphism .site-card-inner { background: transparent !important; }
+.site-card.design-neumorphism:hover {
+  transform: scale(0.98) !important;
+  box-shadow: inset 6px 6px 12px rgba(0,0,0,0.5), inset -6px -6px 12px rgba(255,255,255,0.05) !important;
+}
+
+/* 9. Design: Brutalist */
+.site-card.design-brutalist {
+  background: transparent;
+  border: 2px solid var(--muted); border-radius: 0;
+}
+.site-card.design-brutalist::before { display: none; }
+.site-card.design-brutalist .site-card-inner {
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 2px, transparent 2px, transparent 8px) !important;
+  border-radius: 0 !important;
+}
+.site-card.design-brutalist:hover {
+  transform: translate(-4px, -4px) !important;
+  border-color: var(--card-glow) !important;
+  box-shadow: 8px 8px 0 var(--card-glow) !important;
+  background: #000 !important;
+}
+
+/* 10. Design: Glow Pulse */
+@keyframes heartPulse {
+  0% { box-shadow: 0 0 10px var(--card-glow); }
+  50% { box-shadow: 0 0 25px var(--card-glow); }
+  100% { box-shadow: 0 0 10px var(--card-glow); }
+}
+.site-card.design-pulse {
+  background: #09090b;
+  border: 1px solid rgba(255,255,255,0.05);
+  animation: heartPulse 2s infinite ease-in-out;
+}
+.site-card.design-pulse::before { display: none; }
+.site-card.design-pulse .site-card-inner { background: transparent !important; }
+.site-card.design-pulse:hover {
+  transform: scale(1.02) !important;
+  animation-duration: 1s;
+}
+
+/* 11. Design: Skeuomorphisme 3D */
+.site-card.design-skeuomorph {
+  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+  border-top: 1px solid #475569;
+  border-bottom: 2px solid #0f172a;
+  border-radius: 20px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255,255,255,0.1);
+  padding: 0;
+}
+.site-card.design-skeuomorph::before { display: none; }
+.site-card.design-skeuomorph .site-card-inner {
+  background: transparent !important;
+}
+.site-card.design-skeuomorph:hover {
+  transform: translateY(2px) !important;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.8), inset 0 1px 2px rgba(255,255,255,0.05) !important;
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
+  border-top: 1px solid #334155 !important;
+}
+
+/* 12. Design: Liquid Blob */
+@keyframes blobShape {
+  0% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+}
+.site-card.design-blob {
+  background: rgba(255,255,255,0.03);
+  border: 2px solid var(--card-glow);
+  animation: blobShape 6s infinite alternate ease-in-out;
+  padding: 0;
+  overflow: hidden;
+}
+.site-card.design-blob::before { display: none; }
+.site-card.design-blob .site-card-inner {
+  background: transparent !important;
+  border-radius: inherit !important;
+}
+.site-card.design-blob:hover {
+  background: rgba(255,255,255,0.08) !important;
+  box-shadow: 0 0 30px var(--card-glow) !important;
+  animation-duration: 3s;
+}
+
+/* 13. Design: Hacker Matrix */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(200%); }
+}
+.site-card.design-matrix {
+  background: #000;
+  border: 1px solid #22c55e;
+  border-radius: 0;
+  overflow: hidden;
+}
+.site-card.design-matrix::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 20%;
+  background: linear-gradient(to bottom, transparent, rgba(34,197,94,0.4), transparent);
+  animation: scanline 3s linear infinite;
+  pointer-events: none;
+}
+.site-card.design-matrix .site-card-inner {
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+.site-card.design-matrix:hover {
+  background: rgba(34,197,94,0.05) !important;
+  box-shadow: 0 0 15px #22c55e !important;
+}
+
+/* 14. Design: Retro Brutalism */
+.site-card.design-retro {
+  background: #fff;
+  border: 3px solid #000;
+  border-radius: 0;
+  color: #000;
+  box-shadow: 6px 6px 0 #000;
+  transition: transform 0.1s;
+}
+.site-card.design-retro::before { display: none; }
+.site-card.design-retro .site-card-inner {
+  background: #fff !important;
+  color: #000 !important;
+  border-radius: 0 !important;
+}
+.site-card.design-retro:hover {
+  transform: translate(4px, 4px) !important;
+  box-shadow: 2px 2px 0 #000 !important;
+  background: #fbbf24 !important;
+}
+.site-card.design-retro:hover .site-card-inner {
+  background: transparent !important;
 }
 
 /* Options Cards from the welcome screen */
@@ -177,7 +723,8 @@
 /* Navigation Layout */
 .app-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   position: relative;
 }
 
@@ -347,37 +894,99 @@
   margin: 6px 0;
 }
 
-/* Table Style */
+/* --- THEME SYSTEM FOR DATAGRID --- */
 .table-container {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
   margin-top: 16px;
+  padding-bottom: 20px;
 }
-
-.custom-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-}
-
-.custom-table th, .custom-table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
+.custom-table { width: 100%; text-align: left; }
 .custom-table th {
-  font-weight: 600;
-  color: var(--muted);
-  font-size: 0.88rem;
+  padding: 16px 20px; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;
+  position: sticky; top: 0; z-index: 10;
+  background-color: #0d131f;
 }
+.custom-table td { padding: 16px 20px; transition: all 0.3s ease; }
 
-.custom-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
+/* 1. Theme: Floating Rows (Default) */
+.theme-floating { border-collapse: separate; border-spacing: 0 18px; }
+.theme-floating th { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(4px); color: var(--muted); border-bottom: none; }
+.theme-floating td { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); border-top: 1px solid rgba(255, 255, 255, 1); border-bottom: 1px solid rgba(255, 255, 255, 1); }
+.theme-floating td:first-child { border-left: 1px solid rgba(255, 255, 255, 1); border-radius: 12px 0 0 12px; }
+.theme-floating td:last-child { border-right: 1px solid rgba(255, 255, 255, 1); border-radius: 0 12px 12px 0; }
+.theme-floating tbody tr { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.theme-floating tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
+.theme-floating tbody tr:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); }
+.theme-floating tbody tr.row-paye td { background: rgba(34, 197, 94, 0.15); border-top: 1px solid rgba(34, 197, 94, 0.8); border-bottom: 1px solid rgba(34, 197, 94, 0.8); }
+.theme-floating tbody tr.row-paye td:first-child { border-left: 1px solid rgba(34, 197, 94, 0.8); }
+.theme-floating tbody tr.row-paye td:last-child { border-right: 1px solid rgba(34, 197, 94, 0.8); }
 
-.custom-table tr.agent-last-row td,
-.custom-table td.agent-rowspan-cell {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.6) !important;
-}
+/* 2. Theme: Minimalist Corporate */
+.theme-minimalist { border-collapse: collapse; }
+.theme-minimalist th { background: rgba(15, 23, 42, 0.95); color: var(--muted); border-bottom: 2px solid rgba(255, 255, 255, 0.1); }
+.theme-minimalist td { background: transparent; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.theme-minimalist tbody tr:hover td { background: rgba(255, 255, 255, 0.03); }
+.theme-minimalist tbody tr.row-paye td { background: rgba(34, 197, 94, 0.05); }
+
+/* 3. Theme: Neon Cyberpunk */
+.theme-neon { border-collapse: separate; border-spacing: 0 6px; }
+.theme-neon th { background: rgba(5, 5, 10, 0.95); color: #0ff; letter-spacing: 0.1em; border-bottom: 1px solid rgba(0, 255, 255, 0.3); }
+.theme-neon td { background: rgba(0, 0, 0, 0.6); border-top: 1px solid rgba(0, 255, 255, 0.05); border-bottom: 1px solid rgba(0, 255, 255, 0.05); }
+.theme-neon td:first-child { border-left: 1px solid rgba(0, 255, 255, 0.05); border-radius: 4px 0 0 4px; }
+.theme-neon td:last-child { border-right: 1px solid rgba(0, 255, 255, 0.05); border-radius: 0 4px 4px 0; }
+.theme-neon tbody tr:hover td { background: rgba(0, 255, 255, 0.08); border-top: 1px solid #0ff; border-bottom: 1px solid #0ff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.4); }
+.theme-neon tbody tr:hover td:first-child { border-left: 1px solid #0ff; }
+.theme-neon tbody tr:hover td:last-child { border-right: 1px solid #0ff; }
+.theme-neon tbody tr.row-paye td { background: rgba(34, 197, 94, 0.05); border-top: 1px solid rgba(34, 197, 94, 0.3); border-bottom: 1px solid rgba(34, 197, 94, 0.3); }
+.theme-neon tbody tr.row-paye td:first-child { border-left: 1px solid rgba(34, 197, 94, 0.3); }
+.theme-neon tbody tr.row-paye td:last-child { border-right: 1px solid rgba(34, 197, 94, 0.3); }
+.theme-neon tbody tr.row-paye:hover td { background: rgba(34, 197, 94, 0.15); border-top: 1px solid #22c55e; border-bottom: 1px solid #22c55e; box-shadow: 0 0 20px rgba(34, 197, 94, 0.6); }
+
+/* 4. Theme: Striped */
+.theme-striped { border-collapse: collapse; }
+.theme-striped th { background: rgba(15, 23, 42, 0.95); color: var(--muted); border-bottom: 2px solid rgba(255, 255, 255, 0.1); }
+.theme-striped td { border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
+.theme-striped tbody tr:nth-child(odd) td { background: rgba(15, 23, 42, 0.4); }
+.theme-striped tbody tr:nth-child(even) td { background: rgba(30, 41, 59, 0.5); }
+.theme-striped tbody tr:hover td { background: rgba(56, 189, 248, 0.08) !important; }
+.theme-striped tbody tr.row-paye td { background: rgba(34, 197, 94, 0.1) !important; }
+
+/* 5. Theme: Dark Grid (Excel Style) */
+.theme-dark-grid { border-collapse: collapse; }
+.theme-dark-grid th { background: #0f172a; color: var(--muted); border: 1px solid rgba(255, 255, 255, 0.15); }
+.theme-dark-grid td { background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.1); }
+.theme-dark-grid tbody tr:hover td { background: #334155; }
+.theme-dark-grid tbody tr.row-paye td { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.4); }
+
+/* 6. Theme: Glassmorphism */
+.theme-glass { border-collapse: separate; border-spacing: 0 4px; }
+.theme-glass th { background: rgba(255, 255, 255, 0.05); color: var(--muted); border-bottom: 1px solid rgba(255, 255, 255, 0.2); }
+.theme-glass td { background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(20px); border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.theme-glass tbody tr:hover td { background: rgba(255, 255, 255, 0.08); }
+.theme-glass tbody tr.row-paye td { background: rgba(34, 197, 94, 0.1); }
+
+/* 7. Theme: Soft Bubbles */
+.theme-bubbles { border-collapse: separate; border-spacing: 6px 12px; }
+.theme-bubbles th { background: transparent; color: var(--muted); }
+.theme-bubbles td { background: rgba(15, 23, 42, 0.6); border-radius: 20px; text-align: center; } /* forces rounding on every cell */
+.theme-bubbles tbody tr:hover td { background: rgba(56, 189, 248, 0.1); transform: scale(1.02); }
+.theme-bubbles tbody tr.row-paye td { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); }
+
+/* 8. Theme: High Contrast */
+.theme-high-contrast { border-collapse: collapse; }
+.theme-high-contrast th { background: #000; color: #fff; font-weight: 900; border-bottom: 3px solid #fff; }
+.theme-high-contrast td { background: #000; color: #fff; font-weight: 600; border-bottom: 1px solid #444; }
+.theme-high-contrast tbody tr:hover td { background: #222; color: #ffeb3b; }
+.theme-high-contrast tbody tr.row-paye td { background: #000; color: #22c55e; border-bottom: 2px solid #22c55e; }
+
+/* 9. Theme: Ethereal Lines */
+.theme-ethereal { border-collapse: collapse; }
+.theme-ethereal th { background: transparent; color: rgba(255, 255, 255, 0.6); border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.theme-ethereal td { background: transparent; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.theme-ethereal tbody tr:hover td { background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 100%); }
+.theme-ethereal tbody tr.row-paye td { border-top: 1px solid #22c55e; }
 
 /* Premium Search Input focus glow and scale effect */
 .search-input-premium {
@@ -435,3 +1044,422 @@
   padding: 32px 60px;
   min-height: 350px;
 }
+
+/* ═══════════════════════════════════════════════════════
+   THÈME CLASSIQUE — Cartes de sites blanches
+   Ces règles viennent EN DERNIER pour surcharger tout le reste
+   ═══════════════════════════════════════════════════════ */
+[data-theme="classic"] .site-card,
+[data-theme="classic"] .site-card.design-neon,
+[data-theme="classic"] .site-card.design-glass,
+[data-theme="classic"] .site-card.design-gradient,
+[data-theme="classic"] .site-card.design-holographic,
+[data-theme="classic"] .site-card.design-aurora,
+[data-theme="classic"] .site-card.design-cyberpunk,
+[data-theme="classic"] .site-card.design-neumorphism,
+[data-theme="classic"] .site-card.design-brutalist,
+[data-theme="classic"] .site-card.design-pulse,
+[data-theme="classic"] .site-card.design-skeuomorph,
+[data-theme="classic"] .site-card.design-blob,
+[data-theme="classic"] .site-card.design-matrix,
+[data-theme="classic"] .site-card.design-retro,
+[data-theme="classic"] .site-card.design-classic {
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+  animation: none !important;
+}
+
+[data-theme="classic"] .site-card .site-card-inner,
+[data-theme="classic"] .site-card.design-neon .site-card-inner,
+[data-theme="classic"] .site-card.design-glass .site-card-inner,
+[data-theme="classic"] .site-card.design-gradient .site-card-inner,
+[data-theme="classic"] .site-card.design-holographic .site-card-inner,
+[data-theme="classic"] .site-card.design-aurora .site-card-inner,
+[data-theme="classic"] .site-card.design-cyberpunk .site-card-inner,
+[data-theme="classic"] .site-card.design-neumorphism .site-card-inner,
+[data-theme="classic"] .site-card.design-brutalist .site-card-inner,
+[data-theme="classic"] .site-card.design-pulse .site-card-inner,
+[data-theme="classic"] .site-card.design-skeuomorph .site-card-inner,
+[data-theme="classic"] .site-card.design-blob .site-card-inner,
+[data-theme="classic"] .site-card.design-matrix .site-card-inner,
+[data-theme="classic"] .site-card.design-retro .site-card-inner,
+[data-theme="classic"] .site-card.design-classic .site-card-inner {
+  background: #ffffff !important;
+  border-radius: 14px !important;
+  color: #1e293b !important;
+  backdrop-filter: none !important;
+}
+
+[data-theme="classic"] .site-card:hover {
+  background: #f8fafc !important;
+  border-color: #9ca3af !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+  transform: translateY(-4px) !important;
+}
+
+[data-theme="classic"] .site-card::before {
+  display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   THÈME CLASSIQUE — Tableau de pointage
+   ═══════════════════════════════════════════════════════ */
+[data-theme="classic"] .glass-panel table th {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+[data-theme="classic"] .glass-panel table th div {
+  color: #000000 !important;
+}
+
+.theme-floating tbody tr.row-paye td:first-child { border-left: 1px solid rgba(34, 197, 94, 0.8); }
+.theme-floating tbody tr.row-paye td:last-child { border-right: 1px solid rgba(34, 197, 94, 0.8); }
+
+/* 2. Theme: Minimalist Corporate */
+.theme-minimalist { border-collapse: collapse; }
+.theme-minimalist th { background: rgba(15, 23, 42, 0.95); color: var(--muted); border-bottom: 2px solid rgba(255, 255, 255, 0.1); }
+.theme-minimalist td { background: transparent; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.theme-minimalist tbody tr:hover td { background: rgba(255, 255, 255, 0.03); }
+.theme-minimalist tbody tr.row-paye td { background: rgba(34, 197, 94, 0.05); }
+
+/* 3. Theme: Neon Cyberpunk */
+.theme-neon { border-collapse: separate; border-spacing: 0 6px; }
+.theme-neon th { background: rgba(5, 5, 10, 0.95); color: #0ff; letter-spacing: 0.1em; border-bottom: 1px solid rgba(0, 255, 255, 0.3); }
+.theme-neon td { background: rgba(0, 0, 0, 0.6); border-top: 1px solid rgba(0, 255, 255, 0.05); border-bottom: 1px solid rgba(0, 255, 255, 0.05); }
+.theme-neon td:first-child { border-left: 1px solid rgba(0, 255, 255, 0.05); border-radius: 4px 0 0 4px; }
+.theme-neon td:last-child { border-right: 1px solid rgba(0, 255, 255, 0.05); border-radius: 0 4px 4px 0; }
+.theme-neon tbody tr:hover td { background: rgba(0, 255, 255, 0.08); border-top: 1px solid #0ff; border-bottom: 1px solid #0ff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.4); }
+.theme-neon tbody tr:hover td:first-child { border-left: 1px solid #0ff; }
+.theme-neon tbody tr:hover td:last-child { border-right: 1px solid #0ff; }
+.theme-neon tbody tr.row-paye td { background: rgba(34, 197, 94, 0.05); border-top: 1px solid rgba(34, 197, 94, 0.3); border-bottom: 1px solid rgba(34, 197, 94, 0.3); }
+.theme-neon tbody tr.row-paye td:first-child { border-left: 1px solid rgba(34, 197, 94, 0.3); }
+.theme-neon tbody tr.row-paye td:last-child { border-right: 1px solid rgba(34, 197, 94, 0.3); }
+.theme-neon tbody tr.row-paye:hover td { background: rgba(34, 197, 94, 0.15); border-top: 1px solid #22c55e; border-bottom: 1px solid #22c55e; box-shadow: 0 0 20px rgba(34, 197, 94, 0.6); }
+
+/* 4. Theme: Striped */
+.theme-striped { border-collapse: collapse; }
+.theme-striped th { background: rgba(15, 23, 42, 0.95); color: var(--muted); border-bottom: 2px solid rgba(255, 255, 255, 0.1); }
+.theme-striped td { border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
+.theme-striped tbody tr:nth-child(odd) td { background: rgba(15, 23, 42, 0.4); }
+.theme-striped tbody tr:nth-child(even) td { background: rgba(30, 41, 59, 0.5); }
+.theme-striped tbody tr:hover td { background: rgba(56, 189, 248, 0.08) !important; }
+.theme-striped tbody tr.row-paye td { background: rgba(34, 197, 94, 0.1) !important; }
+
+/* 5. Theme: Dark Grid (Excel Style) */
+.theme-dark-grid { border-collapse: collapse; }
+.theme-dark-grid th { background: #0f172a; color: var(--muted); border: 1px solid rgba(255, 255, 255, 0.15); }
+.theme-dark-grid td { background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.1); }
+.theme-dark-grid tbody tr:hover td { background: #334155; }
+.theme-dark-grid tbody tr.row-paye td { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.4); }
+
+/* 6. Theme: Glassmorphism */
+.theme-glass { border-collapse: separate; border-spacing: 0 4px; }
+.theme-glass th { background: rgba(255, 255, 255, 0.05); color: var(--muted); border-bottom: 1px solid rgba(255, 255, 255, 0.2); }
+.theme-glass td { background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(20px); border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.theme-glass tbody tr:hover td { background: rgba(255, 255, 255, 0.08); }
+.theme-glass tbody tr.row-paye td { background: rgba(34, 197, 94, 0.1); }
+
+/* 7. Theme: Soft Bubbles */
+.theme-bubbles { border-collapse: separate; border-spacing: 6px 12px; }
+.theme-bubbles th { background: transparent; color: var(--muted); }
+.theme-bubbles td { background: rgba(15, 23, 42, 0.6); border-radius: 20px; text-align: center; } /* forces rounding on every cell */
+.theme-bubbles tbody tr:hover td { background: rgba(56, 189, 248, 0.1); transform: scale(1.02); }
+.theme-bubbles tbody tr.row-paye td { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); }
+
+/* 8. Theme: High Contrast */
+.theme-high-contrast { border-collapse: collapse; }
+.theme-high-contrast th { background: #000; color: #fff; font-weight: 900; border-bottom: 3px solid #fff; }
+.theme-high-contrast td { background: #000; color: #fff; font-weight: 600; border-bottom: 1px solid #444; }
+.theme-high-contrast tbody tr:hover td { background: #222; color: #ffeb3b; }
+.theme-high-contrast tbody tr.row-paye td { background: #000; color: #22c55e; border-bottom: 2px solid #22c55e; }
+
+/* 9. Theme: Ethereal Lines */
+.theme-ethereal { border-collapse: collapse; }
+.theme-ethereal th { background: transparent; color: rgba(255, 255, 255, 0.6); border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.theme-ethereal td { background: transparent; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.theme-ethereal tbody tr:hover td { background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 100%); }
+.theme-ethereal tbody tr.row-paye td { border-top: 1px solid #22c55e; }
+
+/* Premium Search Input focus glow and scale effect */
+.search-input-premium {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.search-input-premium:focus {
+  transform: scale(1.025);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.25) !important;
+  border-color: var(--b) !important;
+}
+
+/* Glowing Auth Cards */
+.auth-container-animated {
+  max-width: 450px;
+  margin: 5px auto 0;
+  position: relative;
+  border-radius: 20px;
+  padding: 3px;
+  overflow: hidden;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+}
+
+.auth-container-animated::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    transparent,
+    #38bdf8 120deg,
+    #ffffff 240deg,
+    #f97316 360deg
+  );
+  animation: rotate-auth-bg 3s linear infinite;
+  z-index: 0;
+}
+
+@keyframes rotate-auth-bg {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.auth-container-animated .auth-wrapper {
+  margin: 0 !important;
+  max-width: none !important;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  background: #0d1526;
+  border-radius: 17px;
+  backdrop-filter: none;
+  padding: 32px 60px;
+  min-height: 350px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   THÈME CLASSIQUE — Cartes de sites blanches
+   Ces règles viennent EN DERNIER pour surcharger tout le reste
+   ═══════════════════════════════════════════════════════ */
+[data-theme="classic"] .site-card,
+[data-theme="classic"] .site-card.design-neon,
+[data-theme="classic"] .site-card.design-glass,
+[data-theme="classic"] .site-card.design-gradient,
+[data-theme="classic"] .site-card.design-holographic,
+[data-theme="classic"] .site-card.design-aurora,
+[data-theme="classic"] .site-card.design-cyberpunk,
+[data-theme="classic"] .site-card.design-neumorphism,
+[data-theme="classic"] .site-card.design-brutalist,
+[data-theme="classic"] .site-card.design-pulse,
+[data-theme="classic"] .site-card.design-skeuomorph,
+[data-theme="classic"] .site-card.design-blob,
+[data-theme="classic"] .site-card.design-matrix,
+[data-theme="classic"] .site-card.design-retro,
+[data-theme="classic"] .site-card.design-classic {
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+  animation: none !important;
+}
+
+[data-theme="classic"] .site-card .site-card-inner,
+[data-theme="classic"] .site-card.design-neon .site-card-inner,
+[data-theme="classic"] .site-card.design-glass .site-card-inner,
+[data-theme="classic"] .site-card.design-gradient .site-card-inner,
+[data-theme="classic"] .site-card.design-holographic .site-card-inner,
+[data-theme="classic"] .site-card.design-aurora .site-card-inner,
+[data-theme="classic"] .site-card.design-cyberpunk .site-card-inner,
+[data-theme="classic"] .site-card.design-neumorphism .site-card-inner,
+[data-theme="classic"] .site-card.design-brutalist .site-card-inner,
+[data-theme="classic"] .site-card.design-pulse .site-card-inner,
+[data-theme="classic"] .site-card.design-skeuomorph .site-card-inner,
+[data-theme="classic"] .site-card.design-blob .site-card-inner,
+[data-theme="classic"] .site-card.design-matrix .site-card-inner,
+[data-theme="classic"] .site-card.design-retro .site-card-inner,
+[data-theme="classic"] .site-card.design-classic .site-card-inner {
+  background: #ffffff !important;
+  border-radius: 14px !important;
+  color: #1e293b !important;
+  backdrop-filter: none !important;
+}
+
+[data-theme="classic"] .site-card:hover {
+  background: #f8fafc !important;
+  border-color: #9ca3af !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+  transform: translateY(-4px) !important;
+}
+
+[data-theme="classic"] .site-card::before {
+  display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   THÈME CLASSIQUE — Tableau de pointage
+   ═══════════════════════════════════════════════════════ */
+[data-theme="classic"] .glass-panel table th {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+[data-theme="classic"] .glass-panel table th div {
+  color: #000000 !important;
+}
+
+[data-theme="classic"] .glass-panel {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+[data-theme="classic"] .glass-panel table td {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+[data-theme="classic"] .glass-panel table td {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+[data-theme="classic"] .glass-panel table td span,
+[data-theme="classic"] .glass-panel table td button {
+  color: #000000 !important;
+}
+
+/* Couleurs spécifiques pour les cases de présence (1) */
+[data-theme="classic"] .glass-panel table td:has(.text-present) {
+  background: #15803d !important;
+  color: #ffffff !important;
+}
+
+[data-theme="classic"] .glass-panel table td:has(.text-present) span.text-present {
+  color: #ffffff !important;
+  font-weight: bold !important;
+}
+
+/* Scrollbar gris pour les tableaux (thème classique) */
+[data-theme="classic"] .glass-panel::-webkit-scrollbar-thumb,
+[data-theme="classic"] .table-container::-webkit-scrollbar-thumb {
+  background: #888888 !important;
+  border-radius: 4px;
+}
+[data-theme="classic"] .glass-panel::-webkit-scrollbar-thumb:hover,
+[data-theme="classic"] .table-container::-webkit-scrollbar-thumb:hover {
+  background: #555555 !important;
+}
+[data-theme="classic"] .glass-panel::-webkit-scrollbar-track,
+[data-theme="classic"] .table-container::-webkit-scrollbar-track {
+  background: #f1f1f1 !important;
+  border-radius: 4px;
+}
+[data-theme="classic"] .glass-panel,
+[data-theme="classic"] .table-container {
+  scrollbar-color: #888888 #f1f1f1 !important;
+}
+
+/* Bandeau de verrouillage en jaune plus doux */
+[data-theme="classic"] .locked-period-alert {
+  background: #fef08a !important; /* Jaune doux (Tailwind yellow-200) */
+  border-color: #fde047 !important; /* Bordure légèrement plus foncée */
+  color: #000000 !important;
+}
+
+[data-theme="classic"] .locked-period-alert div,
+[data-theme="classic"] .locked-period-alert span,
+[data-theme="classic"] .locked-period-alert strong {
+  color: #000000 !important;
+  border-color: #000000 !important;
+}
+
+/* Cartes des zones (ex: Personnel Administratif) en gris clair */
+[data-theme="classic"] .subsite-card {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="classic"] .subsite-card > div > h3,
+[data-theme="classic"] .subsite-card > h3 {
+  color: #0f172a !important;
+}
+
+[data-theme="classic"] .subsite-card h3 span {
+  color: #475569 !important;
+}
+
+/* Grande carte d'en-tête (TopBar) en gris très foncé pour lisibilité */
+[data-theme="classic"] .top-bar.glass-panel {
+  background: #0f172a !important; /* Gris très foncé / Presque noir */
+  border-color: #1e293b !important;
+  color: #ffffff !important;
+}
+
+[data-theme="classic"] .top-bar.glass-panel h2,
+[data-theme="classic"] .top-bar.glass-panel span {
+  color: #ffffff;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PAGES AUTH (Connexion / Inscription) — Toujours en mode sombre
+   Exemptées du thème classique pour garder leur design d'origine
+   ═══════════════════════════════════════════════════════ */
+[data-theme="classic"] .auth-container-animated,
+[data-theme="classic"] .auth-container-animated .auth-wrapper {
+  background: #0d1526 !important;
+  color: #ffffff !important;
+  border-color: rgba(255,255,255,0.1) !important;
+}
+
+[data-theme="classic"] .auth-container-animated .glass-panel {
+  background: #0d1526 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="classic"] .auth-container-animated .auth-wrapper h2,
+[data-theme="classic"] .auth-container-animated .auth-wrapper p,
+[data-theme="classic"] .auth-container-animated .auth-wrapper label,
+[data-theme="classic"] .auth-container-animated .auth-wrapper span,
+[data-theme="classic"] .auth-container-animated .auth-wrapper .subtitle {
+  color: #ffffff !important;
+}
+
+[data-theme="classic"] .auth-container-animated .auth-wrapper .subtitle {
+  color: #94a3b8 !important;
+}
+
+[data-theme="classic"] .auth-container-animated .auth-wrapper .form-input {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="classic"] .auth-container-animated .auth-wrapper .form-input::placeholder {
+  color: #64748b !important;
+}
+
+[data-theme="classic"] .auth-container-animated .auth-wrapper .form-label {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="classic"] .auth-container-animated button[style*="background: none"],
+[data-theme="classic"] .auth-container-animated button[style*="background:none"] {
+  color: #94a3b8 !important;
+}
+
+/* La page entière d'authentification (fond derrière le panneau) */
+[data-theme="classic"] div[style*="minHeight: '100vh'"][style*="alignItems: 'center'"][style*="justifyContent: 'center'"] {
+  background: #070e1a !important;
+}
+
+/* 
+ * Personnalisation globale des options de liste déroulante
+ * Pour éviter le fond blanc natif du navigateur dans les thèmes sombres
+ */
+select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+

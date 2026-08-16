@@ -1,7 +1,5 @@
 <?php
-$dbFile = __DIR__ . '/backend/elysium.db';
-$sqlite = new PDO('sqlite:' . $dbFile);
-$stmt = $sqlite->prepare("SELECT data_value FROM service_data WHERE service_id = 'comp_bfccd504' AND data_key = 'published_periods'");
-$stmt->execute();
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-echo json_encode($rows, JSON_PRETTY_PRINT);
+require_once __DIR__ . '/backend/database.php';
+$sqlite = getDb();
+$res = $sqlite->query("SELECT * FROM settings WHERE key_name = 'max_initialized_period'")->fetch();
+print_r($res);

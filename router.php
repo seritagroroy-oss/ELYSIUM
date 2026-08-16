@@ -13,14 +13,95 @@
 
 $uri = urldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 
+// ─── En-têtes de sécurité globaux ───────────────────────────────────────────
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://flagcdn.com; connect-src 'self';");
+
+// ─── Blocage des dossiers interdits ──────────────────────────────────────────
+// Bloque l'accès à _A_SUPPRIMER_PLUS_TARD, scratch, et autres dossiers privés
+$blocked_folders = ['_A_SUPPRIMER_PLUS_TARD', 'scratch', 'VRAI', '-'];
+foreach ($blocked_folders as $folder) {
+    if (strpos($uri, '/' . $folder . '/') === 0 || $uri === '/' . $folder) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Accès interdit', 'code' => 403]);
+        exit;
+    }
+}
+
+// ─── Blocage des fichiers sensibles ──────────────────────────────────────────
+// Empêche l'accès direct aux logs, fichiers de config, bases de données, etc.
+$blocked_extensions = ['log', 'txt', 'env', 'sqlite', 'db', 'sql', 'bak', 'sh', 'md'];
+$blocked_files      = ['.env', '.env.example', 'pointage_db.json', 'database.sqlite'];
+$uri_ext = strtolower(pathinfo($uri, PATHINFO_EXTENSION));
+$uri_basename = basename($uri);
+
+if (in_array($uri_ext, $blocked_extensions) || in_array($uri_basename, $blocked_files)) {
+    http_response_code(403);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Accès interdit', 'code' => 403]);
+    exit;
+}
+
 // 1. Requêtes vers api.php → passer directement
 if ($uri === '/api.php' || strpos($uri, '/api.php') === 0) {
-    require __DIR__ . '/api.php';
+    require __DIR__ . '/api_new.php';
     return true;
 }
 
-// 2. Requêtes vers db.php ou autres PHP → passer directement
+// 2. Liste blanche stricte des fichiers PHP autorisés directement
+// Tout autre fichier .php est bloqué (y compris _A_SUPPRIMER_PLUS_TARD)
+$allowed_php = [
+    '/api_new.php',
+    '/router.php',
+    '/index.php',
+    '/check_data.php',
+    '/sync.php',
+    '/debug_dash.php',
+    '/unpublish_juillet.php',
+    '/diag_archive_repair.php',
+    '/my_script.php',
+    '/backup_script_tmp.php',
+    '/debug_oslo.php',
+    '/debug_oslo2.php',
+    '/debug_oslo3.php',
+    '/debug_oslo4.php',
+    '/debug_schema.php',
+    '/debug_oslo5.php',
+    '/debug_oslo_clones.php',
+    '/debug_oslo_micao.php',
+    '/debug_oslo_micao2.php',
+    '/debug_chain.php',
+    '/do_backup_full.php',
+    '/debug_micao_api.php',
+    '/test_origin_stats.php',
+    '/test_api_micao.php',
+    '/test_api_micao2.php',
+    '/test_sites_direct.php',
+    '/test_micao_att.php',
+    '/do_build.php',
+    '/test_oslo_profile.php',
+    '/test_api_curl.php',
+    '/test_oslo_agents.php',
+    '/test_root_att.php',
+    '/do_copy.php',
+    '/test_am_att.php',
+    '/test_mtime.php',
+    '/test_mtime2.php',
+    '/copy_backups.php',
+    '/do_restore.php',
+    '/clean_temps.php',
+    '/test_kouassi.php'
+];
 if (preg_match('/\.php$/', $uri)) {
+    if (!in_array($uri, $allowed_php)) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Accès interdit', 'code' => 403]);
+        exit;
+    }
     $file = __DIR__ . $uri;
     if (file_exists($file)) {
         require $file;
@@ -34,10 +115,10 @@ if ($uri !== '/' && file_exists($distPath) && !is_dir($distPath)) {
     // Définir le bon Content-Type selon l'extension
     $ext = pathinfo($distPath, PATHINFO_EXTENSION);
     $mimes = [
-        'js'   => 'application/javascript',
-        'mjs'  => 'application/javascript',
-        'css'  => 'text/css',
-        'html' => 'text/html',
+        'js'   => 'application/javascript; charset=UTF-8',
+        'mjs'  => 'application/javascript; charset=UTF-8',
+        'css'  => 'text/css; charset=UTF-8',
+        'html' => 'text/html; charset=UTF-8',
         'json' => 'application/json',
         'svg'  => 'image/svg+xml',
         'png'  => 'image/png',
@@ -53,10 +134,21 @@ if ($uri !== '/' && file_exists($distPath) && !is_dir($distPath)) {
     if (isset($mimes[$ext])) {
         header('Content-Type: ' . $mimes[$ext]);
     }
-    // Empêcher le cache navigateur pour les assets JS/CSS
-    header('Cache-Control: no-cache, no-store, must-revalidate');
-    header('Pragma: no-cache');
-    header('Expires: 0');
+    // ─── Cache intelligent ────────────────────────────────────────────────────
+    // Les assets Vite ont un hash dans leur nom (ex: index-Dz8bXd2k.js)
+    // → ils peuvent être mis en cache très longtemps (1 an)
+    // Les autres fichiers (polices, images sans hash) → cache court (1 heure)
+    $isHashedAsset = preg_match('/\.[a-f0-9]{8,}\.(js|css|mjs)$/i', $uri);
+    if ($isHashedAsset) {
+        // Cache 1 an — immutable car le nom du fichier change à chaque build
+        header('Cache-Control: public, max-age=31536000, immutable');
+    } elseif (in_array($ext, ['woff', 'woff2', 'ttf', 'png', 'jpg', 'jpeg', 'svg', 'ico', 'webp'])) {
+        // Cache 1 heure pour les images et polices
+        header('Cache-Control: public, max-age=3600');
+    } else {
+        // Pas de cache pour les autres (json, map, etc.)
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+    }
     readfile($distPath);
     return true;
 }

@@ -1,0 +1,1388 @@
+<?php
+/**
+ * Module Dashboard & Pointage — pointage.php
+ * Extrait de api_new.php
+ *
+ * Inclus depuis api_new.php — a acces a toutes les fonctions globales
+ */
+
+switch ($action) {
+    case 'get_pointage_agents_for_reclamation':
+        $period = $_GET['period'] ?? '';
+        if (empty($period) || $period === 'undefined') {
+            $period = date('Y-m');
+        }
+        $sqlite = getDb();
+        $company_id = resolveCurrentCompanyIdSql();
+        $module = $_GET['module'] ?? 'PC';
+        
+        $agents = [];
+        try {
+            // Check if period exists in attendance, if not use previous month's active agents
+            $stmtPeriod = $sqlite->prepare("SELECT COUNT(*) FROM attendance WHERE company_id = ? AND period = ?");
+            $stmtPeriod->execute([$company_id, $period]);
+            $has_attendance = $stmtPeriod->fetchColumn() > 0;
+            
+            $periodToSearch = $period;
+            if (!$has_attendance) {
+                // Try previous month
+                $prevPeriod = date('Y-m', strtotime($period . '-01 -1 month'));
+                $stmtPeriodPrev = $sqlite->prepare("SELECT COUNT(*) FROM attendance WHERE company_id = ? AND period = ?");
+                $stmtPeriodPrev->execute([$company_id, $prevPeriod]);
+                if ($stmtPeriodPrev->fetchColumn() > 0) {
+                    $periodToSearch = $prevPeriod;
+                }
+            }
+
+            // Fetch agents not archived before the period
+            $stmt = $sqlite->prepare("SELECT a.name, a.function as fonction, s.name as site_name, sub.name as subsite_name
+                                      FROM agents a
+                                      LEFT JOIN subsites sub ON a.subsite_id = sub.id
+                                      LEFT JOIN sites s ON sub.site_id = s.id
+                                      WHERE a.company_id = ? 
+                                      AND (a.archived_period IS NULL OR a.archived_period >= ?)");
+            $stmt->execute([$company_id, $periodToSearch]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            foreach ($rows as $row) {
+                $siteStr = $row['site_name'];
+                if ($row['subsite_name'] && $row['subsite_name'] !== 'Zone Principale' && strpos($row['subsite_name'], 'Agents non assignés') === false) {
+                    $siteStr .= ' / ' . $row['subsite_name'];
+                }
+                $agents[] = [
+                    'nom' => $row['name'],
+                    'matricule' => '',
+                    'fonction' => $row['fonction'],
+                    'site' => $siteStr
+                ];
+            }
+        } catch (Exception $e) {
+            // Fallback empty
+        }
+        
+        echo json_encode(['success' => true, 'agents' => $agents, 'searched_period' => $periodToSearch]);
+        break;
+
+    case 'get_dashboard_init':
+        $site_id = $_GET['site_id'] ?? null;
+        $period = $_GET['period'] ?? date('Y-m');
+
+        $sqlite = getDb();
+
+        $company_id = resolveCurrentCompanyIdSql();
+        $serviceKey = resolveCurrentServiceKeySql();
+        if (!$serviceKey) {
+            echo json_encode(['success' => false, 'message' => 'No service selected', 'sites' => [], 'site_data' => []]);
+            break;
+        }
+
+        $module = $_GET['module'] ?? 'PC';
+        // Auto-create table
+        $sqlite->exec("CREATE TABLE IF NOT EXISTS period_passwords (
+            company_id VARCHAR(100),
+            period VARCHAR(20),
+            password_hash TEXT,
+            locked_by TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(company_id, period)
+        )");
+        try { $sqlite->exec("ALTER TABLE period_passwords ADD COLUMN locked_by TEXT"); } catch (Exception $e) {}
+
+        // SECURITE : Vérifier si le mois est verrouillé
+        $stmtLock = $sqlite->prepare("SELECT password_hash FROM period_passwords WHERE company_id = ? AND period = ?");
+        $stmtLock->execute([$company_id, $period]);
+        $lockData = $stmtLock->fetch();
+        $is_locked = false;
+        if ($lockData && !empty($lockData['password_hash'])) {
+            if (empty($_SESSION['unlocked_periods'][$company_id][$period])) {
+                echo json_encode(['success' => true, 'locked' => true, 'period' => $period]);
+                exit;
+            } else {
+                $is_locked = true; // Déjà déverrouillé dans la session, mais le statut global est "verrouillé"
+            }
+        }
+
+        $sites = [];
+        try {
+            // Auto-patch missing source_module from JSON migration
+            try { $sqlite->exec("UPDATE sites SET source_module = 'PC' WHERE source_module IS NULL OR source_module = ''"); } catch (Exception $e) {}
+
+            // ─── Patch company_id (migration unique) ──────────────────────────
+            // Ce patch ne s'exécute qu'UNE SEULE FOIS par session pour éviter
+            // de ralentir chaque ouverture du tableau de bord.
+            $patchKey = 'company_patched_' . md5($company_id);
+            if ($company_id !== 'comp_default_1' && $company_id !== '' && empty($_SESSION[$patchKey])) {
+                try { $sqlite->exec("UPDATE sites SET company_id = '$company_id' WHERE company_id = 'comp_default_1'"); } catch (Exception $e) {}
+                try { $sqlite->exec("UPDATE agents SET company_id = '$company_id' WHERE company_id = 'comp_default_1'"); } catch (Exception $e) {}
+                try { $sqlite->exec("UPDATE attendance SET company_id = '$company_id' WHERE company_id = 'comp_default_1'"); } catch (Exception $e) {}
+                try { $sqlite->exec("UPDATE services SET company_id = '$company_id' WHERE company_id = 'comp_default_1'"); } catch (Exception $e) {}
+                try { $sqlite->exec("UPDATE tickets SET company_id = '$company_id' WHERE company_id = 'comp_default_1'"); } catch (Exception $e) {}
+                try { $sqlite->exec("UPDATE sites SET service_id = '$serviceKey' WHERE id IN ('site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration', 'site_itc') AND company_id = '$company_id' AND (service_id = '' OR service_id IS NULL)"); } catch (Exception $e) {}
+                try { $sqlite->exec("UPDATE subsites SET service_id = '$serviceKey' WHERE site_id IN ('site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration', 'site_itc') AND company_id = '$company_id' AND (service_id = '' OR service_id IS NULL)"); } catch (Exception $e) {}
+                try { $sqlite->exec("UPDATE agents SET service_id = '$serviceKey' WHERE (subsite_id IN (SELECT id FROM subsites WHERE site_id IN ('site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration', 'site_itc')) OR subsite_id IN ('site_releves_1', 'site_extras_1', 'site_admin_1')) AND company_id = '$company_id' AND (service_id = '' OR service_id IS NULL)"); } catch (Exception $e) {}
+                $_SESSION[$patchKey] = true; // Marquer comme fait pour cette session
+            }
+
+            $stmt = $sqlite->prepare("SELECT * FROM sites WHERE company_id = ? AND source_module = ?");
+            $stmt->execute([$company_id, $module]);
+            $sites = $stmt->fetchAll();
+        } catch (Exception $e) {
+            $sites = [];
+        }
+
+
+        // Inject default sites
+        $has_extras = false;
+        $has_releves = false;
+        $has_admin = false;
+        $has_itc = false;
+        $has_extras_sur_site = false;
+        foreach ($sites as $s) {
+            if ($s['id'] === 'site_extras') $has_extras = true;
+            if ($s['id'] === 'site_extras_sur_site') $has_extras_sur_site = true;
+            if ($s['id'] === 'site_releves') $has_releves = true;
+            if ($s['id'] === 'site_administration') $has_admin = true;
+            if ($s['id'] === 'site_itc') $has_itc = true;
+        }
+        
+        if (!$has_extras) {
+            $sites[] = ['id' => 'site_extras', 'name' => '🌟 EXTRA BUREAU'];
+        }
+        if (!$has_extras_sur_site) {
+            $sites[] = ['id' => 'site_extras_sur_site', 'name' => '🌟 EXTRA SUR SITE'];
+        }
+        if (!$has_releves) {
+            $sites[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves'];
+        }
+        if (!$has_admin) {
+            $sites[] = ['id' => 'site_administration', 'name' => '🏢 Administration'];
+        }
+        if (!$has_itc) {
+            $sites[] = ['id' => 'site_itc', 'name' => 'ITC / IFM'];
+            // Auto-persister site_itc dans la base si absent avec la signature du PC
+            try {
+                $sqlite->exec("INSERT IGNORE INTO sites (id, name, company_id, service_id, source_module) VALUES ('site_itc', 'ITC / IFM', '$company_id', '$serviceKey', 'PC')");
+            } catch (Exception $e) { /* Ignore */ }
+        }
+
+        // Toujours charger les subsites, sinon le menu déroulant 'Site de Destination' n'aura plus de zones !
+        // EAGER LOADING: Fetch all subsites at once
+            $allSubsitesBySite = [];
+            try {
+                $stmtAllSub = $sqlite->prepare("SELECT * FROM subsites");
+                $stmtAllSub->execute();
+                $allSubRows = $stmtAllSub->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                foreach ($allSubRows as $row) {
+                    $allSubsitesBySite[$row['site_id']][] = $row;
+                }
+            } catch (Exception $e) {}
+
+            // Fetch subsites for all sites
+            foreach ($sites as &$site_ref) {
+                // Fetch custom subsites created by this specific service in the hardcoded global sites
+                if (in_array($site_ref['id'], ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration'])) {
+                    $custom_subsites = [];
+                    if (isset($allSubsitesBySite[$site_ref['id']])) {
+                        foreach ($allSubsitesBySite[$site_ref['id']] as $sub) {
+                            if (empty($sub['service_id']) || $sub['service_id'] == $serviceKey) {
+                                $custom_subsites[] = $sub;
+                            }
+                        }
+                    }
+
+                    if (empty($custom_subsites)) {
+                        if ($site_ref['id'] === 'site_extras') {
+                            $site_ref['subsites'] = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
+                        } elseif ($site_ref['id'] === 'site_releves') {
+                            $site_ref['subsites'] = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
+                        } elseif ($site_ref['id'] === 'site_administration') {
+                            $site_ref['subsites'] = [['id' => 'site_admin_1', 'name' => 'Bureau']];
+                        } else {
+                            $site_ref['subsites'] = [['id' => 'default_' . $site_ref['id'], 'name' => 'Zone Principale']];
+                        }
+                    } else {
+                        $custom_subsites[] = ['id' => 'default_' . $site_ref['id'], 'name' => 'Agents non assignés (Par défaut)'];
+                        $site_ref['subsites'] = $custom_subsites;
+                    }
+                    continue;
+                }
+                // Pour site_itc : isolation complète par company_id
+                if ($site_ref['id'] === 'site_itc') {
+                    try {
+                        $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($company_id)), 0, 12);
+                        $itc_zones = [];
+                        if (isset($allSubsitesBySite['site_itc'])) {
+                            foreach ($allSubsitesBySite['site_itc'] as $sub) {
+                                if (isset($sub['company_id']) && $sub['company_id'] === $company_id) {
+                                    $itc_zones[] = $sub;
+                                }
+                            }
+                        }
+                        
+                        if (!empty($itc_zones)) {
+                            $site_ref['subsites'] = $itc_zones;
+                        } else {
+                            // Première ouverture pour cette entreprise → créer les zones par défaut
+                            $default_zones = [
+                                ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Reguliere'],
+                                ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
+                                ['id' => 'itc_as_' . $comp_suffix, 'name' => 'Agent Special'],
+                                ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS']
+                            ];
+                            try {
+                                $stmtIns = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, ?, 'site_itc', ?, ?)");
+                                foreach ($default_zones as $dz) {
+                                    $stmtIns->execute([$dz['id'], $dz['name'], $serviceKey, $company_id]);
+                                }
+                            } catch (Exception $e2) { /* Ignore */ }
+                            $site_ref['subsites'] = $default_zones;
+                        }
+                    } catch (Exception $e) {
+                        $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($company_id)), 0, 12);
+                        $site_ref['subsites'] = [
+                            ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Reguliere'],
+                            ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
+                            ['id' => 'itc_as_' . $comp_suffix, 'name' => 'Agent Special'],
+                            ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS']
+                        ];
+                    }
+                    continue;
+                }
+                $site_ref['subsites'] = $allSubsitesBySite[$site_ref['id']] ?? [];
+            }
+
+            // Calculate agents_count for all sites
+            try {
+                $stmtAgCountAll = $sqlite->prepare("SELECT subsite_id, COUNT(*) as cnt FROM agents WHERE company_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?) GROUP BY subsite_id");
+                $stmtAgCountAll->execute([$company_id, $period]);
+                $allCounts = $stmtAgCountAll->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                $countsBySubsite = [];
+                foreach ($allCounts as $row) {
+                    $countsBySubsite[$row['subsite_id']] = (int)$row['cnt'];
+                }
+                foreach ($sites as &$site_ref) {
+                    $site_ref['agents_count'] = 0;
+                    $counted_subs = [];
+                    if (!empty($site_ref['subsites'])) {
+                        foreach ($site_ref['subsites'] as $sub) {
+                            $site_ref['agents_count'] += $countsBySubsite[$sub['id']] ?? 0;
+                            $counted_subs[$sub['id']] = true;
+                        }
+                    }
+                    
+                    // Fallback: Check if there are agents in the default subsite that isn't in the DB yet
+                    $default_id = 'default_' . $site_ref['id'];
+                    if (!isset($counted_subs[$default_id])) {
+                        $def_count = $countsBySubsite[$default_id] ?? 0;
+                        if ($def_count > 0) {
+                            $site_ref['agents_count'] += $def_count;
+                            $site_ref['subsites'][] = ['id' => $default_id, 'name' => 'Zone Principale'];
+                        } elseif (empty($site_ref['subsites'])) {
+                            // If absolutely empty, just mock a Zone Principale so the site has at least 1 zone visually
+                            $site_ref['subsites'] = [['id' => $default_id, 'name' => 'Zone Principale']];
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                foreach ($sites as &$site_ref) {
+                    $site_ref['agents_count'] = 0;
+                }
+            }
+
+            // 2. Get published periods consistently using getServiceDataSql
+            $published_periods = getServiceDataSql($company_id, 'published_periods', []);
+            if (!is_array($published_periods)) {
+                $published_periods = [];
+            }
+
+
+            $site_data = [];
+
+            if ($site_id !== null && $site_id !== '') {
+                $site = null;
+                foreach ($sites as $s) {
+                    if ($s['id'] == $site_id) {
+                        $site = $s;
+                        break;
+                    }
+                }
+
+                // AUTO-FIX: Repair any corrupted subsites with an empty site_id
+                $sqlite->exec("UPDATE subsites SET site_id = substr(id, 9) WHERE id LIKE 'default_%' AND (site_id IS NULL OR site_id = '')");
+
+                if ($site) {
+                    $site_name = $site['name'];
+
+                    // Fetch subsites
+                    $stmt = $sqlite->prepare("SELECT * FROM subsites WHERE site_id = ? AND (service_id = ? OR company_id = ? OR service_id IS NULL OR service_id = '')");
+                    $stmt->execute([$site_id, $serviceKey, $company_id]);
+                    $subsites_rows = $stmt->fetchAll();
+
+                    // Inject default subsites for special sites if empty
+                    $is_hardcoded = in_array($site_id, ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration', 'site_itc']);
+                    if ($is_hardcoded) {
+                        if (empty($subsites_rows)) {
+                            if ($site_id === 'site_extras') {
+                                $subsites_rows = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
+                            } elseif ($site_id === 'site_extras_sur_site') {
+                                $subsites_rows = [['id' => 'default_site_extras_sur_site', 'name' => 'Zone Principale']];
+                            } elseif ($site_id === 'site_releves') {
+                                $subsites_rows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
+                            } elseif ($site_id === 'site_administration') {
+                                $subsites_rows = [['id' => 'site_admin_1', 'name' => 'Staff Administratif']];
+                            } else {
+                                $subsites_rows = [['id' => 'default_' . $site_id, 'name' => 'Zone Principale']];
+                            }
+                        } else {
+                            $subsites_rows[] = ['id' => 'default_' . $site_id, 'name' => 'Agents non assignés (Par défaut)'];
+                        }
+                    } else {
+                        // Auto-fix: Create missing default subsite in DB for normal sites so it becomes a REAL zone
+                        $default_id = 'default_' . $site_id;
+                        $has_default = false;
+                        foreach ($subsites_rows as $sr) {
+                            if ($sr['id'] === $default_id) {
+                                $has_default = true;
+                                break;
+                            }
+                        }
+                        if (!$has_default) {
+                            $stmtCheck = $sqlite->prepare("SELECT COUNT(*) FROM agents WHERE subsite_id = ? AND company_id = ?");
+                            $stmtCheck->execute([$default_id, $company_id]);
+                            $has_orphans = $stmtCheck->fetchColumn() > 0;
+                            if (empty($subsites_rows) || $has_orphans) {
+                                $stmtIns = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, 'Zone Principale', ?, ?, ?)");
+                                $stmtIns->execute([$default_id, $site_id, $serviceKey, $company_id]);
+                                $stmt->execute([$site_id, $serviceKey, $company_id]);
+                                $subsites_rows = $stmt->fetchAll();
+                            }
+                        }
+                    }
+
+                    $subsites = [];
+                    $subsite_ids = [];
+                    foreach ($subsites_rows as $sub) {
+                        if (!empty($sub['contract_end_date'])) {
+                            $end_month = substr($sub['contract_end_date'], 0, 7);
+                            if ($end_month < $period) {
+                                continue;
+                            }
+                        }
+                        $sub['agents'] = []; // initialize
+                        $subsites[$sub['id']] = $sub;
+                        $subsite_ids[] = "'" . str_replace("'", "''", $sub['id']) . "'";
+                    }
+
+                    if (!empty($subsite_ids)) {
+                        $inClause = implode(',', $subsite_ids);
+                        
+                        // 1. Fetch all agents
+                        $stmt_ag = $sqlite->prepare("SELECT * FROM agents WHERE subsite_id IN ($inClause) AND company_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?) ORDER BY created_at ASC");
+                        $stmt_ag->execute([$company_id, $period]);
+                        $agents_rows = $stmt_ag->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                        
+                        $agent_ids = [];
+                        foreach ($agents_rows as $ag) {
+                            $agent_ids[] = "'" . str_replace("'", "''", $ag['id']) . "'";
+                        }
+
+                        $all_attendances = [];
+                        $all_supp_ext = [];
+                        $agentFuncMap = [];
+
+                        if (!empty($agent_ids)) {
+                            $inAgents = implode(',', $agent_ids);
+                            
+                            // 2. Fetch all attendances
+                            $stmt_att = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE agent_id IN ($inAgents) AND period = ?");
+                            $stmt_att->execute([$period]);
+                            $raw_atts = $stmt_att->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                            foreach ($raw_atts as $att) {
+                                $all_attendances[$att['agent_id']][] = $att;
+                            }
+
+                            // 3. Fetch agent remplace
+                            $stmt_reps = $sqlite->prepare("SELECT DISTINCT agent_id, agent_remplace FROM supplementaires_externes WHERE agent_id IN ($inAgents) AND periode = ?");
+                            $stmt_reps->execute([$period]);
+                            $repsRows = $stmt_reps->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                            foreach ($repsRows as $r) {
+                                $all_supp_ext[$r['agent_id']][] = $r['agent_remplace'];
+                            }
+                            
+                            // 4. Fetch dictionary of ALL agent functions in company to avoid N+1 function lookups
+                            $stmtAllFuncs = $sqlite->prepare("SELECT id, name, `function` FROM agents WHERE company_id = ?");
+                            $stmtAllFuncs->execute([$company_id]);
+                            $funcsRows = $stmtAllFuncs->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                            foreach ($funcsRows as $r) {
+                                $agentFuncMap[$r['name']] = $r['function'];
+                                $agentFuncMap[$r['id']] = $r['function'];
+                            }
+                        }
+
+                        // Now assemble
+                        foreach ($agents_rows as $agent) {
+                            $agent['has_sp'] = (int) $agent['has_sp'];
+                            $agent['shift_history'] = json_decode($agent['shift_history'] ?? '[]', true) ?: [];
+                            $agent['profile_data'] = json_decode($agent['profile_data'] ?? '{}', true);
+                            
+                            $raw_att = $all_attendances[$agent['id']] ?? [];
+                            $processed_att = [];
+                            $has_suppl_distant = false;
+                            
+                            foreach ($raw_att as $att) {
+                                if (strpos($att['status'], 'EXT_1|') === 0 || strpos($att['status'], 'M_1|') === 0) {
+                                    if (in_array($att['shift_code'], ['J', 'N'])) {
+                                        $new_shift_code = ($att['shift_code'] === 'N') ? 'SN' : 'SJ';
+                                        $parts = explode('|', $att['status']);
+                                        $dest_site = $parts[1] ?? 'Inconnu';
+                                        $replaced_agent = $parts[2] ?? '';
+                                        $motif = $parts[3] ?? '';
+                                        
+                                        $rep_func = $replaced_agent ? ($agentFuncMap[$replaced_agent] ?? '') : '';
+                                        
+                                        $processed_att[] = [
+                                            'date' => $att['date'],
+                                            'shift_code' => $new_shift_code,
+                                            'status' => 'Suppl|' . $dest_site . '|' . $replaced_agent . '|' . $motif . '|' . $rep_func
+                                        ];
+                                        $has_suppl_distant = true;
+                                    } else {
+                                        $has_suppl_distant = true;
+                                    }
+                                    unset($att['agent_id']);
+                                    $processed_att[] = $att;
+                                } else {
+                                    unset($att['agent_id']);
+                                    $processed_att[] = $att;
+                                }
+                            }
+                            $agent['attendance'] = $processed_att;
+                            if ($has_suppl_distant && empty($agent['has_sp'])) {
+                                $agent['has_sp'] = 1;
+                            }
+                            
+                            $replaced_functions = [];
+                            $reps = $all_supp_ext[$agent['id']] ?? [];
+                            foreach ($reps as $repName) {
+                                if (!empty($repName) && !empty($agentFuncMap[$repName])) {
+                                    $replaced_functions[] = $agentFuncMap[$repName];
+                                }
+                            }
+                            $agent['replaced_functions'] = array_values(array_unique($replaced_functions));
+
+                            $subsites[$agent['subsite_id']]['agents'][] = $agent;
+                        }
+                    }
+
+                    // Filter default zones if empty
+                    $final_subsites = [];
+                    $subsitesCount = count($subsites);
+                    foreach ($subsites as $sub) {
+                        $is_default_name = in_array($sub['name'], ['Agents non assignés (Par défaut)', 'Zone Principale', 'Agents Disponibles', 'Bureau', 'Staff Administratif']);
+                        if (strpos($sub['id'], 'default_') === 0 && empty($sub['agents']) && $subsitesCount > 1 && $is_default_name) {
+                            continue;
+                        }
+                        $final_subsites[] = $sub;
+                    }
+                    $subsites = $final_subsites;
+                    $site_data = $subsites;
+
+                    // 3. Mutated Agents (M|...) and Extras/Releves (EXT|..., REL|...)
+                    $mutated_agents = [];
+
+                    $suppl_conditions = [];
+                    $suppl_params = [];
+                    $suppl_conditions[] = "a.status = ?";
+                    $suppl_params[] = 'Suppl|' . $site_id;
+                    foreach ($subsites as $sb) {
+                        if (isset($sb['id'])) {
+                            $suppl_conditions[] = "a.status = ?";
+                            $suppl_params[] = 'Suppl|' . $sb['id'];
+                        }
+                    }
+                    $suppl_sql = implode(' OR ', $suppl_conditions);
+                    if (empty($suppl_sql)) $suppl_sql = "1=0";
+
+                    $stmt_mut = $sqlite->prepare("
+                       SELECT DISTINCT a.agent_id, ag.*
+                       FROM attendance a
+                       JOIN agents ag ON a.agent_id = ag.id
+                       WHERE a.period = ?
+                       AND a.status IS NOT NULL AND a.status != '' AND a.status != '1' AND a.status != 'Repos'
+                       AND (a.status LIKE ? OR a.status LIKE ? OR a.status LIKE ? OR ($suppl_sql))
+                   ");
+
+                    $like_m = 'M|' . $site_name;
+                    $like_ext = 'EXT%|' . $site_name;
+                    $like_rel = 'REL%|' . $site_name;
+
+                    $params = [$period, $like_m, $like_ext, $like_rel];
+                    foreach ($suppl_params as $sp) {
+                        $params[] = $sp;
+                    }
+
+                    $stmt_mut->execute($params);
+                    $mutated_rows = $stmt_mut->fetchAll() ?: [];
+
+                    // EAGER LOADING for mutated agents
+                    $mutated_agent_ids = [];
+                    $mutated_subsite_ids = [];
+                    foreach ($mutated_rows as $ag) {
+                        $mutated_agent_ids[] = "'" . str_replace("'", "''", $ag['agent_id']) . "'";
+                        $mutated_subsite_ids[] = "'" . str_replace("'", "''", $ag['subsite_id']) . "'";
+                    }
+                    
+                    $all_mutated_attendances = [];
+                    $siteMapBySubsiteId = [];
+                    
+                    $all_supp_ext_mutated = [];
+                    $globalAgentFuncMap = [];
+                    
+                    if (!empty($mutated_agent_ids)) {
+                        $inMutAgents = implode(',', $mutated_agent_ids);
+                        $stmt_att2_all = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE agent_id IN ($inMutAgents) AND period = ?");
+                        $stmt_att2_all->execute([$period]);
+                        $raw_att2_all = $stmt_att2_all->fetchAll() ?: [];
+                        foreach ($raw_att2_all as $att) {
+                            $all_mutated_attendances[$att['agent_id']][] = $att;
+                        }
+                        
+                        $inMutSubsites = implode(',', array_unique($mutated_subsite_ids));
+                        $stmt_orig_all = $sqlite->prepare("SELECT sub.id as subsite_id, s.name, s.id FROM sites s JOIN subsites sub ON sub.site_id = s.id WHERE sub.id IN ($inMutSubsites)");
+                        $stmt_orig_all->execute();
+                        $orig_rows = $stmt_orig_all->fetchAll() ?: [];
+                        foreach ($orig_rows as $row) {
+                            $siteMapBySubsiteId[$row['subsite_id']] = ['id' => $row['id'], 'name' => $row['name']];
+                        }
+
+                        // Eager load supplementaires externes for mutated agents
+                        $stmt_se_all = $sqlite->prepare("SELECT agent_id, vacation, agent_remplace, site_destination_id, date_supp FROM supplementaires_externes WHERE agent_id IN ($inMutAgents) AND periode = ? ORDER BY date_supp DESC");
+                        $stmt_se_all->execute([$period]);
+                        $se_all_rows = $stmt_se_all->fetchAll() ?: [];
+                        foreach ($se_all_rows as $se) {
+                            $all_supp_ext_mutated[$se['agent_id']][] = $se;
+                        }
+
+                        // Eager load ALL agent functions in company
+                        $stmtAllFuncsGlobal = $sqlite->prepare("SELECT id, name, `function` FROM agents WHERE company_id = ?");
+                        $stmtAllFuncsGlobal->execute([$company_id]);
+                        $funcsRowsGlobal = $stmtAllFuncsGlobal->fetchAll() ?: [];
+                        foreach ($funcsRowsGlobal as $r) {
+                            $globalAgentFuncMap[$r['name']] = $r['function'];
+                            $globalAgentFuncMap[$r['id']] = $r['function'];
+                        }
+                    }
+
+                    foreach ($mutated_rows as $agent) {
+                        // Fetch original site to determine if they are from extras or releves
+                        if ($agent['subsite_id'] === 'site_releves_1' || strpos($agent['subsite_id'], 'site_releves') !== false) {
+                            $orig_site = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves'];
+                        } elseif ($agent['subsite_id'] === 'site_extras_1' || strpos($agent['subsite_id'], 'site_extras') !== false) {
+                            $orig_site = ['id' => 'site_extras', 'name' => '🌟 Vivier des extras'];
+                        } else {
+                            $orig_site = $siteMapBySubsiteId[$agent['subsite_id']] ?? null;
+                        }
+                        
+                        $is_extra = ($orig_site && $orig_site['id'] === 'site_extras');
+                        $is_releve = ($orig_site && $orig_site['id'] === 'site_releves');
+
+                        $agent['profile_data'] = json_decode($agent['profile_data'] ?? '{}', true);
+                        if (isset($agent['shift_history']) && is_string($agent['shift_history'])) {
+                            $agent['shift_history'] = json_decode($agent['shift_history'], true) ?: [];
+                        } else {
+                            $agent['shift_history'] = [];
+                        }
+                        $agent['has_sp'] = (int) $agent['has_sp'];
+
+                        $raw_att2 = $all_mutated_attendances[$agent['agent_id']] ?? [];
+
+                        $filtered_att = [];
+                        $is_relevant = false;
+                        $target_subsite_id = null;
+                        foreach ($raw_att2 as $att) {
+                            if (strpos($att['status'], 'M|' . $clean_site_name) === 0 || strpos($att['status'], 'M|%' . $clean_site_name) === 0 || (strpos($att['status'], 'M|') === 0 && strpos($att['status'], $clean_site_name) !== false) || strpos($att['status'], 'PM|' . $clean_site_name) === 0 || (strpos($att['status'], 'PM|') === 0 && strpos($att['status'], $clean_site_name) !== false)) {
+                                // Muted fully
+                                $filtered_att[] = [
+                                    'date' => $att['date'],
+                                    'shift_code' => $att['shift_code'],
+                                    'status' => ''
+                                ];
+                                $is_relevant = true;
+                            } else if ((strpos($att['status'], 'EXT_1|') === 0 || strpos($att['status'], 'REL_1|') === 0 || strpos($att['status'], 'M_1|') === 0 || strpos($att['status'], 'REL_T|') === 0) && strpos($att['status'], $clean_site_name) !== false) {
+                                // Ignore same-site standard mutations from mutated_agents
+                                if ($orig_site && $orig_site['id'] === $site_id) {
+                                    continue;
+                                }
+                                $is_relevant = true;
+                                // Keep the exact pointage for distant site view (it will render as 1 in blue or RELV)
+                                $filtered_att[] = $att;
+                                // Still activate SP rows just in case they were pointed on an SP row
+                                if (in_array($att['shift_code'], ['SJ', 'SN'])) {
+                                    $agent['has_sp'] = 2;
+                                } elseif ($att['shift_code'] === 'S' && empty($agent['has_sp'])) {
+                                    $agent['has_sp'] = 1;
+                                }
+                            } else if (strpos($att['status'], 'Suppl|') === 0) {
+                                $dest = explode('|', $att['status'])[1] ?? '';
+                                $belongs = false;
+                                foreach ($subsites as $sb) {
+                                    if (isset($sb['id']) && $sb['id'] === $dest) { $belongs = true; break; }
+                                }
+                                if ($belongs || $dest === $site_id) {
+                                    $is_relevant = true;
+                                    if ($belongs && !$target_subsite_id) {
+                                        $target_subsite_id = $dest;
+                                    }
+                                    // Agent deployed for external supp on this site
+                                    $filtered_att[] = [
+                                        'date' => $att['date'],
+                                        'shift_code' => $att['shift_code'],
+                                        'status' => 'Suppl_Dest'
+                                    ];
+                                    if (in_array($att['shift_code'], ['SJ', 'SN'])) {
+                                        $agent['has_sp'] = 2;
+                                    } elseif ($att['shift_code'] === 'S' && empty($agent['has_sp'])) {
+                                        $agent['has_sp'] = 1;
+                                    }
+                                } else {
+                                    $filtered_att[] = [
+                                        'date' => $att['date'],
+                                        'shift_code' => $att['shift_code'],
+                                        'status' => $att['status'] // Keep 'Suppl|dest' to show it on the origin site
+                                    ];
+                                }
+                            } else if ((strpos($att['status'], 'EXT|') === 0 || strpos($att['status'], 'REL|') === 0) && strpos($att['status'], $clean_site_name) !== false) {
+                                // Full extra/releve
+                                $filtered_att[] = [
+                                    'date' => $att['date'],
+                                    'shift_code' => $att['shift_code'],
+                                    'status' => ''
+                                ];
+                                $is_relevant = true;
+                            } else {
+                                $filtered_att[] = [
+                                    'date' => $att['date'],
+                                    'shift_code' => $att['shift_code'],
+                                    'status' => ''
+                                ];
+                            }
+                        }
+                        
+                        if (!$is_relevant) continue;
+
+                        $agent['attendance'] = $filtered_att;
+
+                        if ($is_extra || $is_releve) {
+                            $agent['source'] = $orig_site['name'];
+                            $agent['is_extra'] = $is_extra;
+                            $agent['is_releve'] = $is_releve;
+                            $agent['target_subsite_id'] = $target_subsite_id ?? null;
+                            $deployed_extras[] = $agent;
+                        } else {
+                            $agent['source'] = $orig_site ? $orig_site['name'] : 'Autre site';
+                            $agent['is_mutated'] = true;
+                            $agent['original_site'] = $orig_site['name'] ?? 'Inconnu';
+                            $agent['target_subsite_id'] = $target_subsite_id ?? null;
+
+                            // CALCUL DES JOURS REELS CONSOMMÉS SUR LE SITE D'ORIGINE
+                            $origin_total_A = 0;
+                            $origin_total_MAP = 0;
+                            $origin_total_P = 0;
+                            $origin_total_Entrant = 0;
+                            $origin_total_Exit = 0;
+                            
+                            foreach ($raw_att2 as $orig_att) {
+                                $st = $orig_att['status'] ?? '';
+                                if (in_array($st, ['ABANDON', 'DEMISSION', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || strpos($st, 'SORTANT_') === 0) $origin_total_Exit++;
+                                if ($st === 'ENTRANT' || $st === 'NON_PRESENT') $origin_total_Entrant++;
+                                if ($st === 'A' || $st === 'M') $origin_total_A++;
+                                if ($st === 'MAP') $origin_total_MAP++;
+                                if ($st === 'P') $origin_total_P++;
+                            }
+                            
+                            $daysInMonth = (int)date('t', strtotime($period . '-01'));
+                            $workedDays = $daysInMonth - $origin_total_Entrant - $origin_total_Exit;
+                            $monthAdj = 30 - $daysInMonth;
+                            if ($monthAdj !== 0) {
+                                $monthAdj = $monthAdj * ($workedDays / $daysInMonth);
+                            }
+                            $origin_base = max(0, $daysInMonth - $origin_total_A - $origin_total_MAP - $origin_total_Entrant - $origin_total_P) + round($monthAdj);
+                            
+                            $agent['days_consumed_by_origin'] = $origin_base;
+
+                            $my_ses = $all_supp_ext_mutated[$agent['agent_id']] ?? [];
+                            $vac = null;
+                            $repsRows = [];
+                            foreach ($my_ses as $se) {
+                                $is_dest = ($se['site_destination_id'] == $site_id);
+                                if (!$is_dest) {
+                                    foreach ($subsites as $sb) {
+                                        if (isset($sb['id']) && $sb['id'] == $se['site_destination_id']) {
+                                            $is_dest = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if ($is_dest) {
+                                    if (!$vac && !empty($se['vacation'])) {
+                                        $vac = $se['vacation'];
+                                    }
+                                    if (!empty($se['agent_remplace'])) {
+                                        $repsRows[] = ['agent_remplace' => $se['agent_remplace']];
+                                    }
+                                }
+                            }
+                            
+                            if ($vac) {
+                                $agent['shift_type'] = $vac;
+                            }
+                            
+                            $replaced_functions = [];
+                            foreach ($repsRows as $repRow) {
+                                $repName = $repRow['agent_remplace'] ?? '';
+                                if (!empty($repName)) {
+                                    $f = $globalAgentFuncMap[$repName] ?? null;
+                                    if ($f) {
+                                        $replaced_functions[] = $f;
+                                    }
+                                }
+                            }
+                            $agent['replaced_functions'] = array_values(array_unique($replaced_functions));
+
+                            $mutated_agents[] = $agent;
+                        }
+                    }
+
+                foreach ($mutated_agents as $ma) {
+                    $added = false;
+                    if (!empty($ma['target_subsite_id'])) {
+                        foreach ($subsites as &$sub) {
+                            if ($sub['id'] === $ma['target_subsite_id']) {
+                                $sub['agents'][] = $ma;
+                                $added = true;
+                                break;
+                            }
+                        }
+                        unset($sub);
+                    }
+                    if (!$added) {
+                        if (!empty($subsites) && isset($subsites[0])) {
+                            $subsites[0]['agents'][] = $ma;
+                        } else {
+                            $subsites[] = [
+                                'id' => 'default_' . $site_id,
+                                'name' => 'Zone par défaut',
+                                'agents' => [$ma]
+                            ];
+                        }
+                    }
+                }
+
+                if (!empty($deployed_extras)) {
+                    usort($deployed_extras, function ($a, $b) {
+                        $is_releve_a = isset($a['is_releve']) && $a['is_releve'] ? 1 : 0;
+                        $is_releve_b = isset($b['is_releve']) && $b['is_releve'] ? 1 : 0;
+                        if ($is_releve_a !== $is_releve_b)
+                            return $is_releve_b - $is_releve_a;
+                        return strcmp($a['name'], $b['name']);
+                    });
+                    foreach ($deployed_extras as $ma) {
+                        $added = false;
+                        if (!empty($ma['target_subsite_id'])) {
+                            foreach ($subsites as &$sub) {
+                                if ($sub['id'] === $ma['target_subsite_id']) {
+                                    $sub['agents'][] = $ma;
+                                    $added = true;
+                                    break;
+                                }
+                            }
+                            unset($sub);
+                        }
+                        if (!$added) {
+                            if (!empty($subsites) && isset($subsites[0])) {
+                                // Eviter les doublons si l'agent est déjà dans le sous-site (cas du Vivier)
+                                $existing_ids = [];
+                                foreach ($subsites[0]['agents'] as $ag) {
+                                    $existing_ids[] = $ag['id'] ?? $ag['agent_id'];
+                                }
+                                if (!in_array($ma['id'] ?? $ma['agent_id'], $existing_ids)) {
+                                    $subsites[0]['agents'][] = $ma;
+                                }
+                            } else {
+                                $subsites[] = [
+                                    'id' => 'default_' . $site_id,
+                                    'name' => 'Zone par défaut',
+                                    'agents' => [$ma]
+                                ];
+                            }
+                        }
+                    }
+                }
+
+                // 4. Scheduled Relèves
+                $scheduled_releves = [];
+                $stmt_sched = $sqlite->prepare("
+                    SELECT s.day_of_week, s.target_subsite_id, ag.*
+                    FROM agent_schedules s
+                    JOIN agents ag ON s.agent_id = ag.id
+                    WHERE s.target_site_id = ? AND ag.company_id = ?
+                ");
+                $stmt_sched->execute([$site_id, $company_id]);
+                $sched_rows = $stmt_sched->fetchAll();
+                
+                $releve_agents_map = [];
+                $sched_agent_ids = [];
+                foreach ($sched_rows as $row) {
+                    $sched_agent_ids[] = "'" . str_replace("'", "''", $row['id']) . "'";
+                }
+                
+                $all_sched_attendances = [];
+                if (!empty($sched_agent_ids)) {
+                    $inSchedAgents = implode(',', array_unique($sched_agent_ids));
+                    $stmt_att_sched = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE agent_id IN ($inSchedAgents) AND period = ?");
+                    $stmt_att_sched->execute([$period]);
+                    $sched_atts = $stmt_att_sched->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                    foreach ($sched_atts as $att) {
+                        $all_sched_attendances[$att['agent_id']][] = $att;
+                    }
+                }
+
+                foreach ($sched_rows as $row) {
+                    $ag_id = $row['id'];
+                    if (!isset($releve_agents_map[$ag_id])) {
+                        $releve_agents_map[$ag_id] = $row;
+                        $releve_agents_map[$ag_id]['scheduled_days'] = [];
+                        $releve_agents_map[$ag_id]['is_scheduled_releve'] = true;
+                        $releve_agents_map[$ag_id]['is_releve'] = true;
+                        
+                        $releve_agents_map[$ag_id]['attendance'] = $all_sched_attendances[$ag_id] ?? [];
+                        
+                        $releve_agents_map[$ag_id]['profile_data'] = json_decode($row['profile_data'] ?? '{}', true);
+                    }
+                    $releve_agents_map[$ag_id]['scheduled_days'][] = $row['day_of_week'];
+                }
+                
+                $scheduled_releves = array_values($releve_agents_map);
+
+                if (!empty($scheduled_releves)) {
+                    foreach ($scheduled_releves as $rel) {
+                        $target_subsite_id = $rel['target_subsite_id'];
+                        $found = false;
+                        foreach ($subsites as &$sub) {
+                            if ($sub['id'] === $target_subsite_id || (empty($target_subsite_id) && strpos($sub['id'], 'mutated_') !== 0 && strpos($sub['id'], 'default_') !== 0)) {
+                                $sub['agents'][] = $rel;
+                                $found = true;
+                                break;
+                            }
+                        }
+                        unset($sub);
+                        if (!$found && count($subsites) > 0) {
+                                    $subsites[0]['agents'][] = $rel;
+                        }
+                    }
+                }
+
+                $site_data = array_values($subsites);
+            }
+        } // Close if ($site_id !== null)
+
+        // Fetch global agents for omni-search & homonym warning (all sites & subsites)
+        $global_agents = [];
+        try {
+            $stmtGlobal = $sqlite->prepare("
+                SELECT a.id, a.name, a.function, a.subsite_id, sub.name as subsite_name, s.name as site_name, sub.site_id 
+                FROM agents a 
+                LEFT JOIN subsites sub ON a.subsite_id = sub.id 
+                LEFT JOIN sites s ON sub.site_id = s.id 
+                WHERE (a.company_id = ? OR a.service_id = ? OR sub.service_id = ?) 
+                AND (a.archived_period IS NULL OR a.archived_period >= ?)
+                AND a.id NOT LIKE 'agt_sp_%'
+            ");
+            $stmtGlobal->execute([$company_id, $serviceKey, $serviceKey, $period]);
+            $raw_globals = $stmtGlobal->fetchAll();
+            
+            // Clean up to keep JSON lightweight but informative
+            $global_agents = array_map(function($a) {
+                return [
+                    'id' => $a['id'],
+                    'name' => $a['name'],
+                    'function' => $a['function'] ?: 'AS',
+                    'subsite_id' => $a['subsite_id'],
+                    'subsite_name' => $a['subsite_name'] ?: 'Zone Principale',
+                    'site_name' => $a['site_name'] ?: 'Site',
+                    'site_id' => $a['site_id'] ?: 'site_extras'
+                ];
+            }, $raw_globals);
+        } catch (Exception $e) {}
+
+        
+        // file_put_contents(__DIR__ . '/debug_dashboard.txt', json_encode($site_data));
+        echo json_encode([
+            'success' => true,
+            'sites' => $sites,
+            'site_data' => $site_data,
+            'global_agents' => $global_agents,
+            'published_periods' => $published_periods,
+            'permissions' => []
+        ]);
+        break;
+
+    case 'get_dashboard_init':
+        $sqlite = getDb();
+        $service_id = $_SESSION['service_id'] ?? null;
+        if (!$service_id) {
+            echo json_encode([
+                'success' => false, 
+                'message' => 'No service selected', 
+                'totals' => ['agents' => 0, 'sites' => 0, 'incidents' => 0, 'absences' => 0],
+                'chart_data' => []
+            ]);
+            break;
+        }
+
+        $period = $_GET['period'] ?? date('Y-m');
+
+        // Settings du cycle
+        $settings_raw = getServiceDataSql($service_id, 'settings', ['cycle_start' => 21, 'cycle_end' => 20]);
+        if (!is_array($settings_raw)) $settings_raw = ['cycle_start' => 21, 'cycle_end' => 20];
+        $start_day = (int)($settings_raw['cycle_start'] ?? 21);
+        $end_day = (int)($settings_raw['cycle_end'] ?? 20);
+        $dates = getPeriodDates($period, $start_day, $end_day);
+
+        // Salary config
+        $companyId = resolveCurrentCompanyIdSql();
+        $stmtGrid = $sqlite->prepare("SELECT poste, taux_horaire FROM salary_grid WHERE company_id = ? ORDER BY id ASC");
+        $stmtGrid->execute([$companyId]);
+        $salary_config_raw = [];
+        while($row = $stmtGrid->fetch()) {
+            $salary_config_raw[$row['poste']] = (int)$row['taux_horaire'];
+        }
+
+        // 1. Agents par site (réel) - Mapping PHP pour gérer les sites virtuels
+        $stmtSubsites = $sqlite->prepare("SELECT id, site_id FROM subsites WHERE service_id = ?");
+        $stmtSubsites->execute([$service_id]);
+        $subsitesMap = [];
+        foreach ($stmtSubsites->fetchAll() ?: [] as $sub) {
+            $subsitesMap[$sub['id']] = $sub['site_id'];
+        }
+        
+        $stmtAllAgents = $sqlite->prepare("SELECT * FROM agents WHERE service_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?)");
+        $stmtAllAgents->execute([$service_id, $period]);
+        $allAgents = $stmtAllAgents->fetchAll() ?: [];
+
+        $agentsBySiteCounts = [];
+        $totalAgents = count($allAgents);
+
+        foreach ($allAgents as $agent) {
+            $subId = $agent['subsite_id'] ?? '';
+            $siteId = $subsitesMap[$subId] ?? null;
+            if (!$siteId) {
+                if (strpos($subId, 'site_extras') !== false) $siteId = 'site_extras';
+                elseif (strpos($subId, 'site_releves') !== false) $siteId = 'site_releves';
+                elseif (strpos($subId, 'site_admin') !== false) $siteId = 'site_administration';
+                else $siteId = 'Inconnu';
+            }
+            if (!isset($agentsBySiteCounts[$siteId])) $agentsBySiteCounts[$siteId] = 0;
+            $agentsBySiteCounts[$siteId]++;
+        }
+
+        // Noms des sites
+        $stmtSites = $sqlite->prepare("SELECT id, name FROM sites WHERE service_id = ? AND source_module != 'FACTURATION'");
+        $stmtSites->execute([$service_id]);
+        $sitesData = $stmtSites->fetchAll() ?: [];
+        $siteNames = [];
+        foreach ($sitesData as $s) {
+            $siteNames[$s['id']] = $s['name'];
+        }
+
+        $agentsBySiteFormatted = [];
+        foreach ($agentsBySiteCounts as $siteId => $total) {
+            $name = $siteNames[$siteId] ?? $siteId;
+            if ($siteId === 'site_extras') $name = 'Vivier Extras';
+            if ($siteId === 'site_releves') $name = 'Vivier Relèves';
+            if ($siteId === 'site_administration') $name = 'Administration';
+            $agentsBySiteFormatted[] = ['name' => $name, 'value' => $total];
+        }
+
+        $totalPresences = 0;
+        $totalAbsences = 0;
+        $totalMasseSalariale = 0;
+
+        // Calcul par semaine pour le graphique barres
+        $weekData = [];
+        $weekSize = max(1, intval(count($dates) / 4));
+        for ($w = 0; $w < 4; $w++) {
+            $weekData[$w] = ['Présents' => 0, 'Absents' => 0];
+        }
+
+        $agent_ids = [];
+        foreach ($allAgents as $ag) {
+            $agent_ids[] = "'" . str_replace("'", "''", $ag['id']) . "'";
+        }
+        
+        $all_attendances = [];
+        if (!empty($agent_ids)) {
+            $inAgents = implode(',', $agent_ids);
+            $stmtAttAll = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE agent_id IN ($inAgents) AND period = ?");
+            $stmtAttAll->execute([$period]);
+            $raw_atts = $stmtAttAll->fetchAll() ?: [];
+            foreach ($raw_atts as $att) {
+                $all_attendances[$att['agent_id']][] = $att;
+            }
+        }
+
+        foreach ($allAgents as $agent) {
+            $agent_id = $agent['id'];
+            $func_id = $agent['function'] ?? 'AS';
+            $base = isset($agent['salary']) && (int)$agent['salary'] > 0
+                ? (int)$agent['salary']
+                : (isset($salary_config_raw[$func_id]) ? (int)$salary_config_raw[$func_id] : 75000);
+
+            $att_rows = $all_attendances[$agent_id] ?? [];
+
+            $att_map = [];
+            foreach ($att_rows as $att) {
+                $att_map[$att['shift_code']][$att['date']] = $att['status'];
+            }
+
+            $agent_absences = 0;
+            $agent_sp = 0;
+            foreach ($dates as $idx => $date) {
+                $weekIdx = min(3, intval($idx / $weekSize));
+                $dayPresent = false;
+                $dayAbsent = false;
+
+                // Vérifier Jour
+                $statusJ = $att_map['J'][$date] ?? '';
+                if ($statusJ === 'A' || in_array($statusJ, ['ABANDON', 'DEMISSION'])) { $agent_absences++; $dayAbsent = true; }
+                elseif ($statusJ === '1' || $statusJ === 'P') { $dayPresent = true; }
+
+                // Vérifier Nuit
+                $statusN = $att_map['N'][$date] ?? '';
+                if ($statusN === 'A' || in_array($statusN, ['ABANDON', 'DEMISSION'])) { $agent_absences++; $dayAbsent = true; }
+                elseif ($statusN === '1' || $statusN === 'P') { $dayPresent = true; }
+
+                // Supplémentaires
+                foreach (['S', 'SJ', 'SN'] as $sp_key) {
+                    $sp_status = $att_map[$sp_key][$date] ?? '';
+                    if ($sp_status !== '' && $sp_status !== 'A' && $sp_status !== 'R') {
+                        $agent_sp++;
+                    }
+                }
+
+                if ($dayPresent) $weekData[$weekIdx]['Présents']++;
+                if ($dayAbsent) $weekData[$weekIdx]['Absents']++;
+            }
+
+            $totalAbsences += $agent_absences;
+            $deductions = (int)round($agent_absences * ($base / 30));
+            $gains = (int)round($agent_sp * ($base / 30));
+            $totalMasseSalariale += ($base - $deductions + $gains);
+        }
+
+        // Nombre total de jours potentiels travaillés
+        $totalPossibleDays = $totalAgents * count($dates);
+        $presenceRate = $totalPossibleDays > 0 ? round((1 - ($totalAbsences / $totalPossibleDays)) * 100, 1) : 0;
+        $totalPresences = $totalPossibleDays - $totalAbsences;
+
+        $monthlyAttendance = [];
+        for ($w = 0; $w < 4; $w++) {
+            $monthlyAttendance[] = [
+                'name' => 'Semaine ' . ($w + 1),
+                'Présents' => $weekData[$w]['Présents'],
+                'Absents' => $weekData[$w]['Absents']
+            ];
+        }
+
+        // 3. Évolution masse salariale (6 derniers mois — estimation rapide par nombre d'agents)
+        $salaryFluctuation = [];
+        $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+        for ($i = 5; $i >= 0; $i--) {
+            $pastDate = date('Y-m', strtotime("-$i months"));
+            $pastYear = date('Y', strtotime("-$i months"));
+            $pastMonth = (int)date('m', strtotime("-$i months")) - 1;
+            $label = $monthNames[$pastMonth] . ' ' . substr($pastYear, 2);
+
+            // Compter les agents actifs pour ce mois
+            $stmtPast = $sqlite->prepare("SELECT COUNT(*) as cnt FROM agents WHERE service_id = ? AND (archived_period IS NULL OR archived_period >= ?)");
+            $stmtPast->execute([$service_id, $pastDate]);
+            $pastRow = $stmtPast->fetch();
+            $pastCount = (int)($pastRow['cnt'] ?? 0);
+
+            // Estimation : nombre d'agents * salaire moyen (75000 par défaut)
+            $avgSalary = 75000;
+            if (!empty($salary_config_raw)) {
+                $vals = array_values($salary_config_raw);
+                $numericVals = array_filter($vals, 'is_numeric');
+                if (!empty($numericVals)) {
+                    $avgSalary = (int)(array_sum($numericVals) / count($numericVals));
+                }
+            }
+            $salaryFluctuation[] = ['month' => $label, 'MasseSalariale' => $pastCount * $avgSalary];
+        }
+
+        // Formater la masse salariale
+        $masseSalarialeLabel = $totalMasseSalariale;
+        if ($totalMasseSalariale >= 1000000) {
+            $masseSalarialeLabel = round($totalMasseSalariale / 1000000, 1) . 'M';
+        } elseif ($totalMasseSalariale >= 1000) {
+            $masseSalarialeLabel = round($totalMasseSalariale / 1000, 0) . 'K';
+        }
+
+        echo json_encode([
+            'success' => true,
+            'period' => $period,
+            'totalAgents' => $totalAgents,
+            'presenceRate' => $presenceRate,
+            'totalAbsences' => $totalAbsences,
+            'masseSalariale' => $totalMasseSalariale,
+            'masseSalarialeLabel' => $masseSalarialeLabel,
+            'agentsBySite' => $agentsBySiteFormatted,
+            'monthlyAttendance' => $monthlyAttendance,
+            'salaryFluctuation' => $salaryFluctuation
+        ]);
+        break;
+
+    case 'get_pointage_for_archive':
+        // Retourne tous les sites avec agents + pointages pour une période donnée
+        // Utilisé par syncOldArchives pour créer des archives complètes
+        $sqlite = getDb();
+        $company_id = resolveCurrentCompanyIdSql();
+        $period = $_GET['period'] ?? date('Y-m');
+        $serviceKey = resolveCurrentServiceKeySql();
+
+        try {
+            // 1. Récupérer tous les sites
+            $stmtSites = $sqlite->prepare("SELECT * FROM sites WHERE company_id = ? AND source_module = 'PC'");
+            $stmtSites->execute([$company_id]);
+            $sites = $stmtSites->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            // Inject virtual sites
+            $has_extras = false; $has_extras_sur = false; $has_releves = false; $has_admin = false; $has_itc = false;
+            foreach ($sites as $s) {
+                if ($s['id'] === 'site_extras') $has_extras = true;
+                if ($s['id'] === 'site_extras_sur_site') $has_extras_sur = true;
+                if ($s['id'] === 'site_releves') $has_releves = true;
+                if ($s['id'] === 'site_administration') $has_admin = true;
+                if ($s['id'] === 'site_itc') $has_itc = true;
+            }
+            if (!$has_extras) $sites[] = ['id' => 'site_extras', 'name' => '🌟 EXTRA BUREAU', 'source_module' => 'PC'];
+            if (!$has_extras_sur) $sites[] = ['id' => 'site_extras_sur_site', 'name' => '🌟 EXTRA SUR SITE', 'source_module' => 'PC'];
+            if (!$has_releves) $sites[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves', 'source_module' => 'PC'];
+            if (!$has_admin) $sites[] = ['id' => 'site_administration', 'name' => '🏢 Administration', 'source_module' => 'PC'];
+            if (!$has_itc) $sites[] = ['id' => 'site_itc', 'name' => 'ITC / IFM', 'source_module' => 'PC'];
+
+            // 2. Pour chaque site, charger subsites + agents + pointages
+            foreach ($sites as &$site) {
+                $siteId = $site['id'];
+                // Subsites
+                $stmtSub = $sqlite->prepare("SELECT * FROM subsites WHERE site_id = ? AND (company_id = ? OR company_id IS NULL OR company_id = '')");
+                $stmtSub->execute([$siteId, $company_id]);
+                $subsiteRows = $stmtSub->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                if (empty($subsiteRows)) {
+                    if ($siteId === 'site_extras') $subsiteRows = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
+                    elseif ($siteId === 'site_releves') $subsiteRows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
+                    elseif ($siteId === 'site_administration') $subsiteRows = [['id' => 'site_admin_1', 'name' => 'Bureau']];
+                    elseif ($siteId === 'site_itc') {
+                        $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($company_id)), 0, 12);
+                        $subsiteRows = [
+                            ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Reguliere'],
+                            ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
+                            ['id' => 'itc_as_' . $comp_suffix, 'name' => 'Agent Special'],
+                            ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS']
+                        ];
+                    }
+                    else $subsiteRows = [['id' => 'default_' . $siteId, 'name' => 'Zone Principale']];
+                }
+
+                $subsitesMap = [];
+                foreach ($subsiteRows as $sub) {
+                    $sub['agents'] = [];
+                    $subsitesMap[$sub['id']] = $sub;
+                }
+
+                // Agents
+                $subIds = array_keys($subsitesMap);
+                if (!empty($subIds)) {
+                    $inClause = implode(',', array_map(function($id) { return "'" . str_replace("'", "''", $id) . "'"; }, $subIds));
+                    $stmtAg = $sqlite->prepare("SELECT * FROM agents WHERE subsite_id IN ($inClause) AND company_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?) ORDER BY created_at ASC");
+                    $stmtAg->execute([$company_id, $period]);
+                    $agentRows = $stmtAg->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+                    $agentIds = array_map(function($a) { return "'" . str_replace("'", "''", $a['id']) . "'"; }, $agentRows);
+
+                    // Pointages
+                    $attendanceMap = [];
+                    if (!empty($agentIds)) {
+                        $inAgents = implode(',', $agentIds);
+                        $stmtAtt = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE agent_id IN ($inAgents) AND period = ?");
+                        $stmtAtt->execute([$period]);
+                        $attRows = $stmtAtt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                        foreach ($attRows as $att) {
+                            $attendanceMap[$att['agent_id']][] = $att;
+                        }
+
+                    }
+
+                    // --- START OF MY NEW CODE ---
+                    // Fetch mutated agents for this site
+                    $clean_site_name = trim(str_replace(['🌟', '🔄', '🏢'], '', $site['name']));
+                    $like_m = 'M|%' . $clean_site_name . '%';
+                    $like_pm = 'PM|%' . $clean_site_name . '%';
+                    $like_ext = 'EXT%|%' . $clean_site_name . '%';
+                    $like_rel = 'REL%|%' . $clean_site_name . '%';
+                    
+                    $suppl_conditions = [];
+                    $suppl_params = [];
+                    $suppl_conditions[] = "a.status = ?";
+                    $suppl_params[] = 'Suppl|' . $site['id'];
+                    foreach ($subIds as $sb_id) {
+                        $suppl_conditions[] = "a.status = ?";
+                        $suppl_params[] = 'Suppl|' . $sb_id;
+                    }
+                    $suppl_sql = implode(' OR ', $suppl_conditions);
+                    if (empty($suppl_sql)) $suppl_sql = "1=0";
+
+                    $stmt_mut = $sqlite->prepare("
+                       SELECT DISTINCT a.agent_id, ag.*
+                       FROM attendance a
+                       JOIN agents ag ON a.agent_id = ag.id
+                       WHERE a.period = ?
+                       AND a.status IS NOT NULL AND a.status != '' AND a.status != '1' AND a.status != 'Repos'
+                       AND (a.status LIKE ? OR a.status LIKE ? OR a.status LIKE ? OR a.status LIKE ? OR ($suppl_sql))
+                    ");
+                    $params_mut = [$period, $like_m, $like_pm, $like_ext, $like_rel];
+                    foreach ($suppl_params as $sp) {
+                        $params_mut[] = $sp;
+                    }
+                    $stmt_mut->execute($params_mut);
+                    $mutatedRows = $stmt_mut->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                    
+                    $existing_agent_ids = array_column($agentRows, 'id');
+                    $mutated_agent_ids = [];
+                    foreach ($mutatedRows as $mut) {
+                        if (!in_array($mut['id'], $existing_agent_ids)) {
+                            if (empty($subsitesMap)) {
+                                $subsitesMap['default_' . $site['id']] = ['id' => 'default_' . $site['id'], 'name' => 'Zone Principale', 'agents' => []];
+                                $subIds[] = 'default_' . $site['id'];
+                            }
+                            $dest_subsite = $subIds[0];
+                            $mut['subsite_id'] = $dest_subsite;
+                            $agentRows[] = $mut;
+                            $existing_agent_ids[] = $mut['id'];
+                            $mutated_agent_ids[] = "'" . str_replace("'", "''", $mut['id']) . "'";
+                        }
+                    }
+                    
+                    if (!empty($mutated_agent_ids)) {
+                        $inMutAgents = implode(',', $mutated_agent_ids);
+                        $stmtAttMut = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE agent_id IN ($inMutAgents) AND period = ?");
+                        $stmtAttMut->execute([$period]);
+                        $attMutRows = $stmtAttMut->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                        foreach ($attMutRows as $att) {
+                            $attendanceMap[$att['agent_id']][] = $att;
+                        }
+                    }
+                    // --- END OF MY NEW CODE ---
+
+                    $targetSub = $subIds[0] ?? null;
+                    foreach ($agentRows as $agent) {
+                        $agent['attendance'] = $attendanceMap[$agent['id']] ?? [];
+                        $subId = $agent['subsite_id'];
+                        
+                        if (isset($subsitesMap[$subId])) {
+                            $subsitesMap[$subId]['agents'][] = $agent;
+                        } elseif ($targetSub && isset($subsitesMap[$targetSub])) {
+                            $subsitesMap[$targetSub]['agents'][] = $agent;
+                        }
+                    }
+                }
+
+                $site['subsites'] = array_values($subsitesMap);
+            }
+
+            // 3. Global agents
+            $stmtGlobal = $sqlite->prepare("SELECT * FROM agents WHERE company_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?)");
+            $stmtGlobal->execute([$company_id, $period]);
+            $globalAgents = $stmtGlobal->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            echo json_encode(['success' => true, 'sites' => $sites, 'global_agents' => $globalAgents]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'archive_pointage':
+        $sqlite = getDb();
+        $company_id = resolveCurrentCompanyIdSql();
+        $period = $data['period'] ?? '';
+        $archive_data = $data['data'] ?? '';
+        
+        if (empty($period) || empty($archive_data)) {
+            echo json_encode(['success' => false, 'message' => 'Paramètres manquants']);
+            break;
+        }
+
+        // Résoudre l'auteur
+        $user_id = $_SESSION['user_id'] ?? '';
+        $archived_by = 'Auto-Archivage (PC)';
+        if ($user_id) {
+            $stmtU = $sqlite->prepare("SELECT first_name, last_name FROM users WHERE email = ?");
+            $stmtU->execute([$user_id]);
+            $u = $stmtU->fetch(PDO::FETCH_ASSOC);
+            if ($u) {
+                $archived_by = trim(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? ''));
+            }
+        }
+        $now = date('Y-m-d H:i:s');
+        
+        try {
+            $stmt = $sqlite->prepare("SELECT id FROM archives_pointage WHERE company_id = ? AND period = ?");
+            $stmt->execute([$company_id, $period]);
+            $exists = $stmt->fetchColumn();
+            
+            if ($exists) {
+                $stmt = $sqlite->prepare("UPDATE archives_pointage SET data = ?, archived_date = ?, archived_by = ?, created_at = ? WHERE id = ?");
+                $stmt->execute([$archive_data, $now, $archived_by, $now, $exists]);
+            } else {
+                $stmt = $sqlite->prepare("INSERT INTO archives_pointage (company_id, period, archived_date, archived_by, data, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$company_id, $period, $now, $archived_by, $archive_data, $now]);
+            }
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'get_archives_pointage_list':
+        $sqlite = getDb();
+        $company_id = resolveCurrentCompanyIdSql();
+        try {
+            $stmt = $sqlite->prepare("SELECT id, period, archived_date, archived_by, created_at FROM archives_pointage WHERE company_id = ? ORDER BY period DESC");
+            $stmt->execute([$company_id]);
+            $archives = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            echo json_encode(['success' => true, 'archives' => $archives]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'get_archive_pointage_detail':
+        $sqlite = getDb();
+        $company_id = resolveCurrentCompanyIdSql();
+        $id = $_GET['id'] ?? '';
+        try {
+            $stmt = $sqlite->prepare("SELECT * FROM archives_pointage WHERE id = ? AND company_id = ?");
+            $stmt->execute([$id, $company_id]);
+            $archive = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($archive) {
+                echo json_encode(['success' => true, 'archive' => $archive]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Archive introuvable']);
+            }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+} // end switch pointage

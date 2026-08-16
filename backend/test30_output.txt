@@ -1,0 +1,43 @@
+Entry #1
+Site: EXTRAS BUREAU | Subsite: EXTRAS BUREAU Abidjan
+active_days: 30
+days_worked: 29
+absences: 1
+sp_details count: 1
+Array
+(
+    [original] => Array
+        (
+            [site] => LDF
+            [subsite] => ABIDJAN MALL
+            [function] => Agent Simple
+            [active_days] => 2
+            [calendar_active_days] => 2
+            [absences] => 1
+            [map_count] => 0
+            [permission_count] => 0
+            [entrant_sortant_count] => 0
+            [worked_days] => 1
+            [base_prorata] => 5000
+            [base_full] => 75000
+        )
+
+    [mutated] => Array
+        (
+            [site] => EXTRAS BUREAU
+            [subsite] => EXTRAS BUREAU Abidjan
+            [function] => Agent Simple
+            [active_days] => 28
+            [calendar_active_days] => 29
+            [absences] => 0
+            [map_count] => 0
+            [permission_count] => 0
+            [entrant_sortant_count] => 0
+            [worked_days] => 28
+            [base_prorata] => 70000
+            [base_full] => 75000
+        )
+
+)
+
+--------

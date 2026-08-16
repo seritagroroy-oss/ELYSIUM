@@ -13,7 +13,7 @@ taskkill /F /IM php.exe /T >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 :: Verifier si PHP est installe
-php -v >nul 2>&1
+"C:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe" -v >nul 2>&1
 if %errorlevel% neq 0 (
     echo.
     echo  ERREUR : PHP n'est pas installe ou pas dans le PATH.
@@ -40,12 +40,14 @@ start "" "http://127.0.0.1:8000/"
 echo  [4/4] Demarrage du serveur PHP...
 echo.
 echo  ============================================================
-echo   Application disponible sur : http://127.0.0.1:8000/
+echo   Application disponible en local sur : http://127.0.0.1:8000/
+echo   Et sur le reseau local via : http://[VOTRE_ADRESSE_IP]:8000/
 echo   Appuyez sur Ctrl+C pour arreter le serveur
 echo  ============================================================
-echo.
-
-php -S 127.0.0.1:8000 router.php
+echo  Serveur en cours d'execution...
+echo  Fermez cette fenetre pour arreter le serveur.
+cd /d "%~dp0"
+"C:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe" -S 0.0.0.0:8000 router.php
 
 if %errorlevel% neq 0 (
     echo.

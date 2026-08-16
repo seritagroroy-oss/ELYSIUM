@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Roadmap Évolutive - Phase 2</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            background-color: #f9fafb;
+        }
+        .page {
+            background: white;
+            padding: 50px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1e3a8a;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 10px;
+            font-size: 2.2em;
+        }
+        h2 {
+            color: #2563eb;
+            margin-top: 30px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 5px;
+        }
+        h3 {
+            color: #1f2937;
+        }
+        .warning {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+            padding: 15px;
+            margin: 20px 0;
+            color: #991b1b;
+            border-radius: 0 4px 4px 0;
+        }
+        .benefit {
+            background-color: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            margin: 20px 0;
+            color: #166534;
+            border-radius: 0 4px 4px 0;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 20px;
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .page { box-shadow: none; padding: 0; }
+            .print-button { display: none; }
+        }
+        .print-button {
+            display: block;
+            width: 200px;
+            margin: 20px auto;
+            padding: 10px;
+            background-color: #2563eb;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+        .print-button:hover {
+            background-color: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-button" onclick="window.print()">Sauvegarder en PDF</button>
+
+    <div class="page">
+        <h1>Document de Vision : Évolution Architecturale (Phase 2)</h1>
+        <p><strong>Projet :</strong> ELYSIUM - Module de Pointage<br>
+        <strong>Sujet :</strong> Futures mises à jour de type "Scale-Up" (Hautes Performances)<br>
+        <strong>Statut :</strong> En pause (Attente de validation stratégique)</p>
+
+        <div class="warning">
+            <strong>Note de sécurité :</strong> Ces implémentations sont jugées comme étant à "Haut Risque" pour la stabilité visuelle et structurelle du système actuel. Elles nécessitent d'être développées et testées sur un serveur miroir (environnement de pré-production) avant toute mise en ligne.
+        </div>
+
+        <h2>1. Virtualisation du Tableau de Bord (React-Window)</h2>
+        <p>Actuellement, le tableau de pointage dessine l'intégralité des cellules pour tous les agents du mois. Si le nombre d'agents dépasse 1000, le navigateur risque de ralentir considérablement.</p>
+        <h3>Le Plan :</h3>
+        <ul>
+            <li>Suppression de la structure HTML classique (<code>&lt;table&gt;</code>, <code>&lt;tr&gt;</code>, <code>&lt;td&gt;</code>).</li>
+            <li>Remplacement par une liste "virtuelle" qui calcule mathématiquement la position du défilement (scroll).</li>
+            <li><strong>Comportement :</strong> Le navigateur ne dessinera physiquement que les 20 lignes visibles à l'écran. Lors du défilement, ces 20 lignes sont instantanément recyclées avec les nouvelles données.</li>
+        </ul>
+        <div class="benefit">
+            <strong>Avantage final :</strong> L'ouverture du tableau de bord prendra exactement le même temps avec 50 agents qu'avec 10 000 agents.
+        </div>
+
+        <h2>2. Architecture "Offline-First" (Pointage sans Internet)</h2>
+        <p>Afin de pallier les coupures de courant ou de réseau fréquentes, le module de pointage doit pouvoir fonctionner en totale autonomie déconnectée.</p>
+        <h3>Le Plan :</h3>
+        <ul>
+            <li>Implémentation d'un <strong>Service Worker</strong> pour intercepter le trafic réseau et mettre en cache l'interface utilisateur.</li>
+            <li>Mise en place d'une base de données locale (<strong>IndexedDB</strong>) dans le navigateur Google Chrome de l'utilisateur.</li>
+            <li>Création d'un gestionnaire de file d'attente (Sync Manager) qui tente de renvoyer les données à MySQL dès que la connexion internet est détectée à nouveau.</li>
+        </ul>
+        <div class="benefit">
+            <strong>Avantage final :</strong> Productivité ininterrompue. Les agents de saisie ne sont jamais bloqués par les aléas du réseau.
+        </div>
+
+        <h2>3. Temps Réel Multijoueur (WebSockets)</h2>
+        <p>Dans le cas où plusieurs superviseurs ou gestionnaires travaillent sur la même grille de pointage en même temps, il faut éviter les écrasements de données.</p>
+        <h3>Le Plan :</h3>
+        <ul>
+            <li>Mise en place d'un serveur WebSocket (Daemon) fonctionnant en permanence à côté du serveur web classique.</li>
+            <li>Le module de pointage maintient une connexion ouverte (Socket) avec le serveur.</li>
+            <li>Dès qu'un pointage est fait sur l'ordinateur A, l'ordinateur B reçoit instantanément le signal et modifie la case à l'écran sans rafraîchir la page.</li>
+        </ul>
+        <div class="benefit">
+            <strong>Avantage final :</strong> Visibilité en temps réel de l'activité. Collaboration semblable à celle d'un document Google Docs.
+        </div>
+
+        <div class="footer">
+            Document généré automatiquement. Conservez-le pour planifier vos futurs recrutements techniques ou budgets de développement.
+        </div>
+    </div>
+</body>
+</html>

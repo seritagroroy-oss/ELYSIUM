@@ -1,0 +1,71 @@
+{
+    "backed_up_at": "2026-07-27 01:20:38",
+    "agent": {
+        "id": "6a4d303f163de",
+        "name": "KOFFI AFFOUE  CHARLENE",
+        "function": "AS",
+        "shift_type": "24h",
+        "has_sp": 2,
+        "hire_date": "2026-07-07",
+        "recruitment_cost": 45000,
+        "subsite_id": "sub_1783518169_4307",
+        "service_id": "svc_52f7a282",
+        "company_id": "comp_cf66d02f",
+        "created_at": "2026-07-07 16:58:39",
+        "shift_offset": 0,
+        "work_days": 0,
+        "shift_cycle": null,
+        "repos_day_of_week": -1,
+        "repos_segments": "[]",
+        "salary": null,
+        "has_cnps": 0,
+        "bank_account": null,
+        "notes": null,
+        "shift_history": "[]",
+        "profile_data": "{\"admin_schedule\":false,\"special_service\":false,\"special_service_base\":12,\"special_service_days\":[]}",
+        "archived_period": null,
+        "exit_date": null,
+        "exit_reason": null,
+        "contract_end_date": null,
+        "is_blacklisted": 0,
+        "status_change": null
+    },
+    "attendance_july18": [
+        {
+            "id": 129461,
+            "agent_id": "6a4d303f163de",
+            "date": "2026-07-18",
+            "shift_code": "J",
+            "status": "R",
+            "service_id": "svc_52f7a282",
+            "company_id": "comp_cf66d02f",
+            "period": "2026-07",
+            "notes": null,
+            "metadata": "{}"
+        },
+        {
+            "id": 129491,
+            "agent_id": "6a4d303f163de",
+            "date": "2026-07-18",
+            "shift_code": "N",
+            "status": "R",
+            "service_id": "svc_52f7a282",
+            "company_id": "comp_cf66d02f",
+            "period": "2026-07",
+            "notes": null,
+            "metadata": "{}"
+        },
+        {
+            "id": 202928,
+            "agent_id": "6a4d303f163de",
+            "date": "2026-07-18",
+            "shift_code": "SP",
+            "status": "1",
+            "service_id": "svc_52f7a282",
+            "company_id": "comp_cf66d02f",
+            "period": "2026-07",
+            "notes": null,
+            "metadata": null
+        }
+    ]
+}

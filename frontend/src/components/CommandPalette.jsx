@@ -3,28 +3,24 @@ import { Search, Compass, Users, Settings, UserPlus, FileText, PieChart, DollarS
 
 const MENU_ITEMS = [
   { id: 'home', label: 'Accueil ELYSIUM', desc: "Retour à la page d'accueil principale", icon: <Compass size={18} />, perm: null },
-  { id: 'analytics', label: 'TABLEAU DE BORD ANALYTIQUE', desc: 'Visualisez les statistiques, les tendances et les performances en temps réel.', icon: <BarChart3 size={18} />, perm: 'analytics' },
-  { id: 'employees', label: 'GESTION DES EMPLOYÉS', desc: 'Gérer la base de données de tous vos employés, leurs contrats et informations.', icon: <Users size={18} />, perm: 'dashboard' },
+  { id: 'employees', label: 'GESTION DES EMPLOYÉS', desc: 'Gérer la base de données de tous vos employés, leurs contrats et informations.', icon: <Users size={18} />, perm: 'employees' },
   { id: 'payroll', label: 'FICHES DE PAIE', desc: 'Génération, consultation et gestion des fiches de paie.', icon: <FileText size={18} />, perm: 'payroll' },
-  { id: 'conges', label: 'GESTION DES CONGÉS', desc: 'Suivi et validation des demandes de congés et absences.', icon: <Calendar size={18} />, perm: 'conges' },
-  { id: 'pointage_gps', label: 'POINTAGE GPS', desc: 'Signalez votre présence avec votre position géographique.', icon: <MapPin size={18} />, perm: 'gps' },
+  { id: 'conges', label: 'GESTION DES CONGÉS', desc: 'Suivi et validation des demandes de congés et absences.', icon: <Calendar size={18} />, perm: 'leave' },
+
   { id: 'dashboard', label: 'Pointage du mois', desc: 'Gérer les plannings et les pointages des agents sur les différents sites.', icon: <PieChart size={18} />, perm: 'dashboard' },
-  { id: 'print_pointage', label: "IMPRIMER LE POINTAGE de l'agent", desc: 'Générer une version imprimable du pointage pour un agent spécifique.', icon: <Printer size={18} />, perm: 'dashboard' },
   { id: 'print_payroll', label: 'Imprimer la fiche de paie', desc: 'Générer et imprimer les fiches de paie mensuelles.', icon: <Printer size={18} />, perm: 'payroll' },
   { id: 'fluctuation', label: 'FLUTUATION SALARIALE', desc: 'Suivi et analyse des variations salariales et des primes/retenues.', icon: <TrendingUp size={18} />, perm: 'fluctuation' },
   { id: 'grille_salariale', label: 'GRILLE SALARIALE', desc: 'Consulter et modifier la grille de rémunération par fonction/poste.', icon: <Table size={18} />, perm: 'salaries' },
   { id: 'reclamation', label: 'RECLAMMATION', desc: 'Gérer les plaintes, requêtes et réclamations du personnel ou des clients.', icon: <AlertCircle size={18} />, perm: 'reclamation' },
-  { id: 'mep', label: 'NOUVELLE MEP / rajout / fermeture', desc: 'Gestion des Mises en Place (MEP) sur site, rajouts et fermetures de postes.', icon: <Building2 size={18} />, perm: 'dashboard' },
   { id: 'recrutement', label: 'ESPACE E RECRUTEMENT', desc: 'Gestion des candidatures, entretiens et embauches de nouveaux agents.', icon: <UserPlus size={18} />, perm: 'recrutement' },
-  { id: 'suivi_personnel', label: 'SUIVI DU PERSONNEL', desc: 'Dossiers des agents, sanctions, absences prolongées, mutations.', icon: <Users size={18} />, perm: 'dashboard' },
-  { id: 'suivi_materiel', label: 'SUIVI DU MATERIEL', desc: 'Gestion des dotations (tenues, PTI, radios) et inventaire matériel.', icon: <Box size={18} />, perm: 'materiel' },
+  { id: 'suivi_personnel', label: 'SUIVI DU PERSONNEL', desc: 'Dossiers des agents, sanctions, absences prolongées, mutations.', icon: <Users size={18} />, perm: 'suivi_personnel' },
   { id: 'verification', label: 'Traitement du pointage', desc: 'Vérification et validation des pointages.', icon: <Search size={18} />, perm: 'verification' },
   { id: 'salaries', label: 'Calcul Salaires', desc: 'Calcul automatique des salaires mensuels.', icon: <DollarSign size={18} />, perm: 'salaries' },
-  { id: 'archives', label: 'Archives Rapports', desc: 'Consulter l\'historique des rapports passés.', icon: <Archive size={18} />, perm: 'archives' },
+  { id: 'archives', label: 'Archives Pointage', desc: 'Consulter l\'historique des pointages passés.', icon: <Archive size={18} />, perm: 'archives' },
   { id: 'communication', label: 'Communication & Tickets', desc: 'Messagerie interne et gestion des tickets.', icon: <MessageSquare size={18} />, perm: 'communication' },
   { id: 'services', label: 'Gestion des Profils', desc: 'Gérer les accès et habilitations des services.', icon: <UserPlus size={18} />, perm: 'services' },
   { id: 'settings', label: 'Paramètres du système', desc: 'Configuration globale de la plateforme ELYSIUM.', icon: <Settings size={18} />, perm: 'admin' }, 
-  { id: 'kiosk', label: 'Mode Kiosque (Pointage direct)', desc: 'Interface de pointage sur site pour les agents.', icon: <Clock size={18} />, perm: 'kiosk' },
+
 ];
 
 export default function CommandPalette({ isOpen, onClose, onSelectView, hasPermission, user }) {
@@ -34,7 +30,8 @@ export default function CommandPalette({ isOpen, onClose, onSelectView, hasPermi
   useEffect(() => {
     if (isOpen) {
       setQuery('');
-      setTimeout(() => inputRef.current?.focus(), 100);
+      const timer = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

@@ -713,3 +713,65 @@ h1, h2, h3, h4 {
   box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 20px rgba(168, 85, 247, 0.2) !important;
   z-index: 10;
 }
+
+/* Hourglass Animation */
+@keyframes hourglass-spin {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(180deg); }
+  50% { transform: rotate(180deg); }
+  75% { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-hourglass {
+  display: inline-block;
+  animation: hourglass-spin 4s ease-in-out infinite;
+}
+
+/* Loader Premium (Chargements lourds) */
+.loader-pulsar {
+  width: 64px;
+  height: 64px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader-pulsar::before, .loader-pulsar::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  animation: spinRing 2s linear infinite;
+}
+
+.loader-pulsar::before {
+  width: 100%;
+  height: 100%;
+  border: 4px solid transparent;
+  border-top-color: #38bdf8;
+  border-right-color: rgba(56, 189, 248, 0.2);
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.8));
+}
+
+.loader-pulsar::after {
+  width: 65%;
+  height: 65%;
+  border: 4px solid transparent;
+  border-bottom-color: #a855f7;
+  border-left-color: rgba(168, 85, 247, 0.2);
+  filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.8));
+  animation-direction: reverse;
+  animation-duration: 1.5s;
+}
+
+/* On masque l'ancienne bulle interne sans casser le HTML React existant */
+.loader-pulsar-inner {
+  display: none;
+}
+
+@keyframes spinRing {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+

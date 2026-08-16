@@ -8,83 +8,35 @@ import {
 } from 'lucide-react';
 
 const ALL_MODULES = {
-  analytics: { label: 'Tableau de Bord Analytique', icon: '📊', desc: 'Visualisez les statistiques, les tendances et les performances en temps réel.' },
   employees: { label: 'Gestion des Employés', icon: '👥', desc: 'Gérer la base de données de tous vos employés, leurs contrats et informations.' },
   payroll: { label: 'État de Paie', icon: '🧾', desc: 'Génération, consultation et gestion des fiches de paie.' },
   leave: { label: 'Gestion des Congés', icon: '✈️', desc: 'Suivi et validation des demandes de congés et absences.' },
-  gps: { label: 'Pointage GPS', icon: '📍', desc: 'Signalez votre présence avec votre position géographique.' },
+
   dashboard: { label: 'Pointage du Mois', icon: '🗓️', desc: 'Gérer les plannings et les pointages des agents sur les différents sites.' },
-  print_attendance: { label: 'Imprimer le Pointage', icon: '🖨️', desc: 'Générer une version imprimable du pointage pour un agent spécifique.' },
-  print_payroll: { label: 'Imprimer Fiche de Paie', icon: '🖨️', desc: 'Générer et imprimer les fiches de paie mensuelles.' },
   fluctuation: { label: 'Fluctuation Salariale', icon: '📈', desc: 'Suivi et analyse des variations salariales et des primes/retenues.' },
   salaries: { label: 'Grille Salariale', icon: '💰', desc: 'Consulter et modifier la grille de rémunération par fonction/poste.' },
   calcul_salaires: { label: 'Calcul des Salaires', icon: '🧮', desc: 'Génération et validation du calcul global des salaires.' },
   reclamation_view: { label: 'Réclamation (Consultation)', icon: '⚠️', desc: 'Consulter les fiches de réclamation publiées par les autres services.' },
   reclamation_edit: { label: 'Réclamation (Édition)', icon: '✏️', desc: 'Créer, modifier et publier les fiches de réclamation de paie. Droit exclusif accordé par l\'admin.' },
-  new_mep: { label: 'Nouvelle MEP', icon: '🏗️', desc: 'Gestion des Mises en Place (MEP) sur site, rajouts et fermetures de postes.' },
-  recrutement: { label: 'Espace E-Recrutement', icon: '🤝', desc: 'Gestion des candidatures, entretiens et embauches de nouveaux agents.' },
-  materiel: { label: 'Suivi du Matériel', icon: '📦', desc: 'Gestion des dotations (tenues, PTI, radios) et inventaire matériel.' },
   verification: { label: 'Traitement du pointage', icon: '✅', desc: 'Vérification et validation des pointages.' },
-  archives: { label: 'Archives Rapports', icon: '🗂️', desc: 'Consulter l\'historique des rapports passés.' },
+  archives: { label: 'Archives Pointage', icon: '🗂️', desc: 'Consulter l\'historique des pointages passés.' },
   communication: { label: 'Communication & Tickets', icon: '💬', desc: 'Messagerie interne et gestion des tickets.' },
   services: { label: 'Gestion des Profils', icon: '⚙️', desc: 'Gérer les accès et habilitations des services.' },
-  kiosk: { label: 'Mode Kiosque', icon: '📱', desc: 'Interface de pointage direct sur site.' },
+
   permissions: { label: 'Gestion des Permissions', icon: '⏱️', desc: 'Suivi et historique des agents ayant obtenu une permission exceptionnelle.' },
   contracts: { label: 'Gestion des Contrats', icon: '📁', desc: 'Gérez les contrats de travail, les renouvellements et les périodes d\'essai.' },
   registry: { label: 'Registre Général', icon: '🏢', desc: 'Consulter l\'effectif total de l\'entreprise (actifs, sortis, incertains).' },
   registre_visiteurs: { label: 'Registre des Visiteurs', icon: '📝', desc: 'Enregistrer l\'arrivée et le départ des visiteurs extérieurs.' },
-  annuaire_statut: { label: 'Annuaire & Statut', icon: '📞', desc: 'Savoir qui est présent ou absent à l\'instant T.' },
   pointage_courriers: { label: 'Pointage Courriers/Colis', icon: '📮', desc: 'Enregistrer les arrivées de colis et notifier les collaborateurs.' },
-  gestion_salles: { label: 'Gestion des Salles', icon: '🚪', desc: 'Calendrier des réservations de salles de réunion.' },
-  reflexe_securite: { label: 'Réflexe Sécurité', icon: '🔒', desc: 'Verrouillage rapide de session pour l\'accueil.' },
-  gestion_appels: { label: 'Main Courante & Appels', icon: '☎️', desc: 'Standard virtuel, prise de messages et journal de bord.' },
-  gestion_flotte: { label: 'Gestion de Flotte', icon: '🚗', desc: 'Réservation de véhicules de service et gestion des clés.' },
-  badges_provisoires: { label: 'Badges Provisoires', icon: '💳', desc: 'Gestion et suivi des badges temporaires prêtés.' },
-  fournitures_bureau: { label: 'Fournitures de Bureau', icon: '📎', desc: 'Commandes et gestion du stock de petit matériel.' },
-  accueil_vip: { label: 'Protocole & Accueil VIP', icon: '👑', desc: 'Gestion des visites de haut rang (parking, repas, etc.).' },
-  alertes_securite: { label: 'Alertes Confinement', icon: '🚨', desc: 'Déclenchement d\'alertes globales d\'évacuation/confinement.' },
-  dg_vision: { label: 'Vision 360° (DG)', icon: '🦅', desc: 'Tableau de bord exécutif avec indicateurs de performance clés (KPIs).' },
-  dg_rapports: { label: 'Rapports Stratégiques (DG)', icon: '📑', desc: 'Génération de rapports exécutifs pour le conseil et les actionnaires.' },
-  dg_validation: { label: 'Validations Exécutives (DG)', icon: '🎯', desc: 'Validation des grosses dépenses, augmentations ou MEP importantes.' },
-  dg_spy: { label: 'Mode Espion (DG)', icon: '🕵️', desc: 'Permet au DG de voir le système avec l\'interface et les droits d\'un autre employé spécifique.' },
-  dg_block: { label: 'Blocage de Service (DG)', icon: '🚫', desc: 'Permet de geler temporairement l\'accès d\'un service complet.' },
+
   dg_audit: { label: 'Audit & Traçabilité (DG)', icon: '📜', desc: 'Consultation complète du journal d\'activité (qui a fait quoi et quand).' },
-  dg_megaphone: { label: 'Mégaphone Exécutif (DG)', icon: '📢', desc: 'Diffuser une annonce prioritaire à tous les employés.' },
-  dg_predictive: { label: 'Analyse Prédictive (DG)', icon: '🔮', desc: 'Simulations des coûts futurs et de l\'absentéisme.' },
-  dg_okr: { label: 'Objectifs Stratégiques (DG)', icon: '🎯', desc: 'Suivi de la progression des objectifs des départements.' },
-  dg_litiges: { label: 'Litiges & Alertes (DG)', icon: '⚖️', desc: 'Radar des alertes légales, prud\'homales et contractuelles.' },
-  dg_organigramme: { label: 'Organigramme Live (DG)', icon: '🗺️', desc: 'Vue hiérarchique détaillée avec coûts et présences des effectifs.' },
-  dg_agenda: { label: 'Agenda Stratégique (DG)', icon: '📅', desc: 'Calendrier des échéances stratégiques synchrosé avec les dates clés de l\'entreprise.' },
-  dg_pv: { label: 'Compte Rendu Réunions (DG)', icon: '📝', desc: 'Créer, signer et archiver les procès-verbaux de réunions de direction.' },
-  dg_veille: { label: 'Veille Sectorielle (DG)', icon: '📰', desc: 'Indicateurs économiques et légaux pour des décisions contextualisées.' },
-  pdg_souverain: { label: 'Tableau de Bord Souverain (PDG)', icon: '👑', desc: 'Vue de synthèse absolue de la valeur et de la conformité.' },
-  pdg_bilan: { label: 'Bilan & Performance Financière (PDG)', icon: '📈', desc: 'Rapport consolidé sur 12 mois de la performance.' },
-  pdg_signature: { label: 'Signature Électronique Exécutive (PDG)', icon: '✍️', desc: 'Apposer une signature numérique officielle sur les documents.' },
-  pdg_sites: { label: 'Tableau des Sites & Filiales (PDG)', icon: '🌐', desc: 'Vue globale et contrôle d\'activation/suspension des sites.' },
-  pdg_acces_maitre: { label: 'Accès Maître & Super-Contrôle (PDG)', icon: '🔐', desc: 'Création d\'Admins et reset des mots de passe DG.' },
-  pdg_benchmark: { label: 'Comparatif Concurrentiel (PDG)', icon: '📊', desc: 'Benchmarks du marché par rapport aux métriques internes.' },
-  pdg_coffre: { label: 'La Salle des Coffres (PDG)', icon: '🏦', desc: 'Stockage ultra-sécurisé des documents fondateurs de l\'entreprise.' },
-  pdg_expansion: { label: 'Simulateur d\'Expansion M&A (PDG)', icon: '🌍', desc: 'Simulation d\'impact d\'une ouverture de filiale ou acquisition.' },
-  pdg_actionnaires: { label: 'Rapport aux Actionnaires (PDG)', icon: '📜', desc: 'Génération automatique de l\'Executive Summary PDF.' },
-  pdg_menaces: { label: 'Radar des Menaces Critiques (PDG)', icon: '⚡', desc: 'Vue macro-économique des risques existentiels pour la société.' },
-  pc_radar: { label: 'Radar Tactique (PC)', icon: '🗺️', desc: 'Cartographie temps réel des sites et de leur état.' },
-  pc_alertes: { label: 'Urgences & SOS (PC)', icon: '🚨', desc: 'Mur centralisé des alertes rouges et boutons panique.' },
-  pc_cctv: { label: 'Vidéosurveillance CCTV (PC)', icon: '📹', desc: 'Accès simulé aux flux de caméras de sécurité.' },
-  pc_dispatch: { label: 'Dispatch & Patrouilles (PC)', icon: '🚔', desc: 'Gestion des flottes d\'intervention et appels aux forces de l\'ordre.' },
-  pc_comms: { label: 'Statut Réseau & Radios (PC)', icon: '📻', desc: 'Surveillance de la connectivité des équipements terrain.' },
+
   pc_main_courante: { label: 'Registre Central Incidents (PC)', icon: '📋', desc: 'Supervision globale des mains courantes de tous les sites.' },
-  pc_tracking: { label: 'Tracking & Géolocalisation Live (PC)', icon: '📱', desc: 'Localisation en direct des agents via téléphone, email et GPS.' },
-  ctrl_feuille: { label: 'Feuille de Route (Contrôleur)', icon: '📋', desc: 'Planning journalier des visites et contrôles.' },
-  ctrl_audit: { label: 'Contrôle & Audit Agents (Contrôleur)', icon: '🔍', desc: 'Valider la présence des agents et noter les anomalies.' },
-  ctrl_rapport: { label: 'Rapport d\'Incident Express (Contrôleur)', icon: '📝', desc: 'Déclarer rapidement un incident depuis le terrain.' },
-  ctrl_dashboard: { label: 'Tableau de Bord Secteur (Contrôleur)', icon: '📊', desc: 'Vue des sites sous tutelle : présence et alertes.' },
-  ctrl_messagerie: { label: 'Messagerie Interne (Contrôleur)', icon: '💬', desc: 'Communication PC, DG et broadcast agents.' },
-  ctrl_carnet: { label: 'Carnet de Bord (Contrôleur)', icon: '🗒️', desc: 'Journal de toutes les visites et statistiques personnelles.' },
-  ctrl_tracking: { label: 'Tracking & Géoloc Live (Contrôleur)', icon: '📍', desc: 'Suivi des véhicules et agents en temps réel.' },
-  ctrl_dispatch: { label: 'Dispatch & Interventions (Contrôleur)', icon: '🚔', desc: 'Gestion des urgences et assignations.' },
-  ctrl_flotte: { label: 'Gestion Flotte (Contrôleur)', icon: '🚗', desc: 'État des véhicules, pleins, et anomalies.' },
-  ctrl_rondes: { label: 'Supervision Rondes (Contrôleur)', icon: '⏱️', desc: 'Suivi en direct des scans NFC et alertes.' },
-  ctrl_notation: { label: 'Évaluation & Discipline (Contrôleur)', icon: '⭐', desc: 'Formulaires rapides d\'évaluation des agents.' },
+
+
+
+
+
   company_config: { label: 'Configuration Entreprise', icon: '🏢', desc: 'Gestion des postes, fonctions et salaires de base des agents.' }
 };
 
@@ -93,79 +45,34 @@ const RISK_LEVELS = {
   employees: 'medium',
   payroll: 'high',
   leave: 'medium',
-  gps: 'low',
+
   dashboard: 'low',
-  print_attendance: 'low',
-  print_payroll: 'medium',
   fluctuation: 'medium',
   salaries: 'high',
   calcul_salaires: 'high',
   reclamation_view: 'medium',
   reclamation_edit: 'high',
-  new_mep: 'medium',
-  recrutement: 'medium',
   materiel: 'low',
   verification: 'medium',
   archives: 'low',
   communication: 'low',
   services: 'critical',
-  kiosk: 'low',
+
   permissions: 'medium',
   contracts: 'high',
   registry: 'medium',
   registre_visiteurs: 'low',
-  annuaire_statut: 'low',
   pointage_courriers: 'low',
-  gestion_salles: 'low',
-  reflexe_securite: 'low',
-  gestion_appels: 'low',
-  gestion_flotte: 'medium',
-  badges_provisoires: 'medium',
-  fournitures_bureau: 'low',
-  accueil_vip: 'low',
-  alertes_securite: 'high',
-  dg_vision: 'medium',
-  dg_rapports: 'medium',
-  dg_validation: 'high',
-  dg_spy: 'critical',
-  dg_block: 'critical',
+
+
   dg_audit: 'high',
-  dg_megaphone: 'high',
-  dg_predictive: 'medium',
-  dg_okr: 'medium',
-  dg_litiges: 'high',
-  dg_organigramme: 'medium',
-  dg_agenda: 'low',
-  dg_pv: 'medium',
-  dg_veille: 'low',
-  pdg_souverain: 'medium',
-  pdg_bilan: 'high',
-  pdg_signature: 'critical',
-  pdg_sites: 'critical',
-  pdg_acces_maitre: 'critical',
-  pdg_benchmark: 'low',
-  pdg_coffre: 'critical',
-  pdg_expansion: 'medium',
-  pdg_actionnaires: 'high',
-  pdg_menaces: 'high',
-  pc_radar: 'high',
-  pc_alertes: 'critical',
-  pc_cctv: 'high',
-  pc_dispatch: 'critical',
-  pc_comms: 'medium',
+
   pc_main_courante: 'high',
-  pc_tracking: 'critical',
-  ctrl_feuille: 'medium',
-  ctrl_audit: 'high',
-  ctrl_rapport: 'high',
-  ctrl_dashboard: 'low',
-  ctrl_messagerie: 'medium',
-  ctrl_carnet: 'low',
-  ctrl_tracking: 'high',
-  ctrl_dispatch: 'critical',
-  ctrl_flotte: 'medium',
-  ctrl_rondes: 'medium',
-  ctrl_notation: 'high'
+
+
+
+
+
 };
 
 const RISK_COLORS = {
@@ -354,7 +261,7 @@ export default function PermissionsManager() {
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
-          <Loader2 className="animate-spin" size={40} style={{ color: '#a855f7' }} />
+          <div className="loader-pulsar"><div className="loader-pulsar-inner"></div></div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: selectedUser && !bulkMode ? '380px 1fr' : '1fr', gap: '24px', marginTop: '24px' }}>
@@ -378,7 +285,7 @@ export default function PermissionsManager() {
                 const isBulkSelected = bulkUsers.includes(u.email);
                 return (
                   <div
-                    key={idx}
+                    key={u.email || u.id || `user-${idx}`}
                     onClick={() => bulkMode
                       ? setBulkUsers(prev => prev.includes(u.email) ? prev.filter(e => e !== u.email) : [...prev, u.email])
                       : selectUser(u)

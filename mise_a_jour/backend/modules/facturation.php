@@ -1,0 +1,965 @@
+<?php
+/**
+ * Module Facturation, Contrats & Reclamations
+ * Extrait de api_new.php
+ */
+
+switch ($action) {
+    case 'archive_payroll':
+        $period = $data['period'] ?? '';
+        $salaries_data = $data['salaries'] ?? [];
+        $statuses_data = $data['statuses'] ?? [];
+        $serviceKey = $_SESSION['service_id'] ?? null;
+
+        if (!$period) {
+            echo json_encode(['success' => false, 'message' => 'Période manquante']);
+            break;
+        }
+
+        $archive = [
+            'period' => $period,
+            'archived_at' => date('Y-m-d H:i:s'),
+            'archived_by' => $_SESSION['user_name'] ?? 'Inconnu',
+            'salaries' => $salaries_data,
+            'statuses' => $statuses_data,
+            'sites' => $data['sites'] ?? []
+        ];
+
+        $sqlite = getDb();
+        $company_id = resolveCurrentCompanyIdSql();
+        $archive_id = 'payroll_' . $period;
+        $scope = $data['scope'] ?? 'service';
+        $target_val = ($scope === 'company') ? $company_id : $serviceKey;
+
+        $sqlite->prepare('REPLACE INTO archives (id, service_id, company_id, period, data) VALUES (?, ?, ?, ?, ?)')
+            ->execute([$archive_id, $target_val, $company_id, $period, json_encode($archive)]);
+
+        // Mettre à jour le snapshot utilisé par get_salaries pour garantir la cohérence
+        if (function_exists('savePayrollSnapshot')) {
+            savePayrollSnapshot($sqlite, $company_id, $period, $salaries_data, $target_val);
+        }
+
+        echo json_encode(['success' => true]);
+        break;
+
+
+    case 'get_payslip_template':
+        $serviceKey = $_SESSION['service_id'] ?? null;
+        $template = getServiceDataSql($serviceKey, 'payslip_template', []);
+        echo json_encode(['success' => true, 'template' => $template]);
+        break;
+
+    case 'save_payslip_template':
+        $serviceKey = $_SESSION['service_id'] ?? null;
+        $template = $data['template'] ?? [];
+        setServiceDataSql($serviceKey, 'payslip_template', $template);
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'update_user_photo':
+        $updater_role = $_SESSION['user_role'] ?? '';
+        if ($updater_role !== 'super_admin' && $updater_role !== 'admin') {
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+            break;
+        }
+        $updater_company_id = $_SESSION['company_id'] ?? '';
+        $target_email = $data['email'] ?? '';
+        $profile_photo = $data['profile_photo'] ?? null;
+        if (!$target_email) {
+            echo json_encode(['success' => false, 'message' => 'Email manquant']);
+            break;
+        }
+
+        $sqlite = getDb();
+        $sql = "UPDATE users SET profile_photo = ? WHERE email = ?";
+        $params = [$profile_photo, $target_email];
+
+        if ($updater_role === 'admin') {
+            $sql .= " AND company_id = ?";
+            $params[] = $updater_company_id;
+        }
+
+        $sqlite->prepare($sql)->execute($params);
+        echo json_encode(['success' => true, 'message' => 'Photo mise à jour']);
+        break;
+
+    case 'update_user_permissions':
+        $updater_role = $_SESSION['user_role'] ?? '';
+        if ($updater_role !== 'super_admin' && $updater_role !== 'admin') {
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+            break;
+        }
+        $updater_company_id = $_SESSION['company_id'] ?? '';
+        $targetEmail = strtolower(trim($data['email'] ?? ''));
+        $newPermissions = $data['permissions'] ?? [];
+        if (!$targetEmail) {
+            echo json_encode(['success' => false, 'message' => 'Email manquant']);
+            break;
+        }
+        $sqlite = getDb();
+        $stmtUser = $sqlite->prepare("SELECT * FROM users WHERE email = ?");
+        $stmtUser->execute([$targetEmail]);
+        $targetUser = $stmtUser->fetch();
+        if (!$targetUser) {
+            echo json_encode(['success' => false, 'message' => 'Utilisateur introuvable']);
+            break;
+        }
+
+        if ($updater_role === 'admin' && ($targetUser['company_id'] ?? '') !== $updater_company_id) {
+            echo json_encode(['success' => false, 'message' => 'Vous ne pouvez modifier que les utilisateurs de votre entreprise']);
+            break;
+        }
+
+        $permObj = is_array($newPermissions) ? $newPermissions : [];
+
+        $stmtUp = $sqlite->prepare("UPDATE users SET permissions = ? WHERE email = ?");
+        $stmtUp->execute([json_encode($permObj), $targetEmail]);
+
+        echo json_encode(['success' => true, 'message' => 'Permissions mises à jour']);
+        break;
+
+    case 'get_stats':
+        $period = $data['period'] ?? date('Y-m');
+        $companyId = resolveCurrentCompanyIdSql();
+        echo json_encode(getAttendanceStats($companyId, $period));
+        break;
+
+    case 'pointage_gps':
+        $agentId = $data['agent_id'] ?? '';
+        $lat = $data['lat'] ?? 0;
+        $lng = $data['lng'] ?? 0;
+        $period = date('Y-m');
+        // TODO: Valider lat/lng
+        echo json_encode(['success' => true, 'message' => 'Pointage GPS enregistré (Simulation)']);
+        break;
+
+    case 'validate_qr':
+        $token = $data['token'] ?? '';
+        // Basic validation mirroring client logic
+        $secret = 'ELYSIUM2026';
+        $now = floor(time());
+        $window30 = floor($now / 30);
+        $expected = substr(str_replace('=', '', base64_encode($secret . ':' . $window30)), 0, 24);
+        $expectedPrev = substr(str_replace('=', '', base64_encode($secret . ':' . ($window30 - 1))), 0, 24);
+
+        if ($token === $expected || $token === $expectedPrev) {
+            echo json_encode(['success' => true, 'message' => 'Pointage validé par QR Code']);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Token invalide ou expiré']);
+        }
+        break;
+
+    case 'get_all_agents':
+        $serviceKey = resolveCurrentServiceKeySql();
+        $sqlite = getDb();
+        $stmt = $sqlite->prepare("SELECT * FROM agents WHERE service_id = ? AND archived_period IS NULL ORDER BY name");
+        $stmt->execute([$serviceKey]);
+        $agents = $stmt->fetchAll();
+        foreach ($agents as &$a) {
+            $a['shift_history'] = json_decode($a['shift_history'] ?? '[]', true);
+            $a['profile_data'] = json_decode($a['profile_data'] ?? '{}', true);
+            $a['has_sp'] = (bool) ($a['has_sp'] ?? false);
+            $a['has_cnps'] = (bool) ($a['has_cnps'] ?? false);
+        }
+        echo json_encode(['success' => true, 'agents' => $agents]);
+        break;
+
+    case 'get_agents_for_admin':
+        // Retourne tous les agents de la company (toutes services confondus) pour les modules admin
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        $stmt = $sqlite->prepare("SELECT id, name, matricule, service_id FROM agents WHERE archived_period IS NULL ORDER BY name");
+        $stmt->execute();
+        echo json_encode(['success' => true, 'agents' => $stmt->fetchAll()]);
+        break;
+
+    case 'get_special_agents':
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        
+        $stmt = $sqlite->prepare("SELECT id, name, `function`, salary FROM agents WHERE salary IS NOT NULL AND salary > 0 AND company_id = ? ORDER BY name");
+        $stmt->execute([$company_id]);
+        $special_agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtAll = $sqlite->prepare("SELECT DISTINCT name FROM agents WHERE company_id = ? AND archived_period IS NULL ORDER BY name");
+        $stmtAll->execute([$company_id]);
+        $all_names = array_column($stmtAll->fetchAll(PDO::FETCH_ASSOC), 'name');
+        
+        echo json_encode(['success' => true, 'agents' => $special_agents, 'all_names' => $all_names]);
+        break;
+
+    case 'save_special_agent':
+        if (!hasPermission('fluctuation') && !hasPermission('salaries') && !hasWritePermission('company_config')) {
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+            break;
+        }
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
+        $name = trim($data['name'] ?? '');
+        $func = $data['function'] ?? 'AS';
+        $salary = (int)($data['salary'] ?? 0);
+        
+        if (empty($name)) {
+            echo json_encode(['success' => false, 'message' => 'Le nom de l\'agent est requis']);
+            break;
+        }
+
+        $sqlite = getDb();
+        $stmtCheck = $sqlite->prepare("SELECT id FROM agents WHERE name LIKE ? AND company_id = ? LIMIT 1");
+        $stmtCheck->execute([$name, $company_id]);
+        $exists = $stmtCheck->fetch();
+
+        if ($exists) {
+            // Mettre à jour TOUTES les instances de cet agent s'il existe déjà
+            $stmtUpdate = $sqlite->prepare("UPDATE agents SET `function` = ?, salary = ? WHERE name LIKE ? AND company_id = ?");
+            $stmtUpdate->execute([$func, $salary, $name, $company_id]);
+        } else {
+            // S'il n'existait pas du tout, on le pré-crée
+            $new_id = uniqid('agt_sp_');
+            $stmtInsert = $sqlite->prepare("INSERT INTO agents (id, name, `function`, salary, company_id) VALUES (?, ?, ?, ?, ?)");
+            $stmtInsert->execute([$new_id, $name, $func, $salary, $company_id]);
+        }
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'remove_special_agent':
+        if (!hasPermission('fluctuation') && !hasPermission('salaries') && !hasWritePermission('company_config')) {
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+            break;
+        }
+        $agent_id = $data['agent_id'] ?? '';
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        
+        $stmtFind = $sqlite->prepare("SELECT name FROM agents WHERE id = ? LIMIT 1");
+        $stmtFind->execute([$agent_id]);
+        $agent = $stmtFind->fetch(PDO::FETCH_ASSOC);
+
+        if ($agent) {
+            $stmtUpdate = $sqlite->prepare("UPDATE agents SET salary = NULL WHERE name LIKE ? AND company_id = ?");
+            $stmtUpdate->execute([$agent['name'], $company_id]);
+        }
+        echo json_encode(['success' => true]);
+        break;
+
+
+
+    case 'close_payroll_fluctuation':
+        $period = $data['period'] ?? $_GET['period'] ?? date('Y-m');
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $ca = $data['chiffre_affaire'] ?? 0;
+        $ms_admin = $data['ms_admin'] ?? 0;
+        $ms_agents = $data['ms_agents'] ?? 0;
+        $closed_by = $_SESSION['user_name'] ?? 'Inconnu';
+        $closed_at = date('Y-m-d H:i:s');
+        
+        $admin_count = $data['admin_count'] ?? 0;
+        $agents_count = $data['agents_count'] ?? 0;
+        $sqlite = getDb();
+        $sqlite->exec('CREATE TABLE IF NOT EXISTS fluctuation_history (company_id TEXT, period TEXT, chiffre_affaire REAL, ms_admin REAL, ms_agents REAL, admin_count INTEGER DEFAULT 0, agents_count INTEGER DEFAULT 0, closed_at TEXT, closed_by TEXT, PRIMARY KEY(company_id, period))');
+        try { $sqlite->exec("ALTER TABLE fluctuation_history ADD COLUMN admin_count INTEGER DEFAULT 0"); } catch (Exception $e) {}
+        try { $sqlite->exec("ALTER TABLE fluctuation_history ADD COLUMN agents_count INTEGER DEFAULT 0"); } catch (Exception $e) {}
+        $sqlite->exec('CREATE TABLE IF NOT EXISTS fluctuation_history_sites (company_id TEXT, period TEXT, site_name TEXT, contract_revenue REAL, total_cost REAL, net_margin REAL, is_alert INTEGER, PRIMARY KEY(company_id, period, site_name))');
+        
+        $stmt = $sqlite->prepare('REPLACE INTO fluctuation_history (company_id, period, chiffre_affaire, ms_admin, ms_agents, admin_count, agents_count, closed_at, closed_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$companyId, $period, $ca, $ms_admin, $ms_agents, $admin_count, $agents_count, $closed_at, $closed_by]);
+        
+        // Compute sites_rentability snapshot
+        $gridRaw = $sqlite->prepare("SELECT poste, taux_horaire FROM salary_grid WHERE company_id=? ORDER BY id ASC");
+        $gridRaw->execute([$companyId]);
+        $salary_config = [];
+        foreach ($gridRaw->fetchAll() as $r) $salary_config[$r['poste']] = (int)$r['taux_horaire'];
+
+        $contractsRaw = $sqlite->prepare("SELECT site_name, budget_mensuel, charges_percent, frais_fixes FROM site_contracts WHERE company_id=?");
+        $contractsRaw->execute([$companyId]);
+        $site_contracts = [];
+        foreach ($contractsRaw->fetchAll() as $r) $site_contracts[$r['site_name']] = $r;
+        
+        $subsite_contracts_stmt = $sqlite->prepare("SELECT sc.*, si.name as site_name FROM subsite_contracts sc JOIN subsites s ON sc.subsite_id = s.id JOIN sites si ON s.site_id = si.id WHERE sc.company_id=?");
+        $subsite_contracts_stmt->execute([$companyId]);
+        $subsite_revenues = [];
+        foreach ($subsite_contracts_stmt->fetchAll(PDO::FETCH_ASSOC) as $sc) {
+            $s_name = $sc['site_name'];
+            if (!isset($subsite_revenues[$s_name])) $subsite_revenues[$s_name] = 0;
+            $subsite_revenues[$s_name] += (int)$sc['quantite'] * (int)$sc['montant_unitaire'];
+        }
+        // Fallback : si un site n'a pas de subsite_contracts, on utilise son budget_mensuel du site parent
+        foreach ($site_contracts as $sname => $sc_data) {
+            if (!isset($subsite_revenues[$sname]) || $subsite_revenues[$sname] === 0) {
+                $budget = (int)($sc_data['budget_mensuel'] ?? 0);
+                if ($budget > 0) $subsite_revenues[$sname] = $budget;
+            }
+        }
+
+        $varsRaw = $sqlite->prepare("SELECT primes_globales, charges_globales_percent FROM monthly_variables WHERE company_id=? AND period=?");
+        $varsRaw->execute([$companyId, $period]);
+        $monthly_vars = $varsRaw->fetch(PDO::FETCH_ASSOC) ?: ['primes_globales' => 0, 'charges_globales_percent' => 0];
+
+        $stmtAg = $sqlite->prepare("SELECT a.*, s.name as site_name FROM agents a LEFT JOIN subsites sub ON a.subsite_id = sub.id LEFT JOIN sites s ON sub.site_id = s.id WHERE a.company_id = ?");
+        $stmtAg->execute([$companyId]);
+        $allAgents = $stmtAg->fetchAll();
+
+        $sites_rentability = [];
+
+        foreach ($allAgents as $agent) {
+            $agent_id  = $agent['id'];
+            $func_id   = $agent['function'] ?? 'AS';
+            $site_name = $agent['site_name'] ?? 'Non affecté';
+            $base = isset($salary_config[$func_id]) && $salary_config[$func_id] > 0 ? $salary_config[$func_id] : 75000;
+
+            if (!isset($sites_rentability[$site_name])) {
+                $sites_rentability[$site_name] = [
+                    'name' => $site_name, 'salary_expense' => 0,
+                    'contract_revenue' => (int)($subsite_revenues[$site_name] ?? 0),
+                    'charges_percent' => (float)($site_contracts[$site_name]['charges_percent'] ?? $monthly_vars['charges_globales_percent']),
+                    'frais_fixes' => (int)($site_contracts[$site_name]['frais_fixes'] ?? 0)
+                ];
+            }
+            if (!empty($agent['exit_date']) && strpos($agent['exit_date'], $period) === 0) continue;
+
+            $stmtAtt = $sqlite->prepare("SELECT shift_code, status FROM attendance WHERE agent_id = ? AND period = ?");
+            $stmtAtt->execute([$agent_id, $period]);
+            $attRows = $stmtAtt->fetchAll();
+            $absences = $sp_count = 0;
+            foreach ($attRows as $row) {
+                if ($row['status'] === 'A' || in_array($row['status'], ['ABANDON', 'DEMISSION'])) $absences++;
+                if (in_array($row['shift_code'], ['S', 'SJ', 'SN']) && !in_array($row['status'], ['', 'A', 'R', 'ABANDON', 'DEMISSION'])) $sp_count++;
+                if (in_array($row['shift_code'], ['J', 'N']) && (strpos($row['status'], 'EXT_1|') === 0 || strpos($row['status'], 'REL_1|') === 0 || strpos($row['status'], 'M_1|') === 0)) $sp_count++;
+            }
+            $deductions = (int)round($absences * ($base / 30));
+            $gains      = (int)round($sp_count * ($base / 30));
+            $sites_rentability[$site_name]['salary_expense'] += ($base - $deductions + $gains);
+        }
+
+        $stmtSitesInsert = $sqlite->prepare('REPLACE INTO fluctuation_history_sites (company_id, period, site_name, contract_revenue, total_cost, net_margin, is_alert) VALUES (?, ?, ?, ?, ?, ?, ?)');
+
+        foreach ($sites_rentability as $site) {
+            $charges = $site['salary_expense'] * ($site['charges_percent'] / 100);
+            $total_cost = $site['salary_expense'] + $charges + $site['frais_fixes'];
+            $net_margin = $site['contract_revenue'] - $total_cost;
+            $is_alert = ($site['contract_revenue'] > 0 && $total_cost > ($site['contract_revenue'] * 0.8)) ? 1 : 0;
+
+            $stmtSitesInsert->execute([$companyId, $period, $site['name'], $site['contract_revenue'], $total_cost, $net_margin, $is_alert]);
+        }
+
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'save_site_revenue':
+        echo json_encode(['success' => true, 'message' => 'Contrat sauvegardé']);
+        break;
+        
+    case 'save_manual_adjustment':
+        echo json_encode(['success' => true, 'message' => 'Ajustement sauvegardé']);
+        break;
+        
+    case 'delete_manual_adjustment':
+        echo json_encode(['success' => true]);
+        break;
+
+    
+    case 'save_salary_grid':
+        if (!hasPermission('fluctuation') && !hasPermission('salaries') && !hasWritePermission('company_config')) {
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+            break;
+        }
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        $stmt = $sqlite->prepare("INSERT INTO salary_grid (company_id, poste, taux_horaire) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE taux_horaire=VALUES(taux_horaire)");
+        foreach ($data['grid'] ?? [] as $poste => $taux) {
+            $stmt->execute([$companyId, $poste, (int)$taux]);
+        }
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'save_site_contracts':
+        if (!hasPermission('fluctuation') && !hasPermission('salaries') && !hasWritePermission('company_config')) {
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+            break;
+        }
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        $site_name = $data['site_name'];
+        $budget = (int)($data['budget_mensuel'] ?? 0);
+        $charges = (float)($data['charges_percent'] ?? 0);
+        $frais = (int)($data['frais_fixes'] ?? 0);
+        $prime = (int)($data['prime_site'] ?? 0);
+        $prime_function = $data['prime_function'] ?? '';
+        
+        $chk = $sqlite->prepare("SELECT id FROM site_contracts WHERE company_id = ? AND site_name = ? AND (prime_function = ? OR prime_function IS NULL)");
+        $chk->execute([$companyId, $site_name, $prime_function]);
+        $existing = $chk->fetch(PDO::FETCH_ASSOC);
+        
+        if ($existing) {
+            // Update existing row
+            $stmt = $sqlite->prepare("UPDATE site_contracts SET budget_mensuel=?, charges_percent=?, frais_fixes=?, prime_site=?, prime_function=? WHERE id=?");
+            $stmt->execute([$budget, $charges, $frais, $prime, $prime_function, $existing['id']]);
+        } else {
+            // Insert new row
+            $stmt = $sqlite->prepare("INSERT INTO site_contracts (company_id, site_name, budget_mensuel, charges_percent, frais_fixes, prime_site, prime_function) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$companyId, $site_name, $budget, $charges, $frais, $prime, $prime_function]);
+        }
+        
+        // Clean up: if everything is 0, delete the row so we don't accumulate junk
+        if ($budget == 0 && $charges == 0 && $frais == 0 && $prime == 0) {
+            $del = $sqlite->prepare("DELETE FROM site_contracts WHERE company_id = ? AND site_name = ? AND (prime_function = ? OR prime_function IS NULL)");
+            $del->execute([$companyId, $site_name, $prime_function]);
+        }
+        
+        // Also cleanup old duplicates where prime is 0 to fix the user's DB state
+        $sqlite->exec("DELETE FROM site_contracts WHERE prime_site = 0 AND budget_mensuel = 0 AND charges_percent = 0 AND frais_fixes = 0");
+        
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'save_subsite_contracts':
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        $subsite_id = $data['subsite_id'] ?? '';
+        $rows = $data['rows'] ?? [];
+        if (!$subsite_id) {
+            echo json_encode(['success' => false, 'message' => 'subsite_id manquant']);
+            break;
+        }
+        // Delete existing rows for this subsite
+        $del = $sqlite->prepare("DELETE FROM subsite_contracts WHERE company_id = ? AND subsite_id = ?");
+        $del->execute([$companyId, $subsite_id]);
+        // Re-insert all rows
+        $ins = $sqlite->prepare("INSERT INTO subsite_contracts (company_id, subsite_id, fonction, shift_type, quantite, montant_unitaire) VALUES (?, ?, ?, ?, ?, ?)");
+        foreach ($rows as $row) {
+            $ins->execute([
+                $companyId,
+                $subsite_id,
+                $row['fonction'] ?? 'AS',
+                $row['shift_type'] ?? 'Jour',
+                (int)($row['quantite'] ?? 1),
+                (int)($row['montant_unitaire'] ?? 0)
+            ]);
+        }
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'archive_contract_rupture':
+        requirePermission('dashboard');
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
+        $subsite_id = $data['subsite_id'] ?? '';
+        $subsite_name = $data['subsite_name'] ?? '';
+        $site_name = $data['site_name'] ?? '';
+        $motif = $data['motif'] ?? '';
+        $rupture_date = $data['rupture_date'] ?? date('Y-m-d');
+        $effectif = $data['effectif'] ?? 0;
+        $montant_total = $data['montant_total'] ?? 0;
+        $contract_rows = json_encode($data['contract_rows'] ?? []);
+        $user = $_SESSION['user_name'] ?? 'Inconnu';
+        $is_billed = isset($data['is_billed']) ? (int)$data['is_billed'] : 1;
+
+        if (!$subsite_id) {
+            echo json_encode(['success' => false, 'message' => 'Zone manquante']);
+            break;
+        }
+
+        $sqlite = getDb();
+        try { $sqlite->exec("ALTER TABLE contract_ruptures ADD COLUMN is_billed INTEGER DEFAULT 1"); } catch (Exception $e) {}
+        try { $sqlite->exec("ALTER TABLE contract_ruptures ADD COLUMN contract_rows TEXT"); } catch(Exception $e) {}
+        try { $sqlite->exec("ALTER TABLE contract_ruptures ADD COLUMN rupture_date TEXT"); } catch(Exception $e) {}
+        $sqlite->exec("CREATE INDEX IF NOT EXISTS idx_contract_ruptures_company ON contract_ruptures(company_id, is_billed)");
+
+        $stmt = $sqlite->prepare("INSERT INTO contract_ruptures 
+            (company_id, subsite_id, subsite_name, site_name, motif, rupture_date, effectif, montant_total, contract_rows, archived_at, archived_by, is_billed) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)");
+        $stmt->execute([
+            $company_id, $subsite_id, $subsite_name, $site_name, $motif, $rupture_date, $effectif, $montant_total, $contract_rows, $user, $is_billed
+        ]);
+
+        $sqlite->prepare("DELETE FROM subsite_contracts WHERE company_id = ? AND subsite_id = ?")->execute([$company_id, $subsite_id]);
+        $sqlite->prepare("DELETE FROM subsites WHERE id = ?")->execute([$subsite_id]);
+
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'get_contract_ruptures':
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $is_billed_filter = isset($data['is_billed']) ? (int)$data['is_billed'] : 1;
+        $sqlite = getDb();
+        $sqlite->exec("CREATE TABLE IF NOT EXISTS contract_ruptures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id TEXT,
+            subsite_id TEXT,
+            subsite_name TEXT,
+            site_name TEXT,
+            motif TEXT,
+            effectif INTEGER,
+            montant_total INTEGER,
+            contract_rows TEXT,
+            archived_at TEXT,
+            archived_by TEXT,
+            is_billed INTEGER DEFAULT 1
+        )");
+        try { $sqlite->exec("ALTER TABLE contract_ruptures ADD COLUMN contract_rows TEXT"); } catch(Exception $e) {}
+        try { $sqlite->exec("ALTER TABLE contract_ruptures ADD COLUMN rupture_date TEXT"); } catch(Exception $e) {}
+        try { $sqlite->exec("ALTER TABLE contract_ruptures ADD COLUMN is_billed INTEGER DEFAULT 1"); } catch(Exception $e) {}
+        
+        $stmt = $sqlite->prepare("SELECT * FROM contract_ruptures WHERE company_id = ? AND is_billed = ? ORDER BY archived_at DESC");
+        $stmt->execute([$companyId, $is_billed_filter]);
+        $ruptures = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($ruptures as &$r) {
+            $r['contract_rows'] = json_decode($r['contract_rows'] ?? '[]', true) ?: [];
+        }
+        echo json_encode(['success' => true, 'ruptures' => $ruptures]);
+        break;
+
+    case 'save_monthly_variables':
+        if (!hasPermission('fluctuation') && !hasPermission('salaries') && !hasWritePermission('company_config')) {
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+            break;
+        }
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        $period = $data['period'];
+        $primes = (int)($data['primes_globales'] ?? 0);
+        $charges = (float)($data['charges_globales_percent'] ?? 0);
+        $stmt = $sqlite->prepare("INSERT INTO monthly_variables (company_id, period, primes_globales, charges_globales_percent) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE primes_globales=VALUES(primes_globales), charges_globales_percent=VALUES(charges_globales_percent)");
+        $stmt->execute([$companyId, $period, $primes, $charges]);
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'get_compta_data':
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        $period = $_GET['period'] ?? date('Y-m');
+        
+        $grid = $sqlite->prepare("SELECT poste, taux_horaire FROM salary_grid WHERE company_id=? ORDER BY id ASC");
+        $grid->execute([$companyId]);
+        
+        $contracts = $sqlite->prepare("SELECT site_name, budget_mensuel, charges_percent, frais_fixes, prime_site, prime_function FROM site_contracts WHERE company_id=?");
+        $contracts->execute([$companyId]);
+
+        $subsite_contracts_stmt = $sqlite->prepare("SELECT sc.*, s.name as subsite_name, si.name as site_name FROM subsite_contracts sc JOIN subsites s ON sc.subsite_id = s.id JOIN sites si ON s.site_id = si.id WHERE sc.company_id=?");
+        $subsite_contracts_stmt->execute([$companyId]);
+        $subsite_contracts_raw = $subsite_contracts_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Group subsite_contracts by subsite_id
+        $subsite_contracts_grouped = [];
+        foreach ($subsite_contracts_raw as $sc) {
+            $subsite_contracts_grouped[$sc['subsite_id']][] = $sc;
+        }
+        
+        $vars = $sqlite->prepare("SELECT primes_globales, charges_globales_percent FROM monthly_variables WHERE company_id=? AND period=?");
+        $vars->execute([$companyId, $period]);
+
+        // Fetch all site names for autocomplete (strictly by company_id)
+        $siteNamesStmt = $sqlite->prepare("SELECT DISTINCT name FROM sites WHERE company_id = ? ORDER BY name");
+        $siteNamesStmt->execute([$companyId]);
+        $siteNames = array_filter(array_column($siteNamesStmt->fetchAll(PDO::FETCH_ASSOC), 'name'));
+
+        // Also fetch subsite (zone) names
+        $subsiteNamesStmt = $sqlite->prepare("SELECT DISTINCT sub.name, si.name as site_name FROM subsites sub JOIN sites si ON sub.site_id = si.id WHERE si.company_id = ? ORDER BY si.name, sub.name");
+        $subsiteNamesStmt->execute([$companyId]);
+        $subsiteRows = $subsiteNamesStmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($subsiteRows as $row) {
+            if (!empty($row['name']) && !empty($row['site_name'])) {
+                $combined = $row['site_name'] . ' / ' . $row['name'];
+                $siteNames[] = $combined;
+            }
+        }
+        // Inject virtual sites and their zones so they appear in autocomplete
+        $virtualSites = [
+            '🌟 EXTRA BUREAU',
+            '🌟 EXTRA BUREAU / Agents Disponibles',
+            '🔄 Vivier des relèves',
+            '🔄 Vivier des relèves / Agents Disponibles',
+            '🌟 EXTRA SUR SITE',
+            '🏢 Administration',
+            '🏢 Administration / Bureau',
+            'ITC / IFM',
+            'ITC / IFM / Tenue Régulière',
+            'ITC / IFM / Costume',
+            'ITC / IFM / Agent Spécial'
+        ];
+        $siteNames = array_merge($siteNames, $virtualSites);
+
+        $siteNames = array_values(array_unique($siteNames));
+        sort($siteNames);
+        
+        echo json_encode([
+            'success' => true,
+            'grid' => $grid->fetchAll(PDO::FETCH_ASSOC),
+            'contracts' => $contracts->fetchAll(PDO::FETCH_ASSOC),
+            'subsite_contracts' => $subsite_contracts_grouped,
+            'variables' => $vars->fetch(PDO::FETCH_ASSOC) ?: ['primes_globales' => 0, 'charges_globales_percent' => 0],
+            'site_names' => $siteNames
+        ]);
+        break;
+
+    case 'get_services':
+        $company_id = $_SESSION['company_id'] ?? '';
+        if (!$company_id) {
+            echo json_encode(['success' => false, 'message' => 'Non connecté']);
+            break;
+        }
+        $sqlite = getDb();
+        $stmt = $sqlite->prepare("SELECT id, name FROM services WHERE company_id = ? ORDER BY name");
+        $stmt->execute([$company_id]);
+        $services = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'services' => $services]);
+        break;
+
+    case 'publish_reclamations':
+        $mois = $data['mois'] ?? '';
+        $services = $data['services'] ?? [];
+        $fromStatus = $data['from_status'] ?? 'Brouillon';
+        $toStatus = $data['to_status'] ?? 'En attente';
+        
+        if (!$mois) {
+            echo json_encode(['success' => false, 'message' => 'Mois manquant']);
+            break;
+        }
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $recs = getReclamations($companyId);
+        $updatedCount = 0;
+        foreach ($recs as $rec) {
+            if ($rec['mois_concerne'] === $mois && ($rec['statut'] ?? '') === $fromStatus) {
+                updateReclamationStatus($rec['id'], [
+                    'statut' => $toStatus,
+                    'services_cibles' => $services
+                ]);
+                $updatedCount++;
+            }
+        }
+        
+        $companyKey = $_SESSION['company_id'] ?? null;
+        $serviceName = $_SESSION['user_service'] ?? 'Un service';
+        $serviceKey = $_SESSION['service_id'] ?? null;
+        
+        $pubData = [
+            'period'          => $mois,
+            'service_name'    => $serviceName,
+            'service_id'      => $serviceKey,
+            'services_cibles' => $services,
+            'timestamp'       => time(),
+            'count'           => $updatedCount
+        ];
+        setServiceDataSql($companyKey, 'latest_publication_reclamations', $pubData);
+
+        // Enregistrer dans l'historique global (visible dans le bouton Historique)
+        $pubHistoryData = [
+            'period'               => $mois,
+            'type'                 => $toStatus === 'Clôturé' ? 'close_reclamations' : 'publish_reclamations',
+            'services_cibles'      => $services,
+            'publisher_service_id' => $serviceKey,
+            'timestamp'            => time(),
+            'count'                => $updatedCount
+        ];
+        $history = getServiceDataSql($companyKey, 'feedback_history', []);
+        array_unshift($history, $pubHistoryData);
+        if (count($history) > 50) $history = array_slice($history, 0, 50);
+        setServiceDataSql($companyKey, 'feedback_history', $history);
+
+        echo json_encode(['success' => true, 'count' => $updatedCount]);
+        break;
+
+    case 'batch_update_reclamations':
+        $updates = $data['updates'] ?? [];
+        $count = 0;
+        foreach ($updates as $u) {
+            if (isset($u['id']) && isset($u['fields'])) {
+                if (updateReclamationStatus($u['id'], $u['fields'])) {
+                    $count++;
+                }
+            }
+        }
+        echo json_encode(['success' => true, 'count' => $count]);
+        break;
+
+    case 'get_latest_publication_reclamations':
+        $companyKey = $_SESSION['company_id'] ?? null;
+        if (!$companyKey) {
+            echo json_encode(['success' => false, 'publication' => null, 'global_security_alert' => null]);
+            break;
+        }
+        $pubData = getServiceDataSql($companyKey, 'latest_publication_reclamations', null);
+        $alertData = getServiceDataSql($companyKey, 'global_security_alert', null);
+        echo json_encode(['success' => true, 'publication' => $pubData, 'global_security_alert' => $alertData]);
+        break;
+
+    case 'set_global_security_alert':
+        $companyKey = $_SESSION['company_id'] ?? null;
+        if (!$companyKey) {
+            echo json_encode(['success' => false]);
+            break;
+        }
+        if (isset($data['alert']) && $data['alert']) {
+            $alertObj = [
+                'type' => $data['alert'],
+                'publisher_service_id' => $_SESSION['user_service'] ?? '',
+                'timestamp' => time()
+            ];
+            setServiceDataSql($companyKey, 'global_security_alert', $alertObj);
+        } else {
+            setServiceDataSql($companyKey, 'global_security_alert', null);
+        }
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'send_reclamation_feedback':
+        $companyKey = $_SESSION['company_id'] ?? null;
+        if (!$companyKey) {
+            echo json_encode(['success' => false]);
+            break;
+        }
+        $feedbackData = [
+            'period'               => $data['period'] ?? '',
+            'service_name'         => $_SESSION['user_service'] ?? 'Un service',
+            'type'                 => 'reclamation_' . ($data['type'] ?? 'accuse'),
+            'publisher_service_id' => $data['publisher_service_id'] ?? '',
+            'timestamp'            => time()
+        ];
+        // Mettre à jour le dernier feedback pour déclencher la pop-up chez le publiant
+        setServiceDataSql($companyKey, 'latest_feedback', $feedbackData);
+
+        // Sauvegarder dans l'historique
+        $history = getServiceDataSql($companyKey, 'feedback_history', []);
+        array_unshift($history, $feedbackData);
+        if (count($history) > 50) $history = array_slice($history, 0, 50);
+        setServiceDataSql($companyKey, 'feedback_history', $history);
+        
+        echo json_encode(['success' => true]);
+        break;
+
+
+    case 'add_reclamation':
+        $serviceName = $_SESSION['user_service'] ?? 'Inconnu';
+        $isUpdate = !empty($data['id']);
+        
+        $record = [
+            'service_declarant' => $serviceName,
+            'agent_nom' => $data['agent_nom'] ?? '',
+            'agent_matricule' => $data['agent_matricule'] ?? '',
+            'agent_site' => $data['agent_site'] ?? '',
+            'agent_fonction' => $data['agent_fonction'] ?? '',
+            'date_entree' => $data['date_entree'] ?? '',
+            'reclamation_categorie' => $data['reclamation_categorie'] ?? 'Salaire',
+            'reclamation_categorie_autre' => $data['reclamation_categorie_autre'] ?? '',
+            'categorie' => $data['categorie'] ?? 'DIVERS',
+            
+            'declarant_nom' => $data['declarant_nom'] ?? '',
+            'declarant_prenom' => $data['declarant_prenom'] ?? '',
+            'declarant_matricule' => $data['declarant_matricule'] ?? '',
+            'declarant_fonction' => $data['declarant_fonction'] ?? '',
+            'declarant_service' => $data['declarant_service'] ?? $serviceName,
+            
+            'type_erreur' => $data['type_erreur'] ?? '',
+            'type_erreur_autre' => $data['type_erreur_autre'] ?? '',
+            'mois_concerne' => $data['mois_concerne'] ?? '',
+            'jours_concernes' => $data['jours_concernes'] ?? '',
+            
+            'premiere_reclamation' => $data['premiere_reclamation'] ?? 'Oui',
+            'ponction_precedente_correcte' => $data['ponction_precedente_correcte'] ?? 'Non',
+            
+            'montant_estime' => $data['montant_estime'] ?? 0,
+            'action_demandee' => $data['action_demandee'] ?? '',
+            'description' => $data['description'] ?? '',
+            'radio_code' => $data['radio_code'] ?? '',
+            'radio_signature' => $data['radio_signature'] ?? '',
+            'statut' => $data['statut'] ?? 'En attente',
+        ];
+
+        // On ne réinitialise les avis que s'il s'agit d'une nouvelle soumission (ou on laisse le frontend décider)
+        if (!$isUpdate) {
+            $record['avis_secretariat'] = '';
+            $record['avis_comptabilite'] = '';
+        }
+        
+        if ($isUpdate) {
+            updateReclamationStatus($data['id'], $record);
+            $record['id'] = $data['id'];
+            $res = $record;
+        } else {
+            $companyId = resolveCurrentCompanyIdSql();
+            $res = addReclamation($record, $companyId);
+        }
+        echo json_encode(['success' => true, 'reclamation' => $res]);
+        break;
+
+    case 'get_radio_signatures':
+        $companyId = resolveCurrentCompanyIdSql();
+        $sigs = getRadioSignatures($companyId);
+        echo json_encode(['success' => true, 'signatures' => $sigs]);
+        break;
+
+    case 'save_radio_signature':
+        $code = $data['code'] ?? '';
+        $image = $data['image'] ?? '';
+        $nom = $data['nom'] ?? '';
+        $prenom = $data['prenom'] ?? '';
+        $matricule = $data['matricule'] ?? '';
+        $fonction = $data['fonction'] ?? '';
+        $service = $data['service'] ?? '';
+
+        if (!$code || !$image) {
+            echo json_encode(['success' => false, 'message' => 'Code ou image manquant']);
+            break;
+        }
+        $companyId = resolveCurrentCompanyIdSql();
+        addRadioSignature($code, $image, $nom, $prenom, $matricule, $fonction, $service, $companyId);
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'get_agent_absences':
+        $agent_id = $_GET['agent_id'] ?? '';
+        $period = $_GET['period'] ?? date('Y-m');
+        if (!$agent_id) {
+            echo json_encode(['success' => false, 'message' => 'Agent manquant']);
+            break;
+        }
+        $parts = explode('-', $period);
+        $att_period = count($parts) === 2 ? $parts[1] . '/' . $parts[0] : $period;
+        $sqlite = getDb();
+        $stmt = $sqlite->prepare("SELECT date, status, period FROM attendance WHERE agent_id = ?");
+        $stmt->execute([$agent_id]);
+        
+        $debug_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmt = $sqlite->prepare("SELECT date, status FROM attendance WHERE agent_id = ? AND period = ? AND status IN ('A', 'ABANDON', 'DEMISSION') ORDER BY date ASC");
+        $stmt->execute([$agent_id, $att_period]);
+        $dates = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $dates[] = $row['date'];
+        }
+        echo json_encode(['success' => true, 'absences' => $dates, 'debug' => $debug_records, 'att_period' => $att_period]);
+        break;
+
+    case 'get_reclamations':
+        $companyId = resolveCurrentCompanyIdSql();
+        $recs = getReclamations($companyId);
+        echo json_encode(['success' => true, 'reclamations' => $recs]);
+        break;
+
+    case 'update_reclamation_status':
+        $id = $data['id'] ?? '';
+        $updates = $data['updates'] ?? [];
+        if (updateReclamationStatus($id, $updates)) {
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Réclamation non trouvée']);
+        }
+        break;
+
+    case 'get_fluctuation_archives':
+        $companyId = resolveCurrentCompanyIdSql();
+        $sqlite = getDb();
+        try {
+            $sqlite->exec('CREATE TABLE IF NOT EXISTS fluctuation_history (company_id TEXT, period TEXT, chiffre_affaire REAL, ms_admin REAL, ms_agents REAL, admin_count INTEGER DEFAULT 0, agents_count INTEGER DEFAULT 0, closed_at TEXT, closed_by TEXT, PRIMARY KEY(company_id, period))');
+            $stmt = $sqlite->prepare('SELECT period, closed_at AS archived_at, closed_by AS archived_by FROM fluctuation_history WHERE company_id = ? ORDER BY period DESC');
+            $stmt->execute([$companyId]);
+            $archives = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $archives = [];
+        }
+        echo json_encode(['success' => true, 'archives' => $archives ?: []]);
+        break;
+
+    case 'get_fluctuation_analytics':
+        $period = $_GET['period'] ?? $data['period'] ?? date('Y-m');
+        $companyId = resolveCurrentCompanyIdSql();
+        $sqlite = getDb();
+        
+        // Ensure tables exist
+        try {
+            $sqlite->exec('CREATE TABLE IF NOT EXISTS fluctuation_history (company_id TEXT, period TEXT, chiffre_affaire REAL, ms_admin REAL, ms_agents REAL, admin_count INTEGER DEFAULT 0, agents_count INTEGER DEFAULT 0, closed_at TEXT, closed_by TEXT, PRIMARY KEY(company_id, period))');
+            $sqlite->exec('CREATE TABLE IF NOT EXISTS fluctuation_history_sites (company_id TEXT, period TEXT, site_name TEXT, contract_revenue REAL, total_cost REAL, net_margin REAL, is_alert INTEGER, PRIMARY KEY(company_id, period, site_name))');
+        } catch (Exception $e) {}
+
+        // Get main snapshot
+        $stmt = $sqlite->prepare('SELECT * FROM fluctuation_history WHERE company_id = ? AND period = ?');
+        $stmt->execute([$companyId, $period]);
+        $snapshot = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$snapshot) {
+            echo json_encode([
+                'success' => true,
+                'snapshot_exists' => false,
+                'chiffre_affaire' => 0,
+                'ms_admin' => 0,
+                'ms_agents' => 0,
+                'admin_count' => 0,
+                'agents_count' => 0,
+                'sites_rentability' => [],
+                'company_metrics' => ['total_cost' => 0],
+                'sites_analysis' => null
+            ]);
+            break;
+        }
+        
+        // Get site rentability data
+        $stmtSites = $sqlite->prepare('SELECT * FROM fluctuation_history_sites WHERE company_id = ? AND period = ?');
+        $stmtSites->execute([$companyId, $period]);
+        $sites_rentability = $stmtSites->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        
+        $total_cost = 0;
+        foreach ($sites_rentability as &$sr) {
+            $sr['is_alert'] = (bool)$sr['is_alert'];
+            $total_cost += (float)$sr['total_cost'];
+        }
+        unset($sr);
+        
+        // Portfolio analysis (comparison with previous period)
+        $sites_analysis = null;
+        $prevPeriodParts = explode('-', $period);
+        $prevDate = new DateTime($period . '-01');
+        $prevDate->modify('-1 month');
+        $prevPeriod = $prevDate->format('Y-m');
+        
+        $stmtPrev = $sqlite->prepare('SELECT * FROM fluctuation_history_sites WHERE company_id = ? AND period = ?');
+        $stmtPrev->execute([$companyId, $prevPeriod]);
+        $prevSites = $stmtPrev->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        
+        $prevSiteNames = [];
+        foreach ($prevSites as $ps) $prevSiteNames[$ps['site_name']] = $ps;
+        $currSiteNames = [];
+        foreach ($sites_rentability as $cs) $currSiteNames[$cs['site_name']] = $cs;
+        
+        $lost_sites = [];
+        $lost_value = 0;
+        foreach ($prevSiteNames as $name => $ps) {
+            if (!isset($currSiteNames[$name])) {
+                $lost_sites[] = ['name' => $name, 'value' => (float)$ps['contract_revenue']];
+                $lost_value += (float)$ps['contract_revenue'];
+            }
+        }
+        
+        $gained_sites = [];
+        $gained_value = 0;
+        foreach ($currSiteNames as $name => $cs) {
+            if (!isset($prevSiteNames[$name])) {
+                $gained_sites[] = ['name' => $name, 'value' => (float)$cs['contract_revenue']];
+                $gained_value += (float)$cs['contract_revenue'];
+            }
+        }
+        
+        $sites_analysis = [
+            'prev_period' => count($prevSites) > 0 ? $prevPeriod : 'données actuelles',
+            'curr_count' => count($sites_rentability),
+            'prev_count' => count($prevSites),
+            'lost_sites' => $lost_sites,
+            'lost_value' => $lost_value,
+            'gained_sites' => $gained_sites,
+            'gained_value' => $gained_value,
+            'conge_agents' => [],
+            'conge_value' => 0
+        ];
+        
+        echo json_encode([
+            'success' => true,
+            'snapshot_exists' => true,
+            'chiffre_affaire' => (float)$snapshot['chiffre_affaire'],
+            'ms_admin' => (float)$snapshot['ms_admin'],
+            'ms_agents' => (float)$snapshot['ms_agents'],
+            'admin_count' => (int)($snapshot['admin_count'] ?? 0),
+            'agents_count' => (int)($snapshot['agents_count'] ?? 0),
+            'sites_rentability' => $sites_rentability,
+            'company_metrics' => ['total_cost' => $total_cost],
+            'sites_analysis' => $sites_analysis
+        ]);
+        break;
+
+} // end switch facturation

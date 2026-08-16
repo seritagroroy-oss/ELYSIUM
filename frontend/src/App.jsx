@@ -1,88 +1,82 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
+import { apiCall } from './api';
+import { ShieldAlert, Shield, UserPlus, Calendar, DollarSign, Archive, Settings, LogOut, Clock, Loader2, Sparkles, Menu, X, CheckCircle, Home as HomeIcon, ReceiptText, TrendingUp, MessageSquare, Camera, Bell, Search, BarChart3, Bot, FileWarning, Fingerprint, Contact, Plane, Briefcase, Database, Users, Printer, FileText, MapPin, PlusCircle, Package, MessageSquareWarning, MessageCircle, AlertTriangle, Inbox, Building2, Sun, Moon, User, Mail, Phone, Lock, Monitor, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import './App.css';
+
+// ─── Imports statiques (toujours nécessaires dès le démarrage) ─────────────────
 import Login from './components/Login';
-import Register from './components/Register';
-import Subscription from './components/Subscription';
-import Dashboard from './components/Dashboard';
-import Salaries from './components/Salaries';
-import Archives from './components/Archives';
-import SettingsView from './components/SettingsView';
-import Kiosk from './components/Kiosk';
-import Home from './components/Home';
-import PayrollView from './components/PayrollView';
-import FluctuationView from './components/FluctuationView';
-import CompanyConfigView from './components/CompanyConfigView';
+import ProductTour from './components/ProductTour';
 import WelcomePage from './components/WelcomePage';
-import PayslipPrintView from './components/PayslipPrintView';
-import ServiceManagement, { WORKSPACE_PRESETS } from './components/ServiceManagement';
-import PermissionsManager from './components/PermissionsManager';
-import Communication from './components/Communication';
-import EmployeesView from './components/EmployeesView';
+
+import AgentPortal from './components/AgentPortal';
+import SiteClosureNotifier from './components/SiteClosureNotifier';
 import CommandPalette from './components/CommandPalette';
 import JarvisseChat from './components/JarvisseChat';
-import AnalyticsDashboard from './components/AnalyticsDashboard';
-import ReclamationsView from './components/ReclamationsView';
-import AgentPortal from './components/AgentPortal';
-import PortalAdminView from './components/PortalAdminView';
-import LeaveManagement from './components/LeaveManagement';
-import PermissionsAbsence from './components/PermissionsAbsence';
-import ContractsView from './components/ContractsView';
-import PersonnelRegistry from './components/PersonnelRegistry';
-import RegistreVisiteurs from './components/RegistreVisiteurs';
-import AnnuaireStatut from './components/AnnuaireStatut';
-import PointageCourriers from './components/PointageCourriers';
-import GestionSalles from './components/GestionSalles';
-import ReflexeSecurite from './components/ReflexeSecurite';
-import GestionAppels from './components/GestionAppels';
-import GestionFlotte from './components/GestionFlotte';
-import BadgesProvisoires from './components/BadgesProvisoires';
-import FournituresBureau from './components/FournituresBureau';
-import AccueilVIP from './components/AccueilVIP';
-import AlertesSecurite from './components/AlertesSecurite';
-import DGVision from './components/DGVision';
-import DGRapports from './components/DGRapports';
-import DGValidations from './components/DGValidations';
-import DGAudit from './components/DGAudit';
-import DGMegaphone from './components/DGMegaphone';
-import DGPredictive from './components/DGPredictive';
-import DGOKR from './components/DGOKR';
-import DGLitiges from './components/DGLitiges';
-import DGOrganigramme from './components/DGOrganigramme';
-import DGAgenda from './components/DGAgenda';
-import DGPV from './components/DGPV';
-import DGVeille from './components/DGVeille';
-import PDGSouverain from './components/PDGSouverain';
-import PDGBilan from './components/PDGBilan';
-import PDGSignature from './components/PDGSignature';
-import PDGSites from './components/PDGSites';
-import PDGAccesMaitre from './components/PDGAccesMaitre';
-import PDGBenchmark from './components/PDGBenchmark';
-import PDGCoffre from './components/PDGCoffre';
-import PDGExpansion from './components/PDGExpansion';
-import PDGActionnaires from './components/PDGActionnaires';
-import PDGMenaces from './components/PDGMenaces';
-import PCRadar from './components/PCRadar';
-import PCAlertes from './components/PCAlertes';
-import PCCCTV from './components/PCCCTV';
-import PCDispatch from './components/PCDispatch';
-import PCComms from './components/PCComms';
-import PCMainCourante from './components/PCMainCourante';
-import PCTracking from './components/PCTracking';
-import CtrlFeuille from './components/CtrlFeuille';
-import CtrlAudit from './components/CtrlAudit';
-import CtrlRapport from './components/CtrlRapport';
-import CtrlDashboard from './components/CtrlDashboard';
-import CtrlMessagerie from './components/CtrlMessagerie';
-import CtrlCarnet from './components/CtrlCarnet';
-import CtrlTracking from './components/CtrlTracking';
-import CtrlDispatch from './components/CtrlDispatch';
-import CtrlFlotte from './components/CtrlFlotte';
-import CtrlRondes from './components/CtrlRondes';
-import CtrlNotation from './components/CtrlNotation';
-import { ShieldAlert, Shield, UserPlus, Calendar, DollarSign, Archive, Settings, LogOut, Clock, Loader2, Sparkles, Menu, X, CheckCircle, Home as HomeIcon, ReceiptText, TrendingUp, MessageSquare, Camera, Bell, Search, BarChart3, Bot, FileWarning, Fingerprint, Contact, Plane, Briefcase, Database, Users, Printer, FileText, MapPin, PlusCircle, Package, MessageSquareWarning, MessageCircle, AlertTriangle, Inbox, Building2 } from 'lucide-react';
-import { apiCall } from './api';
-import BoiteReceptionAdmin from './components/BoiteReceptionAdmin';
-import './App.css';
+import StandalonePayslip from './components/StandalonePayslip';
+import ServiceManagement, { WORKSPACE_PRESETS } from './components/ServiceManagement';
+
+// ─── Lazy loading (chargés uniquement quand l'utilisateur y accède) ──────────
+const ContratsClientsModule  = lazy(() => import('./components/ContratsClientsModule'));
+const Register               = lazy(() => import('./components/Register'));
+const Subscription           = lazy(() => import('./components/Subscription'));
+const Dashboard              = lazy(() => import('./components/Dashboard'));
+const Salaries               = lazy(() => import('./components/Salaries'));
+const ArchivesPointage       = lazy(() => import('./components/ArchivesPointage'));
+const SettingsView           = lazy(() => import('./components/SettingsView'));
+const Home                   = lazy(() => import('./components/Home'));
+const PayrollView            = lazy(() => import('./components/PayrollView'));
+const FluctuationView        = lazy(() => import('./components/FluctuationView'));
+const GrilleSalarialeView    = lazy(() => import('./components/GrilleSalarialeView'));
+const CompanyConfigView      = lazy(() => import('./components/CompanyConfigView'));
+const PayslipPrintView       = lazy(() => import('./components/PayslipPrintView'));
+const PermissionsManager     = lazy(() => import('./components/PermissionsManager'));
+const Communication          = lazy(() => import('./components/Communication'));
+const EmployeesView          = lazy(() => import('./components/EmployeesView'));
+const PersonnelTrackingView  = lazy(() => import('./components/PersonnelTrackingView'));
+const AnalyticsDashboard     = lazy(() => import('./components/AnalyticsDashboard'));
+const ReclamationsView       = lazy(() => import('./components/ReclamationsView'));
+const PortalAdminView        = lazy(() => import('./components/PortalAdminView'));
+const CorrectionAdminView    = lazy(() => import('./components/CorrectionAdminView'));
+const LeaveManagement        = lazy(() => import('./components/LeaveManagement'));
+const PermissionsAbsence     = lazy(() => import('./components/PermissionsAbsence'));
+const ContractsView          = lazy(() => import('./components/ContractsView'));
+const PersonnelRegistry      = lazy(() => import('./components/PersonnelRegistry'));
+const RegistreVisiteurs      = lazy(() => import('./components/RegistreVisiteurs'));
+const PointageCourriers      = lazy(() => import('./components/PointageCourriers'));
+
+
+const DGAudit                = lazy(() => import('./components/DGAudit'));
+
+const PCMainCourante         = lazy(() => import('./components/PCMainCourante'));
+
+
+
+const CtrlRapport            = lazy(() => import('./components/CtrlRapport'));
+
+const BoiteReceptionAdmin    = lazy(() => import('./components/BoiteReceptionAdmin'));
+
+// ─── Fallback de chargement pour Suspense ─────────────────────────────────────
+const PageLoader = () => (
+  <div style={{
+    minHeight: '60vh', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', gap: '16px'
+  }}>
+    <style>{`
+      @keyframes page-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    `}</style>
+    <div style={{
+      width: '40px', height: '40px', borderRadius: '50%',
+      border: '3px solid rgba(56,189,248,0.2)',
+      borderTopColor: '#38bdf8',
+      animation: 'page-spin 0.8s linear infinite'
+    }} />
+    <p style={{ color: '#475569', fontSize: '0.8rem', letterSpacing: '2px', textTransform: 'uppercase' }}>
+      Chargement...
+    </p>
+  </div>
+);
+
 
 const safeFormatMonth = (periodStr) => {
   if (!periodStr || typeof periodStr !== 'string' || !periodStr.includes('-')) return periodStr;
@@ -123,7 +117,7 @@ const OnboardingModal = ({ onComplete }) => {
             objectFit: 'cover', zIndex: 1, opacity: 0.5
           }}
         >
-          <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4" />
+          <source src="/intro.mp4" type="video/mp4" />
         </video>
       )}
 
@@ -369,6 +363,24 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const calculatePasswordStrength = (pass) => {
+    if (!pass) return { score: 0, label: '', color: 'transparent' };
+    let score = 0;
+    if (pass.length >= 8) score += 1;
+    if (pass.match(/[A-Z]/) && pass.match(/[a-z]/)) score += 1;
+    if (pass.match(/[0-9]/)) score += 1;
+    if (pass.match(/[^A-Za-z0-9]/)) score += 1;
+    if (pass.length >= 12) score += 1;
+    
+    if (score <= 1) return { score, label: 'Faible', color: '#ef4444' }; // Red
+    if (score === 2) return { score, label: 'Moyen', color: '#f59e0b' }; // Orange
+    if (score === 3) return { score, label: 'Bon', color: '#3b82f6' }; // Blue
+    return { score, label: 'Fort', color: '#10b981' }; // Green
+  };
+
+  const strength = calculatePasswordStrength(formData.password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -392,7 +404,7 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
         onUpdate();
         setTimeout(() => {
           onClose();
-        }, 2000); // Laisse le temps au toast d'être lu
+        }, 2000);
       } else {
         setErrorMsg(res.message || "Erreur lors de la mise à jour");
       }
@@ -403,19 +415,61 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
     }
   };
 
+  const inputStyle = {
+    width: '100%', padding: '12px 12px 12px 42px', borderRadius: '12px',
+    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)',
+    color: 'white', fontSize: '0.95rem', transition: 'all 0.3s ease',
+    outline: 'none'
+  };
+
+  const labelStyle = { display: 'block', marginBottom: '8px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' };
+  const iconWrapperStyle = { position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', pointerEvents: 'none', transition: 'color 0.3s' };
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000
+      background: 'rgba(2, 6, 23, 0.7)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000,
+      padding: '20px'
     }}>
+      <style>{`
+        .profile-input:focus {
+          border-color: #38bdf8 !important;
+          background: rgba(56, 189, 248, 0.05) !important;
+          box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.1) !important;
+        }
+        .profile-input:focus + .icon-wrapper svg {
+          color: #38bdf8 !important;
+        }
+        .profile-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px -5px rgba(56, 189, 248, 0.4);
+        }
+        .profile-btn:active {
+          transform: translateY(0);
+        }
+      `}</style>
       <div style={{
-        background: '#0f172a', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '450px',
-        border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
+        background: 'linear-gradient(145deg, #0f172a, #1e293b)', padding: '40px', borderRadius: '24px', width: '100%', maxWidth: '750px',
+        border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)',
+        animation: 'slideUp 0.3s ease-out'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-          <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.5rem', fontWeight: 700 }}>Modifier mon profil</h2>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={24} /></button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ background: 'rgba(56, 189, 248, 0.2)', padding: '10px', borderRadius: '12px', color: '#38bdf8' }}>
+              <User size={24} />
+            </div>
+            <div>
+              <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.5px' }}>Modifier mon profil</h2>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem', marginTop: '2px' }}>Gérez vos informations personnelles</p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ 
+            background: 'rgba(255,255,255,0.05)', border: 'none', color: '#94a3b8', cursor: 'pointer',
+            padding: '8px', borderRadius: '50%', transition: 'all 0.2s', display: 'flex'
+          }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.1)'} onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.05)'}>
+            <X size={20} />
+          </button>
         </div>
 
         {/* Floating Toast Notification */}
@@ -425,82 +479,145 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
             background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(34, 197, 94, 0.5)',
             color: '#fff', padding: '16px 24px', borderRadius: '12px',
             boxShadow: '0 20px 40px -10px rgba(0,0,0,0.5), 0 0 20px rgba(34,197,94,0.2)',
-            display: 'flex', alignItems: 'center', gap: '12px',
+            display: 'flex', flexDirection: 'column', gap: '8px',
             animation: 'slideInRight 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
             fontWeight: 500, fontSize: '0.95rem'
           }}>
-            <div style={{ background: 'rgba(34,197,94,0.2)', borderRadius: '50%', padding: '6px', display: 'flex', color: '#4ade80' }}>
-              <CheckCircle size={20} />
+            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.8, fontWeight: 'bold', color: '#4ade80' }}>JARVIS ASSISTANT</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ background: 'rgba(34,197,94,0.2)', borderRadius: '50%', padding: '6px', display: 'flex', color: '#4ade80' }}>
+                <CheckCircle size={20} />
+              </div>
+              {successMsg}
             </div>
-            {successMsg}
-            <style>{`
-              @keyframes slideInRight {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-              }
-            `}</style>
           </div>
         )}
 
         {errorMsg && (
-          <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#fca5a5', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShieldAlert size={18} /> {errorMsg}
+          <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '14px', borderRadius: '12px', marginBottom: '20px', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.8, fontWeight: 'bold', color: '#f87171' }}>JARVIS ASSISTANT</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ShieldAlert size={20} /> {errorMsg}
+            </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', color: '#cbd5e1', fontSize: '0.9rem' }}>Nom complet</label>
-            <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-              style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'white' }} />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', color: '#cbd5e1', fontSize: '0.9rem' }}>Espace de Travail (Environnement)</label>
-            <select value={formData.workspace_type} onChange={e => setFormData({...formData, workspace_type: e.target.value})}
-              style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'white' }}>
-              {Object.entries(WORKSPACE_PRESETS).map(([key, ws]) => (
-                <option key={key} value={key} style={{ background: '#0f172a', color: 'white' }}>{ws.icon} {ws.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '15px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', color: '#fca5a5' }}>
-              <ShieldAlert size={18} />
-              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Informations sensibles</span>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={{ position: 'relative' }}>
+              <label style={labelStyle}>Nom complet</label>
+              <div style={{ position: 'relative' }}>
+                <input required type="text" className="profile-input" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={inputStyle} />
+                <div className="icon-wrapper" style={iconWrapperStyle}><User size={18} /></div>
+              </div>
             </div>
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: '#cbd5e1', fontSize: '0.9rem' }}>Adresse Email (Identifiant)</label>
-              <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}
-                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'white' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', color: '#cbd5e1', fontSize: '0.9rem' }}>Numéro de téléphone</label>
-              <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Optionnel"
-                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'white' }} />
+
+            <div style={{ position: 'relative' }}>
+              <label style={{...labelStyle, color: '#64748b'}}>Espace de Travail <span style={{ textTransform: 'none', fontWeight: 400 }}>(Non modifiable)</span></label>
+              <div style={{ position: 'relative', opacity: 0.7 }}>
+                <select disabled value={formData.workspace_type} onChange={e => setFormData({...formData, workspace_type: e.target.value})} className="profile-input" style={{...inputStyle, appearance: 'none', cursor: 'not-allowed', background: 'rgba(0,0,0,0.2)'}}>
+                  {Object.entries(WORKSPACE_PRESETS).map(([key, ws]) => (
+                    <option key={key} value={key} style={{ background: '#0f172a', color: 'white' }}>{ws.icon} {ws.label}</option>
+                  ))}
+                </select>
+                <div className="icon-wrapper" style={iconWrapperStyle}><Monitor size={18} /></div>
+                <div style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', pointerEvents: 'none' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', color: '#cbd5e1', fontSize: '0.9rem' }}>Nouveau mot de passe (laisser vide si inchangé)</label>
-            <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}
-              style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'white' }} />
-          </div>
-          {formData.password && (
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', color: '#cbd5e1', fontSize: '0.9rem' }}>Confirmer le mot de passe</label>
-              <input type="password" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
-                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'white' }} />
-            </div>
-          )}
-
-          <button type="submit" disabled={loading} style={{
-            background: 'linear-gradient(135deg, #38bdf8, #a855f7)', color: 'white', padding: '14px', borderRadius: '10px',
-            border: 'none', fontWeight: 600, fontSize: '1rem', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px',
-            opacity: loading ? 0.7 : 1, transition: 'all 0.2s'
+          <div style={{ 
+            background: 'rgba(239, 68, 68, 0.05)', padding: '24px', borderRadius: '16px', 
+            border: '1px solid rgba(239, 68, 68, 0.2)', display: 'flex', flexDirection: 'column', gap: '20px' 
           }}>
-            {loading ? <Loader2 className="animate-spin" size={20} style={{ margin: '0 auto' }} /> : "Enregistrer les modifications"}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#fca5a5' }}>
+              <div style={{ background: 'rgba(239, 68, 68, 0.2)', padding: '6px', borderRadius: '8px' }}>
+                <ShieldAlert size={16} />
+              </div>
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Informations sensibles</span>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={labelStyle}>Adresse Email (Identifiant)</label>
+                <div style={{ position: 'relative' }}>
+                  <input required type="email" className="profile-input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} style={inputStyle} />
+                  <div className="icon-wrapper" style={iconWrapperStyle}><Mail size={18} /></div>
+                </div>
+              </div>
+              
+              <div>
+                <label style={labelStyle}>Numéro de téléphone</label>
+                <div style={{ position: 'relative' }}>
+                  <input type="tel" className="profile-input" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Optionnel" style={inputStyle} />
+                  <div className="icon-wrapper" style={iconWrapperStyle}><Phone size={18} /></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+            <div>
+              <label style={labelStyle}>Nouveau mot de passe <span style={{ textTransform: 'none', color: '#64748b', fontWeight: 400 }}>(optionnel)</span></label>
+              <div style={{ position: 'relative' }}>
+                <input type={showPassword ? "text" : "password"} placeholder="•••••••••••••" className="profile-input" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} style={inputStyle} />
+                <div className="icon-wrapper" style={iconWrapperStyle}><Lock size={18} /></div>
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{
+                  position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                  background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 0.2s'
+                }} onMouseEnter={e => e.currentTarget.style.color='#94a3b8'} onMouseLeave={e => e.currentTarget.style.color='#64748b'}>
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              
+              {/* Indicateur de force */}
+              {formData.password && (
+                <div style={{ marginTop: '8px', animation: 'slideUp 0.2s ease-out' }}>
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                    {[1, 2, 3, 4].map(idx => (
+                      <div key={idx} style={{
+                        height: '4px', flex: 1, borderRadius: '2px',
+                        background: strength.score >= idx ? strength.color : 'rgba(255,255,255,0.1)',
+                        transition: 'all 0.3s ease'
+                      }} />
+                    ))}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: strength.color, fontWeight: 600, textAlign: 'right' }}>
+                    {strength.label}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {formData.password ? (
+              <div style={{ animation: 'slideUp 0.2s ease-out' }}>
+                <label style={labelStyle}>Confirmer le mot de passe</label>
+                <div style={{ position: 'relative' }}>
+                  <input type={showPassword ? "text" : "password"} placeholder="•••••••••••••" className="profile-input" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} style={inputStyle} />
+                  <div className="icon-wrapper" style={iconWrapperStyle}><CheckCircle size={18} /></div>
+                </div>
+              </div>
+            ) : <div />}
+          </div>
+
+          <button type="submit" disabled={loading} className="profile-btn" style={{
+            background: 'linear-gradient(135deg, #38bdf8 0%, #3b82f6 100%)', color: 'white', 
+            padding: '16px', borderRadius: '12px', border: 'none', fontWeight: 700, fontSize: '1rem', 
+            cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px',
+            opacity: loading ? 0.7 : 1, transition: 'all 0.2s ease',
+            display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px',
+            boxShadow: '0 4px 15px rgba(56, 189, 248, 0.2)'
+          }}>
+            {loading ? <Loader2 className="animate-spin" size={20} /> : (
+              <>
+                <Shield size={18} />
+                Enregistrer les modifications
+              </>
+            )}
           </button>
         </form>
       </div>
@@ -527,6 +644,7 @@ function MainAppContent() {
   const [view, setView] = useState(() => localStorage.getItem('pontage_active_view') || 'welcome'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isJarvisseOpen, setIsJarvisseOpen] = useState(false);
+  const [isJarvisseVisible, setIsJarvisseVisible] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('pontage_active_view', view);
@@ -535,22 +653,40 @@ function MainAppContent() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [notificationsCount, setNotificationsCount] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const [completedThisSession, setCompletedThisSession] = useState(false);
+  const [completedTourThisSession, setCompletedTourThisSession] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [latestPublication, setLatestPublication] = useState(null);
   const [latestReclamationPub, setLatestReclamationPub] = useState(null);
   const [latestFeedback, setLatestFeedback] = useState(null);
+
+  const latestPublicationRef = useRef(null);
+  const latestFeedbackRef = useRef(null);
+  const latestReclamationPubRef = useRef(null);
+  const dismissedNotificationsRef = useRef(new Set());
+
+  useEffect(() => { latestPublicationRef.current = latestPublication; }, [latestPublication]);
+  useEffect(() => { latestFeedbackRef.current = latestFeedback; }, [latestFeedback]);
+  useEffect(() => { latestReclamationPubRef.current = latestReclamationPub; }, [latestReclamationPub]);
+
   const [showNotifHistory, setShowNotifHistory] = useState(false);
   const [notifHistoryData, setNotifHistoryData] = useState([]);
   const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
   const [globalSecurityAlert, setGlobalSecurityAlert] = useState(null);
+  const [pendingPasswordResets, setPendingPasswordResets] = useState([]);
+  const [dismissedForceChange, setDismissedForceChange] = useState(false);
 
   useEffect(() => {
     const handleCmdK = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setIsCmdPaletteOpen(prev => !prev);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        setIsJarvisseVisible(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleCmdK);
@@ -601,12 +737,21 @@ function MainAppContent() {
   useEffect(() => {
     if (!user) return;
 
-    // Enregistrement de la première connexion sur ce navigateur pour éviter les notifications fantômes du passé
     const loginKey = `first_login_${user.email}`;
-    if (!localStorage.getItem(loginKey)) {
-      localStorage.setItem(loginKey, Date.now().toString());
+    try {
+      if (!localStorage.getItem(loginKey)) {
+        localStorage.setItem(loginKey, Date.now().toString());
+      }
+    } catch (e) {
+      console.warn('LocalStorage quota exceeded or disabled:', e);
     }
-    const firstLoginTime = parseInt(localStorage.getItem(loginKey) || '0');
+    
+    let firstLoginTime = 0;
+    try {
+      firstLoginTime = parseInt(localStorage.getItem(loginKey) || '0');
+    } catch (e) {
+      console.warn('Could not read from LocalStorage:', e);
+    }
 
     const checkData = async () => {
       try {
@@ -618,22 +763,34 @@ function MainAppContent() {
           if (pub.service_id && user.service_id && pub.service_id !== user.service_id && pub.service_name !== user.service) {
             const keyPrefix = `pub_${pub.period}_${pub.timestamp}`;
             
-            // Auto-dismiss si la publication est plus ancienne que la première connexion sur cet ordi (avec 1min de marge)
             if (pub.timestamp * 1000 < firstLoginTime - 60000) {
-              localStorage.setItem(`${keyPrefix}_dismissed`, 'true');
+              try { localStorage.setItem(`${keyPrefix}_dismissed`, 'true'); } catch(e) {}
+              dismissedNotificationsRef.current.add(pub.timestamp);
             }
 
-            if (!localStorage.getItem(`${keyPrefix}_dismissed`)) {
-              const ignoredUntil = localStorage.getItem('pub_ignored_until');
-              if (!ignoredUntil || Date.now() >= parseInt(ignoredUntil)) {
-                if (!latestPublication || latestPublication.timestamp !== pub.timestamp) {
-                  playBeep();
-                }
-                setLatestPublication(pub);
-              }
+            let isDismissed = dismissedNotificationsRef.current.has(pub.timestamp) || dismissedNotificationsRef.current.has(keyPrefix);
+            if (!isDismissed) {
+              try { isDismissed = localStorage.getItem(`${keyPrefix}_dismissed`) === 'true'; } catch(e) {}
             }
+
+            if (!isDismissed) {
+              let ignoredUntil = null;
+              try { ignoredUntil = localStorage.getItem('pub_ignored_until'); } catch(e) {}
+              if (!ignoredUntil || Date.now() >= parseInt(ignoredUntil)) {
+                if (!latestPublicationRef.current || latestPublicationRef.current.timestamp !== pub.timestamp) {
+                  playBeep();
+                  setLatestPublication(pub);
+                }
+              } else if (latestPublicationRef.current) {
+                setLatestPublication(null);
+              }
+            } else if (latestPublicationRef.current) {
+              setLatestPublication(null);
+            }
+          } else if (latestPublicationRef.current) {
+            setLatestPublication(null);
           }
-        } else {
+        } else if (latestPublicationRef.current) {
           setLatestPublication(null);
         }
 
@@ -652,10 +809,16 @@ function MainAppContent() {
             
             const keyPrefix = `fb_${fb.period}_${fb.timestamp}`;
             if (fb.timestamp * 1000 < firstLoginTime - 60000) {
-              localStorage.setItem(`${keyPrefix}_dismissed`, 'true');
+              try { localStorage.setItem(`${keyPrefix}_dismissed`, 'true'); } catch(e) {}
+              dismissedNotificationsRef.current.add(keyPrefix);
             }
             
-            if (!localStorage.getItem(`${keyPrefix}_dismissed`)) {
+            let isFbDismissed = dismissedNotificationsRef.current.has(keyPrefix);
+            if (!isFbDismissed) {
+              try { isFbDismissed = localStorage.getItem(`${keyPrefix}_dismissed`) === 'true'; } catch(e) {}
+            }
+
+            if (!isFbDismissed) {
               activeFeedbacks.push(fb);
             }
           };
@@ -667,14 +830,14 @@ function MainAppContent() {
           if (activeFeedbacks.length > 0) {
             activeFeedbacks.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             const newest = activeFeedbacks[0];
-            if (!latestFeedback || latestFeedback.timestamp !== newest.timestamp || latestFeedback.type !== newest.type) {
+            if (!latestFeedbackRef.current || latestFeedbackRef.current.timestamp !== newest.timestamp || latestFeedbackRef.current.type !== newest.type) {
               playBeep();
+              setLatestFeedback(newest);
             }
-            setLatestFeedback(newest);
-          } else {
+          } else if (latestFeedbackRef.current) {
             setLatestFeedback(null);
           }
-        } else {
+        } else if (latestFeedbackRef.current) {
           setLatestFeedback(null);
         }
 
@@ -683,24 +846,40 @@ function MainAppContent() {
         if (recPubRes?.success && recPubRes.publication) {
           const pub = recPubRes.publication;
           if (pub.service_id && user.service_id && pub.service_id !== user.service_id) {
-            const isTargeted = pub.services_cibles && (pub.services_cibles.includes('Tous') || pub.services_cibles.includes(user.service));
+            let cibles = pub.services_cibles;
+            if (typeof cibles === 'string') {
+                try { cibles = JSON.parse(cibles); } catch(e) { cibles = []; }
+            }
+            const isTargeted = cibles && Array.isArray(cibles) && (cibles.includes('Tous') || cibles.includes(user.service));
             
             if (isTargeted) {
               const keyPrefix = `rec_pub_${pub.period}_${pub.timestamp}`;
               
               if (pub.timestamp * 1000 < firstLoginTime - 60000) {
-                localStorage.setItem(`${keyPrefix}_dismissed`, 'true');
+                try { localStorage.setItem(`${keyPrefix}_dismissed`, 'true'); } catch(e) {}
+                dismissedNotificationsRef.current.add(keyPrefix);
               }
 
-              if (!localStorage.getItem(`${keyPrefix}_dismissed`)) {
-                if (!latestReclamationPub || latestReclamationPub.timestamp !== pub.timestamp) {
-                  playBeep();
-                }
-                setLatestReclamationPub(pub);
+              let isRecDismissed = dismissedNotificationsRef.current.has(keyPrefix);
+              if (!isRecDismissed) {
+                try { isRecDismissed = localStorage.getItem(`${keyPrefix}_dismissed`) === 'true'; } catch(e) {}
               }
+
+              if (!isRecDismissed) {
+                if (!latestReclamationPubRef.current || latestReclamationPubRef.current.timestamp !== pub.timestamp) {
+                  playBeep();
+                  setLatestReclamationPub(pub);
+                }
+              } else if (latestReclamationPubRef.current) {
+                setLatestReclamationPub(null);
+              }
+            } else if (latestReclamationPubRef.current) {
+              setLatestReclamationPub(null);
             }
+          } else if (latestReclamationPubRef.current) {
+            setLatestReclamationPub(null);
           }
-        } else {
+        } else if (latestReclamationPubRef.current) {
           setLatestReclamationPub(null);
         }
 
@@ -711,17 +890,18 @@ function MainAppContent() {
             try { alertData = JSON.parse(alertData); } catch(e) {}
           }
           if (alertData && alertData.type) {
-            // Ne pas afficher si c'est nous qui l'avons publié
             if (alertData.publisher_service_id !== user.service) {
-              // Vérifier si cet incident précis a été ignoré
               const dismissedKey = `alert_${alertData.timestamp}_dismissed`;
-              if (localStorage.getItem(dismissedKey) !== 'true') {
+              let isAlertDismissed = dismissedNotificationsRef.current.has(dismissedKey);
+              if (!isAlertDismissed) {
+                try { isAlertDismissed = localStorage.getItem(dismissedKey) === 'true'; } catch(e) {}
+              }
+              if (!isAlertDismissed) {
                 setGlobalSecurityAlert(alertData);
               } else {
                 setGlobalSecurityAlert(null);
               }
             } else {
-              // L'auteur ne voit pas l'écran de blocage global
               setGlobalSecurityAlert(null);
             }
           } else {
@@ -731,26 +911,43 @@ function MainAppContent() {
           setGlobalSecurityAlert(null);
         }
 
+        // --- 5. Check Pending Password Resets (Admin only) ---
+        if (user.role === 'admin' || user.role === 'super_admin') {
+          const resetRes = await apiCall('get_pending_password_resets', {}, 'GET');
+          if (resetRes?.success && resetRes.count > 0) {
+            const hasNew = resetRes.users.some(u => !pendingPasswordResets.find(p => p.email === u.email));
+            if (hasNew) playBeep();
+            setPendingPasswordResets(resetRes.users);
+          } else {
+            setPendingPasswordResets([]);
+          }
+        }
+
       } catch (e) {}
     };
 
     checkData();
-    const interval = setInterval(checkData, 5000);
+    const interval = setInterval(checkData, 30000); // 30s — réduit la charge serveur
     return () => clearInterval(interval);
-  }, [user, latestPublication, latestFeedback, latestReclamationPub]);
+  }, [user]);
 
   const handlePubIgnorer = () => {
-    localStorage.setItem('pub_ignored_until', (Date.now() + 5 * 60 * 1000).toString()); // 5 minutes
-    setLatestPublication(null);
+    if (latestPublication) {
+      try {
+        localStorage.setItem('pub_ignored_until', (Date.now() + 5 * 60 * 1000).toString()); // 5 minutes
+      } catch (e) {}
+      dismissedNotificationsRef.current.add(latestPublication.timestamp);
+      setLatestPublication(null);
+    }
   };
 
   const sendPubFeedback = async (type) => {
-    if (!latestPublication || !latestPublication.service_id) return;
+    if (!latestPublicationRef.current || !latestPublicationRef.current.service_id) return;
     try {
       await apiCall('send_pub_feedback', {
-        period: latestPublication.period,
+        period: latestPublicationRef.current.period,
         type: type,
-        publisher_service_id: latestPublication.service_id
+        publisher_service_id: latestPublicationRef.current.service_id
       }, 'POST');
     } catch (e) {
       console.error(e);
@@ -759,7 +956,11 @@ function MainAppContent() {
 
   const handleFbCompris = () => {
     if (latestFeedback) {
-      localStorage.setItem(`fb_${latestFeedback.period}_${latestFeedback.timestamp}_dismissed`, 'true');
+      const keyPrefix = `fb_${latestFeedback.period}_${latestFeedback.timestamp}`;
+      try {
+        localStorage.setItem(`${keyPrefix}_dismissed`, 'true');
+      } catch (e) {}
+      dismissedNotificationsRef.current.add(keyPrefix);
       setLatestFeedback(null);
     }
   };
@@ -767,7 +968,12 @@ function MainAppContent() {
   const handlePubAccuser = () => {
     if (latestPublication) {
       sendPubFeedback('accuse');
-      localStorage.setItem(`pub_${latestPublication.period}_${latestPublication.timestamp}_dismissed`, 'true');
+      const keyPrefix = `pub_${latestPublication.period}_${latestPublication.timestamp}`;
+      try {
+        localStorage.setItem(`${keyPrefix}_dismissed`, 'true');
+      } catch (e) {}
+      dismissedNotificationsRef.current.add(latestPublication.timestamp);
+      dismissedNotificationsRef.current.add(keyPrefix);
       setLatestPublication(null);
     }
   };
@@ -775,7 +981,12 @@ function MainAppContent() {
   const handlePubConsulter = () => {
     if (latestPublication) {
       sendPubFeedback('consulter');
-      localStorage.setItem(`pub_${latestPublication.period}_${latestPublication.timestamp}_dismissed`, 'true');
+      const keyPrefix = `pub_${latestPublication.period}_${latestPublication.timestamp}`;
+      try {
+        localStorage.setItem(`${keyPrefix}_dismissed`, 'true');
+      } catch (e) {}
+      dismissedNotificationsRef.current.add(latestPublication.timestamp);
+      dismissedNotificationsRef.current.add(keyPrefix);
       setLatestPublication(null);
     }
     if (user?.permissions?.can_view_salaries || user?.role === 'admin') {
@@ -824,16 +1035,27 @@ function MainAppContent() {
 
 
   useEffect(() => {
-    if (user && user.has_seen_onboarding === false && !completedThisSession) {
-      setShowOnboarding(true);
-    } else {
-      setShowOnboarding(false);
+    if (user) {
+      const tourLocallyDone = localStorage.getItem('tour_completed') === '1';
+      if (user.has_seen_onboarding === false && !completedThisSession) {
+        setShowOnboarding(true);
+      } else if (user.has_seen_tour === false && !completedTourThisSession && !tourLocallyDone) {
+        setShowTour(true);
+      } else {
+        setShowOnboarding(false);
+        setShowTour(false);
+        // Clean localStorage only when DB confirms it's saved
+        if (user.has_seen_tour === true) {
+          localStorage.removeItem('tour_completed');
+        }
+      }
     }
-  }, [user, completedThisSession]);
+  }, [user, completedThisSession, completedTourThisSession]);
 
   const handleCompleteOnboarding = async () => {
     setShowOnboarding(false); // Cacher immédiatement
     setCompletedThisSession(true); // Empêcher la réapparition
+    setShowTour(true); // Déclencher le tour
     try {
       apiCall('complete_onboarding', {}, 'POST'); // Ne pas bloquer l'UI
       if (refreshUser) refreshUser();
@@ -905,15 +1127,23 @@ function MainAppContent() {
 
 
   useEffect(() => {
-    if (loading) return; // Ne pas rediriger pendant la vérification de session
+    if (loading) return; 
     if (!user) {
       setView('welcome');
       setIsSidebarOpen(false);
     } else {
       if (user.workspace_type === 'AGENT' && !user.is_impersonated) {
-        setView(prev => (prev === 'login' || prev === 'register' || prev === 'welcome') ? 'kiosk' : prev);
+        setView(prev => {
+          const stored = localStorage.getItem('pontage_active_view');
+          if (stored && stored !== 'login' && stored !== 'register' && stored !== 'welcome') return stored;
+          return (prev === 'login' || prev === 'register' || prev === 'welcome') ? 'home' : prev;
+        });
       } else {
-        setView(prev => (prev === 'login' || prev === 'register' || prev === 'welcome') ? 'home' : prev);
+        setView(prev => {
+          const stored = localStorage.getItem('pontage_active_view');
+          if (stored && stored !== 'login' && stored !== 'register' && stored !== 'welcome') return stored;
+          return (prev === 'login' || prev === 'register' || prev === 'welcome') ? 'home' : prev;
+        });
       }
       setIsSidebarOpen(false);
     }
@@ -942,13 +1172,111 @@ function MainAppContent() {
       } catch(e) {}
     };
     fetchNotifs();
-    const int = setInterval(fetchNotifs, 5000); // 5 secondes
+    const int = setInterval(fetchNotifs, 30000); // 30s — réduit la charge serveur
     return () => { isMounted = false; clearInterval(int); };
   }, [user]);
 
   if (loading) {
-    // Un simple fond vide pour ne pas faire "flasher" l'écran d'accueil avant de savoir si l'utilisateur est connecté
-    return <div style={{ minHeight: '100vh', background: 'var(--bg)' }} />;
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0b1220 0%, #0f1a2e 50%, #0b1220 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '32px',
+        userSelect: 'none'
+      }}>
+        <style>{`
+          @keyframes elysium-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.97); }
+          }
+          @keyframes elysium-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          @keyframes elysium-fadein {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes elysium-shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+          }
+        `}</style>
+
+        {/* Logo ELYSIUM */}
+        <div style={{ animation: 'elysium-fadein 0.6s ease-out both', textAlign: 'center' }}>
+          <h1 style={{
+            fontSize: 'clamp(3rem, 8vw, 6rem)',
+            fontWeight: 900,
+            margin: 0,
+            letterSpacing: '8px',
+            background: 'linear-gradient(90deg, #ffffff 0%, #38bdf8 30%, #a855f7 60%, #f97316 80%, #ffffff 100%)',
+            backgroundSize: '200% auto',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            animation: 'elysium-shimmer 3s linear infinite, elysium-pulse 2s ease-in-out infinite'
+          }}>
+            ELYSIUM
+          </h1>
+          <p style={{
+            color: '#64748b',
+            fontSize: '0.85rem',
+            letterSpacing: '4px',
+            textTransform: 'uppercase',
+            margin: '8px 0 0 0',
+            animation: 'elysium-fadein 0.6s ease-out 0.2s both'
+          }}>
+            Gestion du Personnel
+          </p>
+        </div>
+
+        {/* Spinner */}
+        <div style={{ animation: 'elysium-fadein 0.6s ease-out 0.3s both', position: 'relative', width: '56px', height: '56px' }}>
+          {/* Cercle extérieur */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            borderRadius: '50%',
+            border: '3px solid transparent',
+            borderTopColor: '#38bdf8',
+            borderRightColor: '#a855f7',
+            animation: 'elysium-spin 1s linear infinite'
+          }} />
+          {/* Cercle intérieur */}
+          <div style={{
+            position: 'absolute', inset: '10px',
+            borderRadius: '50%',
+            border: '2px solid transparent',
+            borderTopColor: '#f97316',
+            animation: 'elysium-spin 0.7s linear infinite reverse'
+          }} />
+          {/* Point central */}
+          <div style={{
+            position: 'absolute',
+            inset: '22px',
+            borderRadius: '50%',
+            background: '#38bdf8',
+            animation: 'elysium-pulse 1s ease-in-out infinite'
+          }} />
+        </div>
+
+        {/* Texte de chargement */}
+        <p style={{
+          color: '#475569',
+          fontSize: '0.8rem',
+          letterSpacing: '2px',
+          textTransform: 'uppercase',
+          margin: 0,
+          animation: 'elysium-fadein 0.6s ease-out 0.5s both'
+        }}>
+          Chargement en cours...
+        </p>
+      </div>
+    );
   }
 
   // ──── PORTAIL AGENT (accessible sans connexion admin) ────
@@ -989,10 +1317,7 @@ function MainAppContent() {
 
 
 
-  // Si on est en mode Kiosque complet (sans sidebar)
-  if (view === 'kiosk') {
-    return <Kiosk setView={setView} />;
-  }
+
 
   // Rendu de l'application connectée avec Sidebar
   return (
@@ -1060,7 +1385,105 @@ function MainAppContent() {
         </div>
       )}
 
+      {/* ─── BANNIÈRE UTILISATEUR : Mot de passe réinitialisé ──────────────── */}
+      {user?.force_password_change && !dismissedForceChange && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+          background: 'linear-gradient(135deg, #b91c1c, #7f1d1d)',
+          color: 'white', padding: '18px 24px', borderRadius: '14px',
+          zIndex: 99999, boxShadow: '0 20px 50px -10px rgba(0,0,0,0.6), 0 0 25px rgba(239,68,68,0.3)',
+          display: 'flex', alignItems: 'center', gap: '16px',
+          maxWidth: '92%', width: '520px',
+          animation: 'slideUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards'
+        }}>
+          <ShieldAlert size={34} color="#fca5a5" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', fontWeight: '800', letterSpacing: '0.3px' }}>
+              🔑 Mot de passe réinitialisé par votre administrateur
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.82rem', lineHeight: '1.5', color: '#fecaca' }}>
+              Votre demande a bien été traitée. Pour votre sécurité, cliquez sur l'icône{' '}
+              <strong style={{ color: 'white' }}>⚙️ Paramètres</strong> en haut à droite pour définir votre propre mot de passe définitif.
+            </p>
+          </div>
+          <button
+            onClick={() => setDismissedForceChange(true)}
+            style={{
+              background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)',
+              color: 'white', padding: '8px 14px', borderRadius: '8px',
+              cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem',
+              flexShrink: 0, transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+          >
+            Compris
+          </button>
+        </div>
+      )}
+
+      {/* ─── TOAST ADMIN : Demandes de réinitialisation en attente ─────────── */}
+      {pendingPasswordResets.length > 0 && (user?.role === 'admin' || user?.role === 'super_admin') && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px', right: '24px',
+          background: 'rgba(15, 23, 42, 0.96)',
+          border: '1px solid rgba(245, 158, 11, 0.6)',
+          color: 'white', padding: '18px 20px', borderRadius: '14px',
+          zIndex: 99999, boxShadow: '0 20px 50px -10px rgba(0,0,0,0.6), 0 0 25px rgba(245,158,11,0.2)',
+          display: 'flex', alignItems: 'flex-start', gap: '14px', maxWidth: '340px',
+          animation: 'slideInRight 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards'
+        }}>
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.15)', color: '#fcd34d',
+            padding: '10px', borderRadius: '50%', display: 'flex', flexShrink: 0,
+            animation: 'pulse-ring 2s ease-in-out infinite'
+          }}>
+            <ShieldAlert size={22} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ margin: '0 0 5px 0', fontSize: '0.95rem', fontWeight: '800', color: '#fcd34d' }}>
+              Demande de réinitialisation
+            </h4>
+            <p style={{ margin: '0 0 10px 0', fontSize: '0.82rem', color: '#94a3b8', lineHeight: '1.5' }}>
+              <strong style={{ color: '#e2e8f0' }}>{pendingPasswordResets.length}</strong> utilisateur(s) attend(ent) une réinitialisation de mot de passe.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '10px' }}>
+              {pendingPasswordResets.slice(0, 3).map(u => (
+                <span key={u.email} style={{ fontSize: '0.78rem', color: '#cbd5e1', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: '6px' }}>
+                  👤 {u.name} ({u.email})
+                </span>
+              ))}
+              {pendingPasswordResets.length > 3 && (
+                <span style={{ fontSize: '0.78rem', color: '#64748b' }}>+{pendingPasswordResets.length - 3} autre(s)…</span>
+              )}
+            </div>
+            <button
+              onClick={() => setView('services')}
+              style={{
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                border: 'none', color: 'white', padding: '8px 14px',
+                borderRadius: '8px', cursor: 'pointer', fontWeight: '700',
+                fontSize: '0.82rem', width: '100%'
+              }}
+            >
+              Gérer dans Gestion des Services
+            </button>
+          </div>
+        </div>
+      )}
+
       {showOnboarding && <OnboardingModal onComplete={handleCompleteOnboarding} />}
+      {showTour && (
+        <ProductTour 
+          onComplete={() => {
+            setShowTour(false);
+            setCompletedTourThisSession(true);
+            if (refreshUser) refreshUser();
+          }} 
+        />
+      )}
 
       {isSidebarOpen && (
         <div 
@@ -1082,7 +1505,7 @@ function MainAppContent() {
         </div>
 
         <nav className="nav-links">
-          <div className={`nav-link ${view === 'home' ? 'active' : ''}`} onClick={() => { setView('home'); setIsSidebarOpen(false); }}>
+          <div data-tour="home" className={`nav-link ${view === 'home' ? 'active' : ''}`} onClick={() => { setView('home'); setIsSidebarOpen(false); }}>
             <HomeIcon size={18} />
             <span>Accueil</span>
           </div>
@@ -1092,12 +1515,12 @@ function MainAppContent() {
                 { id: 'company_config', icon: Building2, label: 'Configuration Entreprise' },
                 { id: 'verification', icon: CheckCircle, label: 'Traitement du pointage' },
                 { id: 'payroll', icon: ReceiptText, label: 'État de Paie' },
+                { id: 'facturation', icon: ReceiptText, label: 'Facturation Clients' },
                 { id: 'kiosk', icon: Clock, label: 'Mode Kiosque' },
                 { id: 'salaries', icon: DollarSign, label: 'Grille Salariale' },
                 { id: 'calcul_salaires', icon: DollarSign, label: 'Calcul des Salaires' },
                 { id: 'fluctuation', icon: TrendingUp, label: 'Fluctuation Salariale' },
-                { id: 'archives', icon: Archive, label: 'Archives Rapports' },
-                { id: 'analytics', icon: BarChart3, label: 'Tableau de Bord Analytique' },
+                { id: 'archives', icon: Archive, label: 'Archives Pointage' },
                 { id: 'services', icon: ShieldAlert, label: 'Gestion des Services' },
                 { id: 'employees', icon: Contact, label: 'Gestion des Employés' },
                 { id: 'leave', icon: Plane, label: 'Gestion des Congés' },
@@ -1105,11 +1528,8 @@ function MainAppContent() {
                 { id: 'contracts', icon: Briefcase, label: 'Gestion des Contrats' },
                 { id: 'registry', icon: Database, label: 'Registre Général' },
                 { id: 'recrutement', icon: Users, label: 'Espace e-Recrutement' },
-                { id: 'print_attendance', icon: Printer, label: 'Imprimer le Pointage' },
                 { id: 'print_payroll', icon: FileText, label: 'Imprimer Fiche de Paie' },
                 { id: 'gps', icon: MapPin, label: 'Pointage GPS' },
-                { id: 'new_mep', icon: PlusCircle, label: 'Nouvelle MEP' },
-                { id: 'materiel', icon: Package, label: 'Suivi du Matériel' },
                 { id: 'reclamation_view', icon: MessageSquareWarning, label: 'Réclamation Paie' },
                 // --- Modules Secrétariat ---
                 { id: 'registre_visiteurs', icon: Users, label: 'Registre des Visiteurs' },
@@ -1119,10 +1539,10 @@ function MainAppContent() {
                 { id: 'reflexe_securite', icon: ShieldAlert, label: 'Réflexe Sécurité' },
               ].map(mod => {
                 const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-                if (hasPermission(mod.id) && (isAdmin || !hasWritePermission(mod.id))) {
+                if (hasPermission(mod.id)) {
                   const Icon = mod.icon;
                   return (
-                    <div key={mod.id} className={`nav-link ${view === mod.id ? 'active' : ''}`} onClick={() => { setView(mod.id); setIsSidebarOpen(false); }}>
+                    <div data-tour={mod.id === 'verification' || mod.id === 'payroll' ? mod.id : undefined} key={mod.id} className={`nav-link ${view === mod.id ? 'active' : ''}`} onClick={() => { setView(mod.id); setIsSidebarOpen(false); }}>
                       <Icon size={18} />
                       <span>{mod.label}</span>
                     </div>
@@ -1131,15 +1551,13 @@ function MainAppContent() {
                 return null;
               })}
 
+          {(user?.role === 'admin' || user?.role === 'super_admin') && (
           <div className={`nav-link ${view === 'settings' ? 'active' : ''}`} onClick={() => { setView('settings'); setIsSidebarOpen(false); }}>
             <Settings size={18} />
             <span>Paramètres</span>
           </div>
+          )}
 
-          <div className={`nav-link ${view === 'private_inbox' ? 'active' : ''}`} onClick={() => { setView('private_inbox'); setIsSidebarOpen(false); }} style={{ borderLeft: '2px solid #06b6d4' }}>
-            <Inbox size={18} style={{ color: '#06b6d4' }} />
-            <span style={{ color: '#06b6d4', fontWeight: 700 }}>Boîte de réception</span>
-          </div>
 
           {hasPermission('services') && (
             <div className={`nav-link ${view === 'services' ? 'active' : ''}`} onClick={() => { setView('services'); setIsSidebarOpen(false); }} style={{ borderLeft: '2px solid #38bdf8' }}>
@@ -1174,9 +1592,12 @@ function MainAppContent() {
 
       </aside>
 
-      <main className="main-content" style={(view === 'fluctuation' || view === 'payslip_print' || view === 'communication') ? { padding: 0 } : {}}>
+      <main className="main-content">
         {view === 'home' && (
           <header style={{ 
+            position: 'sticky',
+            top: '-24px',
+            zIndex: 100,
             margin: '-24px -24px 24px -24px', 
             display: 'flex', 
             alignItems: 'center', 
@@ -1191,6 +1612,7 @@ function MainAppContent() {
             {/* Left section: Menu */}
             <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
               <button 
+                data-tour="menu"
                 className="btn btn-secondary" 
                 onClick={() => setIsSidebarOpen(true)} 
                 style={{ 
@@ -1208,8 +1630,8 @@ function MainAppContent() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'; e.currentTarget.style.transform = 'translateY(0)'; }}
               >
-                <Menu size={20} style={{ color: '#38bdf8' }} />
-                <span style={{ fontWeight: 600, fontSize: '0.9rem', letterSpacing: '0.5px' }}>Menu</span>
+                <Menu size={20} style={{ color: 'white' }} />
+                <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem', letterSpacing: '0.5px' }}>Menu</span>
               </button>
             </div>
             
@@ -1233,6 +1655,7 @@ function MainAppContent() {
               
               <div style={{ display: 'flex', gap: '15px' }}>
                 <button 
+                  data-tour="quick_search"
                   title="Recherche Rapide (Ctrl+K)"
                   onClick={() => setIsCmdPaletteOpen(true)}
                   style={{ 
@@ -1251,11 +1674,14 @@ function MainAppContent() {
                   }}
                 >
                   <Search size={18} />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Recherche...</span>
-                  <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginLeft: '5px' }}>Ctrl+K</span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'white' }}>Recherche...</span>
+                  <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginLeft: '5px', color: 'white' }}>Ctrl+K</span>
                 </button>
+<ThemeToggle />
+
 
                 <button 
+                  data-tour="jarvisse"
                   title="Assistant IA Jarvisse"
                   onClick={() => setIsJarvisseOpen(!isJarvisseOpen)}
                   style={{ 
@@ -1277,6 +1703,7 @@ function MainAppContent() {
                 </button>
 
                 <button 
+                  data-tour="messages"
                   title="Historique des Notifications"
                   onClick={async () => {
                     setShowNotifHistory(true);
@@ -1367,7 +1794,7 @@ function MainAppContent() {
                       flexShrink: 0
                     }} 
                   />
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Messages</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, whiteSpace: 'nowrap', color: 'white' }}>Messages</span>
                   {notificationsCount > 0 && (
                     <span style={{
                       background: 'linear-gradient(135deg, #ef4444, #dc2626)',
@@ -1391,7 +1818,7 @@ function MainAppContent() {
             </div>
 
             {/* Right section: Profile Widget */}
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px' }}>
+            <div data-tour="settings" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingRight: '24px', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1496,11 +1923,17 @@ function MainAppContent() {
         )}
 
         {/* Global floating Close Button for sections */}
-        {view !== 'home' && view !== 'fluctuation' && view !== 'payslip_print' && view !== 'communication' && (
+        {view !== 'home' && view !== 'fluctuation' && view !== 'payslip_print' && view !== 'communication' && view !== 'company_config' && (
           <button
             onClick={() => {
-              if (view === 'verification' && localStorage.getItem('pontage_payroll_activeSite')) {
-                setView('payroll');
+              if (view === 'verification') {
+                const sName = (user?.service || '').toLowerCase();
+                const isComptaRH = user?.role === 'admin' || user?.role === 'super_admin' || sName.includes('compta') || sName.includes('rh') || sName.includes('ressources humaines') || (user?.permissions && user.permissions.can_view_salaries);
+                if (localStorage.getItem('pontage_payroll_activeSite') && hasPermission('payroll') && isComptaRH) {
+                  setView('payroll');
+                } else {
+                  setView('home');
+                }
               } else {
                 setView('home');
               }
@@ -1534,79 +1967,50 @@ function MainAppContent() {
 
         {view === 'home' && <Home setView={setView} hasPermission={hasPermission} user={user} />}
         {view === 'dashboard' && <Dashboard />}
-        {view === 'verification' && <Dashboard isVerificationMode={true} onBack={() => setView('payroll')} />}
+        {view === 'verification' && <Dashboard isVerificationMode={true} onBack={() => { 
+          const sName = (user?.service || '').toLowerCase();
+          const isComptaRH = user?.role === 'admin' || user?.role === 'super_admin' || sName.includes('compta') || sName.includes('rh') || sName.includes('ressources humaines') || (user?.permissions && user.permissions.can_view_salaries);
+          if (hasPermission('payroll') && isComptaRH) { 
+            setView('payroll'); 
+          } else { 
+            setView('home'); 
+          } 
+        }} />}
         {view === 'employees' && <EmployeesView />}
+        {view === 'suivi_personnel' && <PersonnelTrackingView />}
         {view === 'payroll' && <PayrollView setView={setView} />}
-        {view === 'salaries' && <Salaries />}
-        {view === 'calcul_salaires' && <Salaries />}
+        {view === 'facturation' && <ContratsClientsModule onClose={() => setView('home')} />}
+        {view === 'salaries' && <Salaries setView={setView} />}
+        {view === 'calcul_salaires' && <Salaries setView={setView} />}
         {view === 'payslip_print' && <PayslipPrintView onClose={() => setView('home')} />}
         {view === 'fluctuation' && <FluctuationView onClose={() => setView('home')} />}
+        {view === 'grille_salariale' && <GrilleSalarialeView onClose={() => setView('home')} />}
         {view === 'company_config' && <CompanyConfigView onClose={() => setView('home')} />}
-        {view === 'archives' && <Archives onSwitchToCurrent={() => setView('dashboard')} />}
+        {view === 'archives' && <ArchivesPointage setView={setView} />}
         {view === 'communication' && <Communication onClose={() => setView('home')} />}
         {view === 'reclamations' && <ReclamationsView />}
-        {view === 'settings' && <SettingsView />}
+        {view === 'settings' && (user?.role === 'admin' || user?.role === 'super_admin') && <SettingsView />}
         {view === 'services' && <ServiceManagement />}
         {view === 'private_inbox' && <BoiteReceptionAdmin />}
         {view === 'permissions' && <PermissionsManager />}
         {view === 'subscription' && <Subscription setView={setView} />}
         {view === 'analytics' && <AnalyticsDashboard goBack={() => setView('home')} />}
         {view === 'portal_admin' && <PortalAdminView />}
+        {view === 'correction_admin' && <CorrectionAdminView />}
         {view === 'leave_admin' && <LeaveManagement />}
         {view === 'permissions_absence' && <PermissionsAbsence />}
         {view === 'contracts' && <ContractsView />}
         {view === 'registry' && <PersonnelRegistry />}
         {view === 'registre_visiteurs' && <RegistreVisiteurs />}
-        {view === 'annuaire_statut' && <AnnuaireStatut />}
         {view === 'pointage_courriers' && <PointageCourriers />}
-        {view === 'gestion_salles' && <GestionSalles />}
-        {view === 'reflexe_securite' && <ReflexeSecurite setView={setView} />}
-        {view === 'gestion_appels' && <GestionAppels />}
         {view === 'gestion_flotte' && <GestionFlotte />}
-        {view === 'badges_provisoires' && <BadgesProvisoires />}
-        {view === 'fournitures_bureau' && <FournituresBureau />}
-        {view === 'accueil_vip' && <AccueilVIP />}
         {view === 'alertes_securite' && <AlertesSecurite />}
-        {view === 'dg_vision' && <DGVision />}
-        {view === 'dg_rapports' && <DGRapports />}
-        {view === 'dg_validation' && <DGValidations />}
         {view === 'dg_audit' && <DGAudit />}
-        {view === 'dg_megaphone' && <DGMegaphone />}
-        {view === 'dg_predictive' && <DGPredictive />}
-        {view === 'dg_okr' && <DGOKR />}
-        {view === 'dg_litiges' && <DGLitiges />}
-        {view === 'dg_organigramme' && <DGOrganigramme />}
-        {view === 'dg_agenda' && <DGAgenda />}
-        {view === 'dg_pv' && <DGPV />}
-        {view === 'dg_veille' && <DGVeille />}
-        {view === 'pdg_souverain' && <PDGSouverain />}
-        {view === 'pdg_bilan' && <PDGBilan />}
-        {view === 'pdg_signature' && <PDGSignature />}
-        {view === 'pdg_sites' && <PDGSites />}
-        {view === 'pdg_acces_maitre' && <PDGAccesMaitre />}
-        {view === 'pdg_benchmark' && <PDGBenchmark />}
-        {view === 'pdg_coffre' && <PDGCoffre />}
-        {view === 'pdg_expansion' && <PDGExpansion />}
-        {view === 'pdg_actionnaires' && <PDGActionnaires />}
-        {view === 'pdg_menaces' && <PDGMenaces />}
-        {view === 'pc_radar' && <PCRadar />}
-        {view === 'pc_alertes' && <PCAlertes />}
-        {view === 'pc_cctv' && <PCCCTV />}
-        {view === 'pc_dispatch' && <PCDispatch />}
-        {view === 'pc_comms' && <PCComms />}
+
         {view === 'pc_main_courante' && <PCMainCourante />}
-        {view === 'pc_tracking' && <PCTracking />}
-        {view === 'ctrl_feuille' && <CtrlFeuille />}
-        {view === 'ctrl_audit' && <CtrlAudit />}
+
         {view === 'ctrl_rapport' && <CtrlRapport />}
-        {view === 'ctrl_dashboard' && <CtrlDashboard />}
-        {view === 'ctrl_messagerie' && <CtrlMessagerie />}
-        {view === 'ctrl_carnet' && <CtrlCarnet />}
-        {view === 'ctrl_tracking' && <CtrlTracking onClose={() => setView('home')} />}
-        {view === 'ctrl_dispatch' && <CtrlDispatch onClose={() => setView('home')} />}
-        {view === 'ctrl_flotte' && <CtrlFlotte onClose={() => setView('home')} />}
-        {view === 'ctrl_rondes' && <CtrlRondes onClose={() => setView('home')} />}
-        {view === 'ctrl_notation' && <CtrlNotation onClose={() => setView('home')} />}
+
       </main>
 
       {showProfileModal && (
@@ -1672,8 +2076,11 @@ function MainAppContent() {
             animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Archive size={24} style={{ color: '#10b981' }}/> Historique
+              <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.5rem', display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.8, fontWeight: 'bold', color: '#10b981', marginBottom: '8px' }}>JARVIS ASSISTANT</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Archive size={24} style={{ color: '#10b981' }}/> Historique des Notifications
+                </div>
               </h2>
               <button onClick={() => setShowNotifHistory(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
                 <X size={24} />
@@ -1836,7 +2243,7 @@ function MainAppContent() {
             }}>Nouveau Pointage !</h2>
             
             <p style={{ color: '#94a3b8', marginBottom: '32px', fontSize: '1.05rem', lineHeight: 1.6 }}>
-              Le <strong style={{ color: '#e2e8f0' }}>{latestPublication.service_name}</strong> vient de publier le pointage pour la période <strong style={{ color: '#38bdf8' }}>{formatPeriodCycle(latestPublication.period)}</strong>.
+              Le service <strong style={{ color: '#e2e8f0' }}>{latestPublication.service_name}</strong> vient de publier le pointage pour la période <strong style={{ color: '#38bdf8' }}>{formatPeriodCycle(latestPublication.period)}</strong>.
             </p>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1929,16 +2336,149 @@ function MainAppContent() {
       )}
 
       {/* JARVISSE AI ASSISTANT */}
-      <JarvisseChat user={user} isOpen={isJarvisseOpen} setIsOpen={setIsJarvisseOpen} hideFloatingButton={view === 'home'} />
+      <JarvisseChat user={user} isOpen={isJarvisseOpen} setIsOpen={setIsJarvisseOpen} hideFloatingButton={!isJarvisseVisible} />
+
+      {/* NOTIFICATIONS DE FERMETURE DE SITES */}
+      <SiteClosureNotifier />
 
     </div>
   );
 }
 
+
+const ThemeToggle = () => {
+  const [theme, setTheme] = useState(() => localStorage.getItem('pontage_theme') || 'modern');
+  const [showResetMenu, setShowResetMenu] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowResetMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    const handleThemeUpdate = () => {
+      const saved = localStorage.getItem('pontage_theme');
+      if (saved) setTheme(saved);
+    };
+    window.addEventListener('pontage_theme_updated', handleThemeUpdate);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('pontage_theme_updated', handleThemeUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (theme === 'modern') {
+      document.body.removeAttribute('data-theme');
+    } else {
+      document.body.setAttribute('data-theme', theme);
+    }
+  }, [theme]);
+  
+  const resetTheme = () => {
+    setTheme('modern');
+    localStorage.setItem('pontage_theme', 'modern');
+    setShowResetMenu(false);
+    if (window.forceSyncSettings) {
+      window.forceSyncSettings();
+    }
+  };
+
+  const toggleTheme = () => {
+    let newTheme = 'modern';
+    if (theme === 'modern') newTheme = 'dark-sober';
+    else if (theme === 'dark-sober') newTheme = 'dark-amoled';
+    else if (theme === 'dark-amoled') newTheme = 'cyberpunk';
+    else if (theme === 'cyberpunk') newTheme = 'modern';
+    
+    setTheme(newTheme);
+    localStorage.setItem('pontage_theme', newTheme);
+    if (window.forceSyncSettings) {
+      window.forceSyncSettings();
+    }
+  };
+
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    setShowResetMenu(true);
+  };
+
+  return (
+    <div style={{ position: 'relative' }} ref={menuRef}>
+      <button 
+        title="Changer de thème (Clic droit pour réinitialiser)"
+        onClick={toggleTheme}
+        onContextMenu={handleContextMenu}
+        style={{ 
+          position: 'relative', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid white',
+          borderRadius: '50%', width: '42px', height: '42px', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', cursor: 'pointer', color: '#94a3b8',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+        onMouseEnter={(e) => { 
+          e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+          e.currentTarget.style.transform = 'scale(1.05)';
+        }}
+        onMouseLeave={(e) => { 
+          e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+      >
+        {theme === 'classic' ? <Moon size={20} /> : <Sun size={20} />}
+      </button>
+
+      {showResetMenu && (
+        <div style={{
+          position: 'absolute',
+          top: '50px',
+          right: '0',
+          background: 'rgba(15, 23, 42, 0.95)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '12px',
+          padding: '8px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+          zIndex: 1000,
+          width: 'max-content'
+        }}>
+          <button 
+            onClick={resetTheme}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#f8fafc',
+              padding: '10px 15px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              borderRadius: '8px',
+              transition: 'background 0.2s',
+              width: '100%',
+              textAlign: 'left'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <RefreshCw size={16} style={{ color: '#38bdf8' }} />
+            Réinitialiser au thème par défaut
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <AuthProvider>
-      <MainAppContent />
+      <Suspense fallback={<PageLoader />}>
+        <MainAppContent />
+      </Suspense>
     </AuthProvider>
   );
 }

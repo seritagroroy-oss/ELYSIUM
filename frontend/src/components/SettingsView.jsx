@@ -284,6 +284,10 @@ export default function SettingsView() {
     localStorage.removeItem('pontage_releve_cell_bg');
     localStorage.removeItem('pontage_rel_text_color');
     localStorage.removeItem('pontage_releve_name_bg');
+    localStorage.removeItem('pontage_cp_bg');
+    localStorage.removeItem('pontage_cp_text');
+    localStorage.removeItem('pontage_entrant_bg');
+    localStorage.removeItem('pontage_entrant_text');
     setTheme(t => t); // force re-render
   };
 
@@ -304,7 +308,7 @@ export default function SettingsView() {
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
-          <Loader2 className="animate-spin" size={32} style={{ color: 'var(--b)' }} />
+          <div className="loader-pulsar"><div className="loader-pulsar-inner"></div></div>
         </div>
       ) : (
         <>
@@ -625,7 +629,7 @@ export default function SettingsView() {
 
 
           {/* Apparence & Interface */}
-          <div className="glass-panel" style={{ marginTop: '24px' }}>
+          <div className="glass-panel" style={{ marginTop: '24px', display: 'none' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionApparence ? '8px' : 0 }}>
               <h3 style={{ fontSize: '1.15rem', margin: 0 }}>🎨 Apparence &amp; Interface</h3>
               <button
@@ -877,311 +881,13 @@ export default function SettingsView() {
             )}
           </div>
 
-          {/* === SECTION COMPTABILITÉ UNIQUEMENT === */}
-          {isComptable && (
-          <div className="glass-panel" style={{ marginTop: '24px', border: '1px solid rgba(34,197,94,0.2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionComptable ? '8px' : 0 }}>
-              <h3 style={{ fontSize: '1.15rem', margin: 0 }}>🧮 Préférences de l'Espace Comptabilité</h3>
-              <button
-                onClick={() => setShowSectionComptable(v => !v)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px' }}
-              >
-                {showSectionComptable ? <EyeOff size={16} /> : <Eye size={16} />}
-                <span>{showSectionComptable ? 'Masquer' : 'Afficher'}</span>
-              </button>
-            </div>
-            {showSectionComptable && (
-              <>
-                <p className="subtitle" style={{ marginBottom: '24px' }}>
-                  Configurez les paramètres de calcul de paie, les taux sociaux et les préférences d'export pour votre espace comptabilité.
-                </p>
-
-                {/* ---- 1. Mode de Calcul Fiscal ---- */}
-                <div style={{ marginBottom: '28px' }}>
-                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>📐 Mode de Calcul Fiscal</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>Régime fiscal par défaut</label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {[
-                          { id: 'simplifie', label: '⚡ ITS Simplifié (1.2%)', desc: 'Calcul rapide, taux forfaitaire' },
-                          { id: 'reel_ci', label: '🏛️ IGR Réel Côte d\'Ivoire', desc: 'Barème progressif IS+CN+IGR' }
-                        ].map(opt => (
-                          <label key={opt.id} style={{
-                            display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s',
-                            background: comptTaxMode === opt.id ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.02)',
-                            border: `1px solid ${comptTaxMode === opt.id ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.05)'}`,
-                          }}>
-                            <input type="radio" name="comptTaxMode" value={opt.id} checked={comptTaxMode === opt.id} onChange={() => setComptTaxMode(opt.id)} style={{ accentColor: '#22c55e', marginTop: '2px' }} />
-                            <div>
-                              <span style={{ color: comptTaxMode === opt.id ? 'white' : 'var(--muted)', fontSize: '0.9rem', fontWeight: 600, display: 'block' }}>{opt.label}</span>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{opt.desc}</span>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>🗓️ Début de l'exercice fiscal</label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {[
-                          { id: 'jan', label: 'Janvier' }, { id: 'avr', label: 'Avril' },
-                          { id: 'jul', label: 'Juillet' }, { id: 'oct', label: 'Octobre' }
-                        ].map(m => (
-                          <button key={m.id} onClick={() => setComptFiscalYear(m.id)} style={{
-                            flex: '1 1 calc(50% - 6px)', padding: '10px 8px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.85rem', fontWeight: comptFiscalYear === m.id ? 700 : 400,
-                            background: comptFiscalYear === m.id ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.03)',
-                            border: `2px solid ${comptFiscalYear === m.id ? '#22c55e' : 'var(--border)'}`,
-                            color: comptFiscalYear === m.id ? '#22c55e' : 'var(--muted)'
-                          }}>{m.label}</button>
-                        ))}
-                      </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '10px', fontStyle: 'italic' }}>Utilisé pour les rapports DISA et bilans annuels.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ---- 2. Paie & Calculs ---- */}
-                <div style={{ marginBottom: '28px' }}>
-                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>💰 Paie & Calculs</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>⏱️ Taux Heures Supplémentaires (%)</label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ fontSize: '0.8rem', width: '70px', color: 'var(--muted)' }}>Jour</span>
-                          <input type="range" min="0" max="50" step="5" value={comptHsJour} onChange={e => setComptHsJour(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#22c55e' }} />
-                          <span style={{ fontSize: '0.85rem', fontWeight: 700, width: '40px' }}>+{comptHsJour}%</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ fontSize: '0.8rem', width: '70px', color: 'var(--muted)' }}>Nuit</span>
-                          <input type="range" min="0" max="100" step="5" value={comptHsNuit} onChange={e => setComptHsNuit(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#22c55e' }} />
-                          <span style={{ fontSize: '0.85rem', fontWeight: 700, width: '40px' }}>+{comptHsNuit}%</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ fontSize: '0.8rem', width: '70px', color: 'var(--muted)' }}>Dimanche</span>
-                          <input type="range" min="0" max="150" step="5" value={comptHsDimanche} onChange={e => setComptHsDimanche(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#22c55e' }} />
-                          <span style={{ fontSize: '0.85rem', fontWeight: 700, width: '40px' }}>+{comptHsDimanche}%</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ fontSize: '0.8rem', width: '70px', color: 'var(--muted)' }}>Férié</span>
-                          <input type="range" min="0" max="200" step="5" value={comptHsFerie} onChange={e => setComptHsFerie(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#22c55e' }} />
-                          <span style={{ fontSize: '0.85rem', fontWeight: 700, width: '40px' }}>+{comptHsFerie}%</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>👴 Prime d'ancienneté</label>
-                        <div onClick={() => setComptPrimeAnciennete(!comptPrimeAnciennete)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-                          <span style={{ fontSize: '0.9rem', color: comptPrimeAnciennete ? 'white' : 'var(--muted)' }}>{comptPrimeAnciennete ? 'Activée (+2%/an)' : 'Désactivée'}</span>
-                          <div style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptPrimeAnciennete ? '#22c55e' : 'var(--border)', padding: '2px' }}>
-                            <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptPrimeAnciennete ? 'translateX(18px)' : 'translateX(0)' }} />
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>💸 Seuil minimal de versement</label>
-                        <input type="number" className="form-input" value={comptSeuilMinimal} onChange={e => setComptSeuilMinimal(parseInt(e.target.value) || 0)} style={{ width: '100%', marginBottom: '8px' }} />
-                        <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Alerte si net &lt; {comptSeuilMinimal} XOF</span>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>📆 Jour de virement</label>
-                        <input type="number" min="1" max="31" className="form-input" value={comptJourVirement} onChange={e => setComptJourVirement(parseInt(e.target.value) || 1)} style={{ width: '100%', marginBottom: '8px' }} />
-                        <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Sera le {comptJourVirement} du mois</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ---- 3. Taux Cotisations Sociales ---- */}
-                <div style={{ marginBottom: '28px' }}>
-                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>🏦 Taux des Cotisations Sociales (CNPS)</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>👤 CNPS Salarial (%)</label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <input type="range" min="3" max="15" step="0.1" value={comptCnpsSalarial}
-                          onChange={e => setComptCnpsSalarial(parseFloat(e.target.value))}
-                          style={{ flex: 1, accentColor: '#22c55e' }} />
-                        <span style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, minWidth: '60px', textAlign: 'center' }}>{comptCnpsSalarial.toFixed(1)}%</span>
-                      </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Taux légal actuel : 6.3%</p>
-                    </div>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>🏢 CNPS Patronal (%)</label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <input type="range" min="5" max="20" step="0.1" value={comptCnpsPatronal}
-                          onChange={e => setComptCnpsPatronal(parseFloat(e.target.value))}
-                          style={{ flex: 1, accentColor: '#f59e0b' }} />
-                        <span style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, minWidth: '60px', textAlign: 'center' }}>{comptCnpsPatronal.toFixed(1)}%</span>
-                      </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Taux légal actuel : 7.7%</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ---- 4. Alertes Comptables ---- */}
-                <div style={{ marginBottom: '28px' }}>
-                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>🔔 Alertes Comptables</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>⚠️ Variation Masse Salariale (%)</label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <input type="range" min="1" max="50" step="1" value={comptAlerteVariationMasse} onChange={e => setComptAlerteVariationMasse(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#f59e0b' }} />
-                        <span style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, minWidth: '60px', textAlign: 'center' }}>±{comptAlerteVariationMasse}%</span>
-                      </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '8px', fontStyle: 'italic' }}>Alerte si la masse varie de plus de {comptAlerteVariationMasse}% vs mois N-1.</p>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>Alerte Virement sans RIB</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Bloque l'export si RIB manquant</span>
-                        </div>
-                        <div onClick={() => setComptAlerteSansRib(!comptAlerteSansRib)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptAlerteSansRib ? '#f59e0b' : 'var(--border)', padding: '2px', cursor: 'pointer' }}>
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptAlerteSansRib ? 'translateX(18px)' : 'translateX(0)' }} />
-                        </div>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>Alerte salaire &lt; SMIG</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Signale les paies sous 75 000</span>
-                        </div>
-                        <div onClick={() => setComptAlerteInfSmig(!comptAlerteInfSmig)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptAlerteInfSmig ? '#ef4444' : 'var(--border)', padding: '2px', cursor: 'pointer' }}>
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptAlerteInfSmig ? 'translateX(18px)' : 'translateX(0)' }} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ---- 5. Bulletins de Paie ---- */}
-                <div style={{ marginBottom: '28px' }}>
-                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>🖨️ Bulletins de Paie</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Entête (Entreprise)</label>
-                        <input type="text" className="form-input" value={comptEnteteBulletin} onChange={e => setComptEnteteBulletin(e.target.value)} style={{ width: '100%' }} />
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Mention légale personnalisée</label>
-                        <input type="text" className="form-input" value={comptMentionLegale} onChange={e => setComptMentionLegale(e.target.value)} style={{ width: '100%' }} />
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                        <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Format numérotation</label>
-                        <select className="form-input" value={comptFormatNum} onChange={e => setComptFormatNum(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.4)' }}>
-                          <option value="ELYS-YYYY-XXXX">ELYS-YYYY-XXXX</option>
-                          <option value="PAIE-YY-MM-XXX">PAIE-YY-MM-XXX</option>
-                          <option value="000XXX">000XXX</option>
-                        </select>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>Masquer lignes vides</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Cacher les rubriques à 0</span>
-                        </div>
-                        <div onClick={() => setComptHideLignesVides(!comptHideLignesVides)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptHideLignesVides ? '#22c55e' : 'var(--border)', padding: '2px', cursor: 'pointer' }}>
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptHideLignesVides ? 'translateX(18px)' : 'translateX(0)' }} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ---- 6. Tableau de Bord Comptable ---- */}
-                <div style={{ marginBottom: '28px' }}>
-                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>📊 Tableau de Bord</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Période de comparaison</label>
-                      <select className="form-input" value={comptComparePeriod} onChange={e => setComptComparePeriod(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.4)' }}>
-                        <option value="prev_month">Mois précédent</option>
-                        <option value="prev_year">Même mois N-1</option>
-                        <option value="avg_3m">Moyenne 3 mois</option>
-                      </select>
-                    </div>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '8px', display: 'block' }}>Devise</label>
-                      <select className="form-input" value={comptDevise} onChange={e => setComptDevise(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.4)' }}>
-                        <option value="XOF">XOF (Franc CFA)</option>
-                        <option value="EUR">EUR (€)</option>
-                        <option value="USD">USD ($)</option>
-                      </select>
-                    </div>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>Mode Confidentiel</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Masquer montants (••••)</span>
-                        </div>
-                        <div onClick={() => setComptModeConfidentiel(!comptModeConfidentiel)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: comptModeConfidentiel ? '#a855f7' : 'var(--border)', padding: '2px', cursor: 'pointer' }}>
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptModeConfidentiel ? 'translateX(18px)' : 'translateX(0)' }} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ---- 7. Export & Automatisation ---- */}
-                <div style={{ marginBottom: '28px' }}>
-                  <h4 style={{ fontSize: '1rem', margin: '0 0 16px 0', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>📤 Export & Automatisation</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>Format d'export préféré</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        {[{id: 'excel', label: '📊 Excel', color: '#10b981'}, {id: 'csv', label: '📄 CSV', color: '#38bdf8'}, {id: 'pdf', label: '📑 PDF', color: '#a78bfa'}].map(fmt => (
-                          <button key={fmt.id} onClick={() => setComptExportFormat(fmt.id)} style={{
-                            flex: 1, padding: '10px 6px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s',
-                            background: comptExportFormat === fmt.id ? `${fmt.color}22` : 'rgba(255,255,255,0.03)',
-                            border: `2px solid ${comptExportFormat === fmt.id ? fmt.color : 'var(--border)'}`,
-                            color: comptExportFormat === fmt.id ? fmt.color : 'var(--muted)',
-                            fontSize: '0.82rem', fontWeight: comptExportFormat === fmt.id ? 700 : 400
-                          }}>{fmt.label}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '12px', display: 'block' }}>🔄 Recalcul automatique</label>
-                      <div onClick={() => setComptAutoCalc(!comptAutoCalc)} style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
-                        background: comptAutoCalc ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.05)',
-                        border: `1px solid ${comptAutoCalc ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.15)'}`
-                      }}>
-                        <div>
-                          <span style={{ display: 'block', color: 'white', fontSize: '0.9rem', fontWeight: 600 }}>{comptAutoCalc ? '✅ Calcul en temps réel' : '⏸️ Calcul manuel'}</span>
-                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--muted)', marginTop: '4px' }}>{comptAutoCalc ? 'Les bulletins sont recalculés à chaque modification.' : 'Cliquez sur "Calculer" pour déclencher le calcul.'}</span>
-                        </div>
-                        <div style={{ width: '48px', height: '26px', borderRadius: '13px', padding: '3px', background: comptAutoCalc ? '#22c55e' : 'var(--border)' }}>
-                          <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'white', transition: 'transform 0.3s', transform: comptAutoCalc ? 'translateX(22px)' : 'translateX(0)' }} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {isAdmin && (
-                  <button className={`btn ${savedCompt ? 'btn-success' : 'btn-primary'}`} onClick={handleSaveComptPrefs}
-                    style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', background: savedCompt ? undefined : 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 14px rgba(34,197,94,0.3)' }}>
-                    <Save size={16} />
-                    <span>{savedCompt ? '✓ Préférences Comptabilité sauvegardées !' : 'Sauvegarder les Préférences Comptabilité'}</span>
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-          )}
-
           {/* Sections masquées pour l'Espace RH et Comptabilité */}
           {!isRH && !isComptable && !isSecretariat && (
             <>
-              {/* Couleurs des Extras & Relèves */}
+              {/* Couleurs des Extras, Relèves & Congés */}
               <div className="glass-panel" style={{ marginTop: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSectionCouleurs ? '8px' : 0 }}>
-              <h3 style={{ fontSize: '1.15rem', margin: 0 }}>🎨 Couleurs des Extras &amp; Relèves</h3>
+              <h3 style={{ fontSize: '1.15rem', margin: 0 }}>🎨 Couleurs (Extras, Relèves & Congés)</h3>
               <button
                 onClick={() => setShowSectionCouleurs(v => !v)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px' }}
@@ -1194,7 +900,7 @@ export default function SettingsView() {
             {showSectionCouleurs && (
               <>
                 <p className="subtitle" style={{ marginBottom: '20px' }}>
-                  Personnalisez les couleurs d'affichage des agents extras et relèves lorsqu'ils sont déployés sur vos sites.
+                  Personnalisez les couleurs d'affichage des agents extras, relèves et des jours de congés payés.
                 </p>
 
             {/* Extras */}
@@ -1320,6 +1026,90 @@ export default function SettingsView() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '0.75rem', color: '#f97316', fontWeight: 'bold'
                   }}>Agent Relève</div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Congés Payés */}
+            <h4 style={{ fontSize: '1rem', marginBottom: '12px', marginTop: '24px', color: '#10b981' }}>🏖️ Congés Payés (CP)</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+              
+              <div style={{ padding: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '8px' }}>Fond des cases (CP)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <input
+                    type="color"
+                    value={localStorage.getItem('pontage_cp_bg') || '#4b5563'}
+                    onChange={(e) => { localStorage.setItem('pontage_cp_bg', e.target.value); setTheme(t => t); }}
+                    style={{ width: '48px', height: '36px', border: 'none', borderRadius: '8px', cursor: 'pointer', background: 'transparent' }}
+                  />
+                  <div style={{
+                    flex: 1, height: '36px', borderRadius: '8px',
+                    background: localStorage.getItem('pontage_cp_bg') || 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
+                    border: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.75rem', color: '#ffffff'
+                  }}>Congé Payé</div>
+                </div>
+              </div>
+
+              <div style={{ padding: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '8px' }}>Couleur du texte (CP)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <input
+                    type="color"
+                    value={localStorage.getItem('pontage_cp_text') || '#ffffff'}
+                    onChange={(e) => { localStorage.setItem('pontage_cp_text', e.target.value); setTheme(t => t); }}
+                    style={{ width: '48px', height: '36px', border: 'none', borderRadius: '8px', cursor: 'pointer', background: 'transparent' }}
+                  />
+                  <div style={{
+                    flex: 1, height: '36px', borderRadius: '8px',
+                    background: localStorage.getItem('pontage_cp_bg') || 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
+                    border: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.85rem', fontWeight: 'bold',
+                    color: localStorage.getItem('pontage_cp_text') || '#ffffff'
+                  }}>Texte CP</div>
+                </div>
+              </div>
+
+              <div style={{ padding: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '8px' }}>Fond des cases (ENTRANT)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <input
+                    type="text"
+                    value={localStorage.getItem('pontage_entrant_bg_v5') || 'linear-gradient(135deg, rgba(130, 196, 108, 0.15), rgba(164, 219, 149, 0.25))'}
+                    onChange={(e) => { localStorage.setItem('pontage_entrant_bg_v5', e.target.value); setTheme(t => t); }}
+                    style={{ flex: 1, padding: '8px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg)', color: '#fff', fontSize: '0.8rem' }}
+                  />
+                  <div style={{
+                    width: '100px', height: '36px', borderRadius: '8px',
+                    background: localStorage.getItem('pontage_entrant_bg_v5') || 'linear-gradient(135deg, rgba(130, 196, 108, 0.15), rgba(164, 219, 149, 0.25))',
+                    border: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.75rem', fontWeight: 'bold', color: localStorage.getItem('pontage_entrant_text_v5') || '#82c46c'
+                  }}>ENTRANT</div>
+                </div>
+              </div>
+
+              <div style={{ padding: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '8px' }}>Couleur du texte (ENTRANT)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <input
+                    type="color"
+                    value={localStorage.getItem('pontage_entrant_text_v5') || '#82c46c'}
+                    onChange={(e) => { localStorage.setItem('pontage_entrant_text_v5', e.target.value); setTheme(t => t); }}
+                    style={{ width: '48px', height: '36px', border: 'none', borderRadius: '8px', cursor: 'pointer', background: 'transparent' }}
+                  />
+                  <div style={{
+                    flex: 1, height: '36px', borderRadius: '8px',
+                    background: localStorage.getItem('pontage_entrant_bg_v5') || 'linear-gradient(135deg, rgba(130, 196, 108, 0.15), rgba(164, 219, 149, 0.25))',
+                    border: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.85rem', fontWeight: 'bold',
+                    color: localStorage.getItem('pontage_entrant_text_v5') || '#82c46c'
+                  }}>Texte ENTRANT</div>
                 </div>
               </div>
 

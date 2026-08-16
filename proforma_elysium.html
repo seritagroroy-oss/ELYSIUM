@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facture Proforma - ELYSIUM</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            color: #333;
+            background: #f8fafc;
+        }
+
+        .invoice-box {
+            max-width: 800px;
+            margin: auto;
+            padding: 40px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            border-radius: 12px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 50px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo span {
+            color: #10b981;
+        }
+
+        .title {
+            text-align: right;
+        }
+
+        .title h1 {
+            margin: 0;
+            font-size: 32px;
+            color: #0f172a;
+            text-transform: uppercase;
+        }
+
+        .title p {
+            margin: 5px 0 0 0;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .info-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .info-block {
+            width: 45%;
+        }
+
+        .info-block h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #64748b;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .info-block p {
+            margin: 4px 0;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .table-container {
+            width: 100%;
+            margin-bottom: 40px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background-color: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .amount-col {
+            text-align: right;
+        }
+
+        .total-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 40px;
+        }
+
+        .total-box {
+            width: 350px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            font-size: 15px;
+        }
+
+        .total-row.grand-total {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+            border-top: 2px solid #e2e8f0;
+            padding-top: 15px;
+            margin-top: 5px;
+        }
+
+        .terms {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #475569;
+            line-height: 1.6;
+        }
+
+        .terms strong {
+            color: #0f172a;
+        }
+
+        @media print {
+            body {
+                background: #fff;
+                padding: 0;
+            }
+
+            .invoice-box {
+                box-shadow: none;
+                border: none;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="invoice-box">
+        <div class="header">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+                ELYSIUM<span>.</span>
+            </div>
+            <div class="title">
+                <h1>FACTURE PROFORMA</h1>
+                <p>Date : 06 Août 2026</p>
+                <p>N° Proforma : PRF-2026-0801</p>
+                <p>Validité : 30 jours</p>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-block">
+                <h3>Émetteur</h3>
+                <p><strong>GNACADJA JEREMIE</strong></p>
+            </div>
+            <div class="info-block">
+                <h3>Adressé à (Client)</h3>
+                <p><strong>SECURITEX</strong></p>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th style="width: 10%;">Qté</th>
+                        <th class="amount-col" style="width: 25%;">Prix Unitaire (FCFA)</th>
+                        <th class="amount-col" style="width: 25%;">Total (FCFA)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <strong style="color: #0f172a; font-size: 15px;">Application ELYSIUM - Licence
+                                d'Exploitation Unique</strong><br>
+                            <span style="font-size: 13px; color: #64748b;">Système complet de gestion d'entreprise de
+                                sécurité privée incluant :<br>
+                                • Module de traitement des pointages et présences<br>
+                                • Module Ressources Humaines (Agents, archives, sanctions, dossiers)<br>
+                                • Module Facturation Clients (Contrats, effectifs, multi-sites)<br>
+                                • Module d'Analytique (Tableaux de bord financiers et RH)<br>
+                                • Module Paie (Acomptes, calculs automatiques des primes et salaires)</span>
+                        </td>
+                        <td>1</td>
+                        <td class="amount-col">4 500 000</td>
+                        <td class="amount-col">4 500 000</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <strong style="color: #0f172a; font-size: 15px;">Installation & Déploiement</strong><br>
+                            <span style="font-size: 13px; color: #64748b;">Installation sur serveur local ou Cloud,
+                                configuration initiale.</span>
+                        </td>
+                        <td>1</td>
+                        <td class="amount-col">Inclus</td>
+                        <td class="amount-col">0</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <strong style="color: #0f172a; font-size: 15px;">Formation du Personnel</strong><br>
+                            <span style="font-size: 13px; color: #64748b;">Formation des équipes RH et Comptabilité
+                                (Session de 2 jours).</span>
+                        </td>
+                        <td>1</td>
+                        <td class="amount-col">Inclus</td>
+                        <td class="amount-col">0</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="total-section">
+            <div class="total-box">
+                <div class="total-row">
+                    <span>Total HT :</span>
+                    <span>4 500 000 FCFA</span>
+                </div>
+                <div class="total-row">
+                    <span>TVA (0%) :</span>
+                    <span>0 FCFA</span>
+                </div>
+                <div class="total-row grand-total">
+                    <span>Total TTC :</span>
+                    <span style="color: #10b981;">4 500 000 FCFA</span>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+</body>
+
+</html>

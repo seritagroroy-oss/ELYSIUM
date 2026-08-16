@@ -42,10 +42,10 @@ export function AuthProvider({ children }) {
     refreshUser();
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (email, password, rememberMe = false) => {
     setLoading(true);
     try {
-      const res = await apiCall('login', { email, password });
+      const res = await apiCall('login', { email, password, rememberMe });
       if (res.success) {
         localStorage.removeItem('pontage_activeSiteId');
         localStorage.removeItem('pontage_activeSiteName');
@@ -67,6 +67,9 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     setLoading(true);
     try {
+      if (typeof window.forceSyncSettings === 'function') {
+        await window.forceSyncSettings();
+      }
       const res = await apiCall('logout');
       if (res.success) {
         localStorage.removeItem('pontage_activeSiteId');
@@ -112,7 +115,7 @@ export function AuthProvider({ children }) {
   };
 
   const hasPermission = (moduleName) => {
-    // Si c'est un super_admin, accès total. Pour un admin, accès total SAUF s'il est de l'espace RH.
+    // Si c'est un super_admin, accès total.
     if (user?.role === 'super_admin') return true;
     if (user?.role === 'admin' && user?.workspace_type !== 'RH') return true;
     
@@ -121,9 +124,11 @@ export function AuthProvider({ children }) {
     // Si c'est un tableau (ancien format)
     if (Array.isArray(user.permissions)) return user.permissions.includes(moduleName);
     
-    // Si c'est un objet — accepter toute valeur non-false/non-none (read, write, true...)
+    // Si c'est un objet
     const val = user.permissions[moduleName];
-    if (val && val !== false && val !== 'none') return true;
+    if (val !== undefined) {
+      return val !== false && val !== 'none';
+    }
     
     return Object.values(user.permissions).includes(moduleName);
   };
@@ -138,7 +143,12 @@ export function AuthProvider({ children }) {
     if (Array.isArray(user.permissions)) return user.permissions.includes(moduleName);
     
     // Si c'est un objet
-    return user.permissions[moduleName] === 'write' || user.permissions[moduleName] === true || user.permissions[moduleName] === 'approver_3';
+    const val = user.permissions[moduleName];
+    if (val !== undefined) {
+      return val === 'write' || val === true || val === 'approver_3';
+    }
+    
+    return Object.values(user.permissions).includes(moduleName);
   };
 
   return (

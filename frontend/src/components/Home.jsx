@@ -66,15 +66,6 @@ export default function Home({ setView, user }) {
   // Définition des 10 cartes demandées
   const cards = [
     {
-      id: 'analytics',
-      title: 'TABLEAU DE BORD ANALYTIQUE',
-      description: 'Visualisez les statistiques, les tendances et les performances en temps réel.',
-      icon: BarChart3,
-      color: '#a855f7',
-      onClick: () => setView('analytics'),
-      perm: 'analytics'
-    },
-    {
       id: 'employes',
       title: 'GESTION DES EMPLOYÉS',
       description: 'Gérer la base de données de tous vos employés, leurs contrats et informations.',
@@ -101,15 +92,7 @@ export default function Home({ setView, user }) {
       onClick: () => setView('leave_admin'),
       perm: 'leave'
     },
-    {
-      id: 'pointage_gps',
-      title: 'POINTAGE GPS',
-      description: 'Signalez votre présence avec votre position géographique.',
-      icon: MapPin,
-      color: '#10b981',
-      onClick: () => setShowGPSModal(true),
-      perm: 'gps'
-    },
+
     {
       id: 'pointage',
       title: 'Pointage du mois',
@@ -119,24 +102,7 @@ export default function Home({ setView, user }) {
       onClick: () => setView('dashboard'),
       perm: 'dashboard'
     },
-    {
-      id: 'imprimer_pointage',
-      title: "IMPRIMER LE POINTAGE de l'agent",
-      description: 'Générer une version imprimable du pointage pour un agent spécifique.',
-      icon: Printer,
-      color: '#a78bfa',
-      onClick: () => setShowDevModal(true),
-      perm: 'print_attendance'
-    },
-    {
-      id: 'imprimer_paie',
-      title: 'Imprimer la fiche de paie',
-      description: 'Générer et imprimer les fiches de paie mensuelles.',
-      icon: FileText,
-      color: '#34d399',
-      onClick: () => setView('payslip_print'),
-      perm: 'print_payroll'
-    },
+    
     {
       id: 'fluctuation',
       title: 'FLUTUATION SALARIALE',
@@ -148,7 +114,7 @@ export default function Home({ setView, user }) {
     },
     {
       id: 'company_config',
-      title: 'CONFIGURATION DE L\'ENTREPRISE',
+      title: 'CONFIGURATION ENTREPRISE',
       description: 'Gérer les postes, fonctions et salaires de base des agents.',
       icon: Building2,
       color: '#8b5cf6',
@@ -174,12 +140,21 @@ export default function Home({ setView, user }) {
       perm: 'verification'
     },
     {
+      id: 'facturation',
+      title: 'FACTURATION CLIENTS',
+      description: 'Gérer les contrats et la facturation des sites clients.',
+      icon: Briefcase,
+      color: '#10b981',
+      onClick: () => setView('facturation'),
+      perm: 'facturation'
+    },
+    {
       id: 'grille_salariale',
       title: 'GRILLE SALARIALE',
       description: 'Consulter et modifier la grille de rémunération par fonction/poste.',
       icon: Table,
       color: '#f472b6',
-      onClick: () => setView('salaries'),
+      onClick: () => setView('grille_salariale'),
       perm: 'salaries'
     },
     {
@@ -218,41 +193,15 @@ export default function Home({ setView, user }) {
       onClick: () => setView('reclamations'),
       perm: 'reclamation_view'
     },
-    {
-      id: 'nouvelle_mep',
-      title: 'NOUVELLE MEP / rajout / fermeture',
-      description: 'Gestion des Mises en Place (MEP) sur site, rajouts et fermetures de postes.',
-      icon: PlusCircle,
-      color: '#818cf8',
-      onClick: () => setShowDevModal(true),
-      perm: 'new_mep'
-    },
-    {
-      id: 'recrutement',
-      title: 'ESPACE E RECRUTEMENT',
-      description: 'Gestion des candidatures, entretiens et embauches de nouveaux agents.',
-      icon: Users,
-      color: '#2dd4bf',
-      onClick: () => setShowDevModal(true),
-      perm: 'recrutement'
-    },
+    
     {
       id: 'suivi_personnel',
       title: 'SUIVI DU PERSONNEL',
       description: 'Dossiers des agents, sanctions, absences prolongées, mutations.',
       icon: UserCheck,
       color: '#e879f9',
-      onClick: () => setShowDevModal(true),
-      perm: 'dashboard'
-    },
-    {
-      id: 'suivi_materiel',
-      title: 'SUIVI DU MATERIEL',
-      description: 'Gestion des dotations (tenues, PTI, radios) et inventaire matériel.',
-      icon: Package,
-      color: '#a3e635',
-      onClick: () => setShowDevModal(true),
-      perm: 'materiel'
+      onClick: () => setView('suivi_personnel'),
+      perm: 'suivi_personnel'
     },
     {
       id: 'archives',
@@ -272,15 +221,7 @@ export default function Home({ setView, user }) {
       onClick: () => setView('services'),
       perm: 'services'
     },
-    {
-      id: 'kiosk',
-      title: 'MODE KIOSQUE',
-      description: 'Interface de pointage direct sur site.',
-      icon: Clock,
-      color: '#8b5cf6',
-      onClick: () => setView('kiosk'),
-      perm: 'kiosk'
-    },
+
     {
       id: 'registre_visiteurs',
       title: 'REGISTRE DES VISITEURS',
@@ -291,15 +232,6 @@ export default function Home({ setView, user }) {
       perm: 'registre_visiteurs'
     },
     {
-      id: 'annuaire_statut',
-      title: 'ANNUAIRE & STATUT',
-      description: 'Savoir qui est présent ou absent à l\'instant T.',
-      icon: Contact,
-      color: '#38bdf8',
-      onClick: () => setView('annuaire_statut'),
-      perm: 'annuaire_statut'
-    },
-    {
       id: 'pointage_courriers',
       title: 'POINTAGE COURRIERS / COLIS',
       description: 'Enregistrer les arrivées de colis et notifier les collaborateurs.',
@@ -308,105 +240,7 @@ export default function Home({ setView, user }) {
       onClick: () => setView('pointage_courriers'),
       perm: 'pointage_courriers'
     },
-    {
-      id: 'gestion_salles',
-      title: 'GESTION DES SALLES',
-      description: 'Calendrier des réservations de salles de réunion.',
-      icon: CalendarDays,
-      color: '#fcd34d',
-      onClick: () => setView('gestion_salles'),
-      perm: 'gestion_salles'
-    },
-    {
-      id: 'reflexe_securite',
-      title: 'RÉFLEXE SÉCURITÉ',
-      description: 'Verrouillage rapide de session pour l\'accueil.',
-      icon: ShieldAlert,
-      color: '#ef4444',
-      onClick: () => setView('reflexe_securite'),
-      perm: 'reflexe_securite'
-    },
-    {
-      id: 'gestion_appels',
-      title: 'MAIN COURANTE & APPELS',
-      description: 'Standard virtuel, prise de messages et journal de bord.',
-      icon: Phone,
-      color: '#10b981',
-      onClick: () => setView('gestion_appels'),
-      perm: 'gestion_appels'
-    },
-    {
-      id: 'gestion_flotte',
-      title: 'GESTION DE FLOTTE',
-      description: 'Réservation de véhicules de service et gestion des clés.',
-      icon: Car,
-      color: '#3b82f6',
-      onClick: () => setView('gestion_flotte'),
-      perm: 'gestion_flotte'
-    },
-    {
-      id: 'badges_provisoires',
-      title: 'BADGES PROVISOIRES',
-      description: 'Gestion et suivi des badges temporaires prêtés.',
-      icon: CreditCard,
-      color: '#f59e0b',
-      onClick: () => setView('badges_provisoires'),
-      perm: 'badges_provisoires'
-    },
-    {
-      id: 'fournitures_bureau',
-      title: 'FOURNITURES DE BUREAU',
-      description: 'Commandes et gestion du stock de petit matériel.',
-      icon: Paperclip,
-      color: '#8b5cf6',
-      onClick: () => setView('fournitures_bureau'),
-      perm: 'fournitures_bureau'
-    },
-    {
-      id: 'accueil_vip',
-      title: 'PROTOCOLE & ACCUEIL VIP',
-      description: 'Gestion des visites de haut rang (parking, repas, etc.).',
-      icon: Crown,
-      color: '#eab308',
-      onClick: () => setView('accueil_vip'),
-      perm: 'accueil_vip'
-    },
-    {
-      id: 'alertes_securite',
-      title: 'ALERTES CONFINEMENT',
-      description: 'Déclenchement d\'alertes globales d\'évacuation/confinement.',
-      icon: Siren,
-      color: '#ef4444',
-      onClick: () => setView('alertes_securite'),
-      perm: 'alertes_securite'
-    },
-    {
-      id: 'dg_vision',
-      title: 'VISION 360° EXÉCUTIVE',
-      description: 'Tableau de bord stratégique avec KPIs en temps réel.',
-      icon: Eye,
-      color: '#eab308',
-      onClick: () => setView('dg_vision'),
-      perm: 'dg_vision'
-    },
-    {
-      id: 'dg_rapports',
-      title: 'RAPPORTS STRATÉGIQUES',
-      description: 'Génération de rapports exécutifs et bilans globaux.',
-      icon: FileText,
-      color: '#3b82f6',
-      onClick: () => setView('dg_rapports'),
-      perm: 'dg_rapports'
-    },
-    {
-      id: 'dg_validation',
-      title: 'VALIDATIONS EXÉCUTIVES',
-      description: 'Approbation des dépenses et changements majeurs.',
-      icon: Target,
-      color: '#22c55e',
-      onClick: () => setView('dg_validation'),
-      perm: 'dg_validation'
-    },
+    
     {
       id: 'dg_audit',
       title: 'AUDIT & TRAÇABILITÉ',
@@ -416,231 +250,16 @@ export default function Home({ setView, user }) {
       onClick: () => setView('dg_audit'),
       perm: 'dg_audit'
     },
-    {
-      id: 'dg_spy',
-      title: 'MODE ESPION',
-      description: 'Visualisez le système tel qu\'un employé le voit.',
-      icon: Eye,
-      color: '#a855f7',
-      onClick: () => setShowDevModal(true),
-      perm: 'dg_spy'
-    },
-    {
-      id: 'dg_block',
-      title: 'BLOCAGE DE SERVICE',
-      description: 'Geler temporairement l\'accès d\'un service complet.',
-      icon: ShieldOff,
-      color: '#ef4444',
-      onClick: () => setShowDevModal(true),
-      perm: 'dg_block'
-    },
-    {
-      id: 'dg_megaphone',
-      title: 'MÉGAPHONE EXÉCUTIF',
-      description: 'Diffuser une annonce prioritaire à tous les employés.',
-      icon: Megaphone,
-      color: '#ec4899',
-      onClick: () => setView('dg_megaphone'),
-      perm: 'dg_megaphone'
-    },
-    {
-      id: 'dg_predictive',
-      title: 'ANALYSE PRÉDICTIVE',
-      description: 'Simulations des coûts futurs et de l\'absentéisme.',
-      icon: Sparkles,
-      color: '#8b5cf6',
-      onClick: () => setView('dg_predictive'),
-      perm: 'dg_predictive'
-    },
-    {
-      id: 'dg_okr',
-      title: 'OBJECTIFS STRATÉGIQUES (OKR)',
-      description: 'Suivi de la progression des objectifs des départements.',
-      icon: Target,
-      color: '#f97316',
-      onClick: () => setView('dg_okr'),
-      perm: 'dg_okr'
-    },
-    {
-      id: 'dg_litiges',
-      title: 'LITIGES & ALERTES LÉGALES',
-      description: 'Radar des alertes légales et prud\'homales.',
-      icon: Scale,
-      color: '#ef4444',
-      onClick: () => setView('dg_litiges'),
-      perm: 'dg_litiges'
-    },
-    {
-      id: 'dg_organigramme',
-      title: 'ORGANIGRAMME LIVE',
-      description: 'Vue hiérarchique détaillée avec effectifs et coûts.',
-      icon: Network,
-      color: '#14b8a6',
-      onClick: () => setView('dg_organigramme'),
-      perm: 'dg_organigramme'
-    },
-    {
-      id: 'dg_agenda',
-      title: 'AGENDA STRATÉGIQUE',
-      description: 'Calendrier des échéances stratégiques et réunions de direction.',
-      icon: CalendarDays,
-      color: '#38bdf8',
-      onClick: () => setView('dg_agenda'),
-      perm: 'dg_agenda'
-    },
-    {
-      id: 'dg_pv',
-      title: 'COMPTE RENDU DE RÉUNIONS',
-      description: 'Rédiger, archiver et diffuser vos procès-verbaux de direction.',
-      icon: BookOpen,
-      color: '#34d399',
-      onClick: () => setView('dg_pv'),
-      perm: 'dg_pv'
-    },
-    {
-      id: 'dg_veille',
-      title: 'VEILLE SECTORIELLE',
-      description: 'Indicateurs économiques, légaux et tendances du secteur.',
-      icon: Globe,
-      color: '#f59e0b',
-      onClick: () => setView('dg_veille'),
-      perm: 'dg_veille'
-    },
-    {
-      id: 'pdg_souverain',
-      title: 'TABLEAU SOUVERAIN (PDG)',
-      description: 'Vision absolue de la valeur et de la santé de l\'entreprise.',
-      icon: Crown,
-      color: '#d4af37',
-      onClick: () => setView('pdg_souverain'),
-      perm: 'pdg_souverain'
-    },
-    {
-      id: 'pdg_bilan',
-      title: 'PERFORMANCE FINANCIÈRE',
-      description: 'Bilan consolidé sur 12 mois (budget vs réel).',
-      icon: TrendingUp,
-      color: '#d4af37',
-      onClick: () => setView('pdg_bilan'),
-      perm: 'pdg_bilan'
-    },
-    {
-      id: 'pdg_signature',
-      title: 'SIGNATURE EXÉCUTIVE',
-      description: 'Apposer une signature numérique officielle (documents & PV).',
-      icon: PenTool,
-      color: '#d4af37',
-      onClick: () => setView('pdg_signature'),
-      perm: 'pdg_signature'
-    },
-    {
-      id: 'pdg_sites',
-      title: 'TABLEAU DES SITES',
-      description: 'Contrôle souverain : vision, activation et suspension des sites.',
-      icon: Map,
-      color: '#d4af37',
-      onClick: () => setView('pdg_sites'),
-      perm: 'pdg_sites'
-    },
-    {
-      id: 'pdg_acces_maitre',
-      title: 'ACCÈS MAÎTRE',
-      description: 'Super-contrôle : création d\'admins et gestion du DG.',
-      icon: Key,
-      color: '#d4af37',
-      onClick: () => setView('pdg_acces_maitre'),
-      perm: 'pdg_acces_maitre'
-    },
-    {
-      id: 'pdg_benchmark',
-      title: 'COMPARATIF CONCURRENTIEL',
-      description: 'Benchmarks du marché par rapport aux performances internes.',
-      icon: BarChart,
-      color: '#d4af37',
-      onClick: () => setView('pdg_benchmark'),
-      perm: 'pdg_benchmark'
-    },
-    {
-      id: 'pdg_coffre',
-      title: 'SALLE DES COFFRES',
-      description: 'Stockage ultra-sécurisé des documents fondateurs de l\'entreprise.',
-      icon: Lock,
-      color: '#d4af37',
-      onClick: () => setView('pdg_coffre'),
-      perm: 'pdg_coffre'
-    },
-    {
-      id: 'pdg_expansion',
-      title: 'SIMULATEUR M&A',
-      description: 'Simulation d\'impact d\'une ouverture de filiale ou acquisition.',
-      icon: Globe,
-      color: '#d4af37',
-      onClick: () => setView('pdg_expansion'),
-      perm: 'pdg_expansion'
-    },
-    {
-      id: 'pdg_actionnaires',
-      title: 'RAPPORT ACTIONNAIRES',
-      description: 'Génération automatique de l\'Executive Summary PDF.',
-      icon: FileText,
-      color: '#d4af37',
-      onClick: () => setView('pdg_actionnaires'),
-      perm: 'pdg_actionnaires'
-    },
-    {
-      id: 'pdg_menaces',
-      title: 'RADAR DES MENACES',
-      description: 'Vue macro-économique des risques existentiels pour la société.',
-      icon: Zap,
-      color: '#ef4444',
-      onClick: () => setView('pdg_menaces'),
-      perm: 'pdg_menaces'
-    },
-    {
-      id: 'pc_radar',
-      title: 'RADAR TACTIQUE',
-      description: 'Cartographie temps réel des sites et de leur état.',
-      icon: Crosshair,
-      color: '#3b82f6',
-      onClick: () => setView('pc_radar'),
-      perm: 'pc_radar'
-    },
-    {
-      id: 'pc_alertes',
-      title: 'URGENCES & SOS',
-      description: 'Mur centralisé des alertes rouges et boutons panique.',
-      icon: Siren,
-      color: '#ef4444',
-      onClick: () => setView('pc_alertes'),
-      perm: 'pc_alertes'
-    },
-    {
-      id: 'pc_cctv',
-      title: 'VIDÉOSURVEILLANCE CCTV',
-      description: 'Accès simulé aux flux de caméras de sécurité.',
-      icon: Video,
-      color: '#3b82f6',
-      onClick: () => setView('pc_cctv'),
-      perm: 'pc_cctv'
-    },
-    {
-      id: 'pc_dispatch',
-      title: 'DISPATCH & PATROUILLES',
-      description: 'Gestion des flottes d\'intervention et appels aux forces de l\'ordre.',
-      icon: ShieldAlert,
-      color: '#f59e0b',
-      onClick: () => setView('pc_dispatch'),
-      perm: 'pc_dispatch'
-    },
-    {
-      id: 'pc_comms',
-      title: 'STATUT RÉSEAU & RADIOS',
-      description: 'Surveillance de la connectivité des équipements terrain.',
-      icon: Radio,
-      color: '#3b82f6',
-      onClick: () => setView('pc_comms'),
-      perm: 'pc_comms'
-    },
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     {
       id: 'pc_main_courante',
       title: 'REGISTRE CENTRAL INCIDENTS',
@@ -650,114 +269,12 @@ export default function Home({ setView, user }) {
       onClick: () => setView('pc_main_courante'),
       perm: 'pc_main_courante'
     },
-    {
-      id: 'pc_tracking',
-      title: 'TRACKING & GÉOLOCALISATION LIVE',
-      description: 'Localiser et suivre en direct agents, contrôleurs et équipages.',
-      icon: MapPin,
-      color: '#38bdf8',
-      onClick: () => setView('pc_tracking'),
-      perm: 'pc_tracking'
-    },
-    {
-      id: 'ctrl_feuille',
-      title: 'MA FEUILLE DE ROUTE',
-      description: 'Planning journalier des visites de sites et contrôles terrain.',
-      icon: Route,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_feuille'),
-      perm: 'ctrl_feuille'
-    },
-    {
-      id: 'ctrl_audit',
-      title: 'CONTRÔLE & AUDIT AGENTS',
-      description: 'Valider la présence des agents et noter les anomalies sur site.',
-      icon: UserCheck,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_audit'),
-      perm: 'ctrl_audit'
-    },
-    {
-      id: 'ctrl_rapport',
-      title: 'RAPPORT D\'INCIDENT EXPRESS',
-      description: 'Déclarer rapidement un incident ou une anomalie depuis le terrain.',
-      icon: MessageSquareWarning,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_rapport'),
-      perm: 'ctrl_rapport'
-    },
-    {
-      id: 'ctrl_dashboard',
-      title: 'TABLEAU DE BORD SECTEUR',
-      description: 'Vue d\'ensemble des sites sous tutelle : présences et alertes.',
-      icon: BarChart3,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_dashboard'),
-      perm: 'ctrl_dashboard'
-    },
-    {
-      id: 'ctrl_messagerie',
-      title: 'MESSAGERIE INTERNE',
-      description: 'Communication directe avec le PC, la DG et broadcast agents.',
-      icon: MessageSquare,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_messagerie'),
-      perm: 'ctrl_messagerie'
-    },
-    {
-      id: 'ctrl_carnet',
-      title: 'CARNET DE BORD',
-      description: 'Historique personnel des visites de sites et statistiques de contrôle.',
-      icon: BookOpen,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_carnet'),
-      perm: 'ctrl_carnet'
-    },
-    {
-      id: 'ctrl_tracking',
-      title: 'TRACKING & GÉOLOC LIVE',
-      description: 'Suivre en direct les agents et véhicules d\'intervention.',
-      icon: MapPin,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_tracking'),
-      perm: 'ctrl_tracking'
-    },
-    {
-      id: 'ctrl_dispatch',
-      title: 'DISPATCH & INTERVENTIONS',
-      description: 'Gestion des urgences et assignation des équipages disponibles.',
-      icon: ShieldAlert,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_dispatch'),
-      perm: 'ctrl_dispatch'
-    },
-    {
-      id: 'ctrl_flotte',
-      title: 'GESTION DE FLOTTE',
-      description: 'État des lieux des véhicules de service (kilométrage, dommages).',
-      icon: Car,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_flotte'),
-      perm: 'ctrl_flotte'
-    },
-    {
-      id: 'ctrl_rondes',
-      title: 'SUPERVISION DES RONDES',
-      description: 'Suivi chronologique des tags NFC scannés par les agents et alarmes.',
-      icon: Clock,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_rondes'),
-      perm: 'ctrl_rondes'
-    },
-    {
-      id: 'ctrl_notation',
-      title: 'ÉVALUATION & DISCIPLINE',
-      description: 'Noter rapidement l\'attitude et la tenue d\'un agent lors d\'un contrôle.',
-      icon: Star,
-      color: '#6366f1',
-      onClick: () => setView('ctrl_notation'),
-      perm: 'ctrl_notation'
-    }
+    
+    
+
+    
+    
+    
   ];
 
   // Filtrage des cartes par rapport à la recherche et aux permissions
@@ -765,6 +282,9 @@ export default function Home({ setView, user }) {
     // Vérification des permissions
     if (card.perm) {
       if (card.perm === 'admin' && user?.role !== 'super_admin' && user?.role !== 'admin') return false;
+      else if (card.id === 'reclamation') {
+        if (!hasPermission('reclamation_view') && !hasPermission('reclamation_edit')) return false;
+      }
       else if (card.perm !== 'admin') {
         // Appliquer globalement la règle : s'affiche sur l'accueil UNIQUEMENT s'il a un droit de modification
         if (!hasWritePermission(card.perm)) return false;
@@ -773,7 +293,7 @@ export default function Home({ setView, user }) {
     // Filtrage par texte
     return card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
            card.description.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  }).sort((a, b) => a.title.localeCompare(b.title));
 
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto', animation: 'fadeIn 0.4s ease-out' }}>
@@ -787,9 +307,9 @@ export default function Home({ setView, user }) {
           Accédez rapidement à tous les modules de votre système de gestion.
         </p>
 
-        <div style={{ position: 'relative', width: '100%', maxWidth: '600px' }}>
+        <div data-tour="home_search" style={{ position: 'relative', width: '100%', maxWidth: '600px' }}>
           <div style={{
-            position: 'absolute', top: '50%', left: '16px', transform: 'translateY(-50%)', color: 'white'
+            position: 'absolute', top: '50%', left: '16px', transform: 'translateY(-50%)', color: 'var(--text)'
           }}>
             <Search size={22} />
           </div>
@@ -803,9 +323,9 @@ export default function Home({ setView, user }) {
               width: '100%',
               padding: '16px 24px 16px 48px',
               borderRadius: '50px',
-              border: '1px solid white',
-              background: 'rgba(255, 255, 255, 0.05)',
-              color: 'white',
+              border: '1px solid var(--border)',
+              background: 'var(--card)',
+              color: 'var(--text)',
               fontSize: '1.1rem',
               outline: 'none',
               boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
@@ -813,13 +333,13 @@ export default function Home({ setView, user }) {
               transition: 'all 0.3s ease'
             }}
             onFocus={(e) => {
-              e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-              e.target.style.borderColor = 'white';
-              e.target.style.boxShadow = '0 0 0 3px rgba(255, 255, 255, 0.2)';
+              e.target.style.background = 'var(--card-hover)';
+              e.target.style.borderColor = 'var(--border-focus)';
+              e.target.style.boxShadow = '0 0 0 3px var(--border-focus)';
             }}
             onBlur={(e) => {
-              e.target.style.background = 'rgba(255, 255, 255, 0.05)';
-              e.target.style.borderColor = 'white';
+              e.target.style.background = 'var(--card)';
+              e.target.style.borderColor = 'var(--border)';
               e.target.style.boxShadow = '0 8px 32px rgba(0,0,0,0.1)';
             }}
           />
@@ -848,7 +368,7 @@ export default function Home({ setView, user }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
             {rhAlerts.slice(0, 6).map((alert, i) => (
-              <div key={i} style={{
+              <div key={alert.id || alert.agent + '-' + i} style={{
                 display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '10px',
                 background: alert.severity === 'critical' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.08)',
                 border: `1px solid ${alert.severity === 'critical' ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.15)'}`,
@@ -883,10 +403,15 @@ export default function Home({ setView, user }) {
             return (
               <div
                 key={card.id}
+                data-tour={
+                  card.id === 'analytics' ? 'home_dashboard' :
+                  card.id === 'fiche_paie' ? 'home_payroll' :
+                  card.id === 'verification' ? 'home_verification' : undefined
+                }
                 onClick={card.onClick}
                 style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid var(--border)',
+                  background: 'var(--card)',
+                  border: `1px solid ${card.color}60`,
                   borderRadius: '16px',
                   padding: '24px',
                   cursor: 'pointer',
@@ -903,14 +428,14 @@ export default function Home({ setView, user }) {
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-5px) scale(1.02)';
                   e.currentTarget.style.boxShadow = `0 15px 30px -10px ${card.color}40`;
-                  e.currentTarget.style.border = `1px solid ${card.color}60`;
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                  e.currentTarget.style.border = `1px solid ${card.color}`;
+                  e.currentTarget.style.background = 'var(--card-hover)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0) scale(1)';
                   e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.border = '1px solid var(--border)';
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                  e.currentTarget.style.border = `1px solid ${card.color}60`;
+                  e.currentTarget.style.background = 'var(--card)';
                 }}
               >
                 {/* Décoration en arrière-plan (glow) */}

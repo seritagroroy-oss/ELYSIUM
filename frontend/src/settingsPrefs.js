@@ -7,25 +7,26 @@ export function initSettingsInterceptor() {
 
   let syncTimeout = null;
 
-  const syncToBackend = () => {
-    if (syncTimeout) clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(async () => {
-      try {
-        const settings = {};
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && (k.startsWith('pontage_') || k.startsWith('map_selection_mode') || k.startsWith('elysium_'))) {
-            // Exclure les clés de session/état
-            if (!k.includes('pontage_current_service') && !k.includes('pontage_csrf_token') && !k.includes('pontage_activeSiteId') && !k.includes('pontage_activeSiteName') && !k.includes('pontage_period') && !k.includes('pontage_active_view')) {
-              settings[k] = originalGetItem.call(localStorage, k);
-            }
+  window.forceSyncSettings = async () => {
+    try {
+      const settings = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('pontage_') || k.startsWith('map_selection_mode') || k.startsWith('elysium_'))) {
+          if (!k.includes('pontage_current_service') && !k.includes('pontage_csrf_token') && !k.includes('pontage_activeSiteId') && !k.includes('pontage_activeSiteName') && !k.includes('pontage_period') && !k.includes('pontage_active_view')) {
+            settings[k] = originalGetItem.call(localStorage, k);
           }
         }
-        await apiCall('save_user_settings', { settings });
-      } catch (e) {
-        console.error("Erreur sync settings:", e);
       }
-    }, 2000); // Debounce 2 secondes
+      await apiCall('save_user_settings', { settings });
+    } catch (e) {
+      console.error("Erreur sync settings:", e);
+    }
+  };
+
+  const syncToBackend = () => {
+    if (syncTimeout) clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => window.forceSyncSettings(), 2000); // Debounce 2 secondes
   };
 
   const isScopedKey = (key) => {
@@ -105,9 +106,24 @@ export function initSettingsInterceptor() {
 export function restoreSettingsFromBackend(settings) {
   if (!settings || typeof settings !== 'object') return;
   for (const [k, v] of Object.entries(settings)) {
+    // Exclure les clés de session/état de la restauration
+    if (
+      k.includes('pontage_activeSiteId') ||
+      k.includes('pontage_activeSiteName') ||
+      k.includes('pontage_active_view') ||
+      k.includes('pontage_period') ||
+      k.includes('pontage_current_service') ||
+      k.includes('pontage_csrf_token') ||
+      k.includes('pontage_theme')
+    ) {
+      continue;
+    }
     // Si la valeur existe déjà et est identique, pas besoin de réécrire
     if (localStorage.getItem(k) !== v) {
       localStorage.setItem(k, v);
+      if (k === 'pontage_theme') {
+        window.dispatchEvent(new Event('pontage_theme_updated'));
+      }
     }
   }
 }

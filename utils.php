@@ -125,41 +125,43 @@ loadEnvFile();
 function getDefaultServicePermissions()
 {
     return [
-        'can_view_dashboard' => true,
-        'can_edit_dashboard' => true,
-        'can_view_archives' => true,
-        'can_view_salaries' => true,
-        'can_view_settings' => false,
-        'communication' => true,
-        'analytics' => true,
-        'reclamation' => true,
-        'edit_reclamations' => false
+        'dashboard' => 'none',
+        'kiosk' => 'write',
+        'payroll' => 'read',
+        'archives' => 'none',
+        'salaries' => 'none',
+        'settings' => 'none',
+        'communication' => 'none',
+        'analytics' => 'none',
+        'reclamation_view' => 'none',
+        'reclamation_edit' => 'none'
     ];
 }
 
 function getAdminPermissions()
 {
     return [
-        'dashboard' => true,
-        'verification' => true,
-        'payroll' => true,
-        'kiosk' => true,
-        'salaries' => true,
-        'fluctuation' => true,
-        'archives' => true,
-        'settings' => true,
-        'services' => true,
-        'communication' => true,
-        'analytics' => true,
-        'reclamation' => true,
-        'edit_reclamations' => true
+        'dashboard' => 'write',
+        'verification' => 'write',
+        'payroll' => 'write',
+        'kiosk' => 'write',
+        'salaries' => 'write',
+        'fluctuation' => 'write',
+        'archives' => 'write',
+        'settings' => 'write',
+        'services' => 'write',
+        'communication' => 'write',
+        'analytics' => 'write',
+        'reclamation_view' => 'read',
+        'reclamation_edit' => 'write',
+        'company_config' => 'write'
     ];
 }
 
 function getSuperAdminPermissions()
 {
     $perms = getAdminPermissions();
-    $perms['can_manage_workspaces'] = true;
+    $perms['can_manage_workspaces'] = 'write';
     return $perms;
 }
 
@@ -330,14 +332,15 @@ function buildSubscriptionStateFromUser($user, $cfg, $messagePrefix = '')
         ];
     }
 
+    // Désactivation temporaire de la période d'essai (Abonnement toujours actif)
     return [
-        'access_allowed' => false,
-        'status' => 'expired',
-        'message' => trim($messagePrefix . ' Abonnement admin requis'),
-        'trial_days_left' => 0,
-        'subscription_days_left' => 0,
-        'trial_ends_at' => $user['trial_ends_at'] ?? null,
-        'subscription_until' => $user['subscription_until'] ?? null,
+        'access_allowed' => true,
+        'status' => 'active',
+        'message' => trim($messagePrefix . ' Accès libre temporaire'),
+        'trial_days_left' => 9999,
+        'subscription_days_left' => 9999,
+        'trial_ends_at' => null,
+        'subscription_until' => null,
         'monthly_price' => (int) ($cfg['monthly_price'] ?? 20000),
         'currency' => (string) ($cfg['currency'] ?? 'XOF'),
         'plan_code' => (string) ($cfg['plan_code'] ?? 'premium_monthly')
@@ -347,8 +350,8 @@ function buildSubscriptionStateFromUser($user, $cfg, $messagePrefix = '')
 function getUserByEmail($email)
 {
     $sqlite = getDb();
-    $stmt = $sqlite->prepare("SELECT * FROM users WHERE email = ?");
-    $stmt->execute([strtolower($email)]);
+    $stmt = $sqlite->prepare("SELECT * FROM users WHERE email = ? OR id = ?");
+    $stmt->execute([strtolower((string)$email), (string)$email]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($user) {
         $user['permissions'] = json_decode($user['permissions'] ?? '{}', true) ?: [];

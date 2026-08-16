@@ -2,7 +2,7 @@
  * Client d'API pour communiquer avec api.php
  */
 
-export async function apiCall(action, data = {}, method = 'POST') {
+export async function apiCall(action, data = {}, method = 'POST', signal = null) {
   const url = `/api.php?action=${action}`;
 
   try {
@@ -14,7 +14,8 @@ export async function apiCall(action, data = {}, method = 'POST') {
       response = await fetch(`${url}&${params}`, {
         method: 'GET',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        ...(signal ? { signal } : {})
       });
     } else {
       const options = {
@@ -22,8 +23,9 @@ export async function apiCall(action, data = {}, method = 'POST') {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': localStorage.getItem('pontage_csrf_token') || ''
+          'X-CSRF-Token': localStorage.getItem('pontage_csrf_token') || ''
         },
+        ...(signal ? { signal } : {})
       };
       if (method === 'POST') {
         options.body = JSON.stringify(data);
@@ -38,6 +40,10 @@ export async function apiCall(action, data = {}, method = 'POST') {
     return result;
 
   } catch (error) {
+    // Si la requête a été annulée intentionnellement, on retourne silencieusement
+    if (error.name === 'AbortError') {
+      return { success: true, aborted: true };
+    }
     console.error(`Erreur d'appel API [${action}]:`, error);
     return {
       success: false,

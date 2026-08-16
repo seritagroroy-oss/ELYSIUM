@@ -1,7 +1,4 @@
 <?php
-require 'backend/database.php';
-$db = getDb();
-$res = $db->query("SELECT id, name, service_id, company_id FROM sites");
-foreach ($res as $r) {
-    print_r($r);
-}
+$file = __DIR__ . '/frontend/src/components/Salaries.jsx';
+// Just a dummy to check sites, actually we can't easily read localStorage from PHP.
+// But we can check if there's a JSON file for sites in backend/data.

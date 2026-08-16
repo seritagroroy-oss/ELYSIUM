@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiCall } from '../api';
-import { ShieldAlert, Plus, Users, Loader2, KeyRound, CheckCircle2, Pencil, Trash2, X, Building2, ChevronRight, ChevronLeft, ArrowLeft, UserCircle2, Layers, PauseCircle, PowerOff, Wrench, Inbox } from 'lucide-react';
+import { ShieldAlert, Plus, Users, Loader2, KeyRound, CheckCircle2, Pencil, Trash2, X, Building2, ChevronRight, ChevronLeft, ArrowLeft, UserCircle2, Layers, PauseCircle, PowerOff, Wrench, Inbox, RefreshCw, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import BoiteReceptionAdmin from './BoiteReceptionAdmin';
 
@@ -20,14 +20,12 @@ export const WORKSPACE_PRESETS = {
       gps: 'none',
       dashboard: 'none',
       print_attendance: 'none',
-      print_payroll: 'none',
       fluctuation: 'none',
       salaries: 'write',
       calcul_salaires: 'none',
       reclamation_view: 'none',
       reclamation_edit: 'none',
       new_mep: 'none',
-      recrutement: 'write',
       materiel: 'none',
       verification: 'read',
       archives: 'read',
@@ -36,7 +34,8 @@ export const WORKSPACE_PRESETS = {
       kiosk: 'none',
       permissions: 'write',
       contracts: 'write',
-      registry: 'read'
+      registry: 'read',
+      suivi_personnel: 'write'
     }
   },
   'COMPTABLE': {
@@ -53,14 +52,13 @@ export const WORKSPACE_PRESETS = {
       gps: 'none',
       dashboard: 'none',
       print_attendance: 'read',
-      print_payroll: 'write',
       fluctuation: 'write',
+      facturation: 'write',
       salaries: 'write',
       calcul_salaires: 'write',
       reclamation_view: 'approver_3',
       reclamation_edit: 'none',
       new_mep: 'read',
-      recrutement: 'none',
       materiel: 'write',
       verification: 'none',
       archives: 'read',
@@ -87,41 +85,25 @@ export const WORKSPACE_PRESETS = {
       fluctuation: 'none',
       calcul_salaires: 'none',
       reclamation_edit: 'write',
-      recrutement: 'read',
       verification: 'read',
       kiosk: 'write',
       contracts: 'none',
       registre_visiteurs: 'none',
       pointage_courriers: 'none',
-      reflexe_securite: 'none',
       gestion_flotte: 'none',
-      fournitures_bureau: 'none',
       alertes_securite: 'write',
-      dg_rapports: 'none',
-      dg_spy: 'none',
       dg_audit: 'none',
       dg_predictive: 'none',
-      dg_litiges: 'none',
       dg_agenda: 'none',
-      dg_veille: 'none',
-      pdg_bilan: 'none',
-      pdg_sites: 'none',
-      pdg_benchmark: 'none',
-      pdg_expansion: 'none',
-      pdg_menaces: 'none',
-      pc_alertes: 'none',
       pc_dispatch: 'none',
       pc_main_courante: 'none',
-      ctrl_feuille: 'none',
       ctrl_rapport: 'write',
       ctrl_messagerie: 'write',
       ctrl_tracking: 'write',
       ctrl_flotte: 'write',
-      ctrl_notation: 'read',
       employees: 'none',
       leave: 'none',
       dashboard: 'write',
-      print_payroll: 'none',
       salaries: 'none',
       reclamation_view: 'none',
       new_mep: 'write',
@@ -130,31 +112,13 @@ export const WORKSPACE_PRESETS = {
       permissions: 'none',
       registry: 'read',
       annuaire_statut: 'none',
-      gestion_salles: 'none',
-      gestion_appels: 'none',
       badges_provisoires: 'none',
-      accueil_vip: 'none',
-      dg_vision: 'none',
-      dg_validation: 'none',
-      dg_block: 'none',
-      dg_megaphone: 'none',
-      dg_okr: 'none',
-      dg_organigramme: 'none',
       dg_pv: 'none',
-      pdg_souverain: 'none',
-      pdg_signature: 'none',
-      pdg_acces_maitre: 'none',
-      pdg_coffre: 'none',
-      pdg_actionnaires: 'none',
-      pc_radar: 'write',
       pc_cctv: 'write',
       pc_comms: 'write',
       pc_tracking: 'write',
-      ctrl_audit: 'none',
-      ctrl_dashboard: 'none',
-      ctrl_carnet: 'write',
+
       ctrl_dispatch: 'write',
-      ctrl_rondes: 'none'
     }
   },
   'SECRETARIAT': {
@@ -171,14 +135,12 @@ export const WORKSPACE_PRESETS = {
       gps: 'none',
       dashboard: 'none',
       print_attendance: 'none',
-      print_payroll: 'none',
       fluctuation: 'none',
       salaries: 'none',
       calcul_salaires: 'none',
       reclamation_view: 'modifier_no',
       reclamation_edit: 'none',
       new_mep: 'none',
-      recrutement: 'write',
       materiel: 'none',
       verification: 'read',
       archives: 'read',
@@ -189,15 +151,8 @@ export const WORKSPACE_PRESETS = {
       contracts: 'none',
       registry: 'read',
       registre_visiteurs: 'write',
-      annuaire_statut: 'write',
       pointage_courriers: 'write',
-      gestion_salles: 'write',
-      reflexe_securite: 'write',
-      gestion_appels: 'write',
       gestion_flotte: 'write',
-      badges_provisoires: 'write',
-      fournitures_bureau: 'write',
-      accueil_vip: 'write',
       alertes_securite: 'write'
     }
   },
@@ -231,14 +186,12 @@ export const WORKSPACE_PRESETS = {
       gps: 'read',
       dashboard: 'read',
       print_attendance: 'read',
-      print_payroll: 'read',
       fluctuation: 'read',
       salaries: 'read',
       calcul_salaires: 'none',
       reclamation_view: 'read',
       reclamation_edit: 'none',
       new_mep: 'read',
-      recrutement: 'read',
       materiel: 'read',
       verification: 'read',
       archives: 'read',
@@ -249,30 +202,10 @@ export const WORKSPACE_PRESETS = {
       contracts: 'read',
       registry: 'read',
       registre_visiteurs: 'read',
-      annuaire_statut: 'read',
       pointage_courriers: 'read',
-      gestion_salles: 'read',
-      reflexe_securite: 'read',
-      gestion_appels: 'read',
       gestion_flotte: 'read',
-      badges_provisoires: 'read',
-      fournitures_bureau: 'read',
-      accueil_vip: 'read',
       alertes_securite: 'read',
-      dg_vision: 'write',
-      dg_rapports: 'write',
-      dg_validation: 'write',
-      dg_spy: 'write', 
-      dg_block: 'write',
       dg_audit: 'write',
-      dg_megaphone: 'write',
-      dg_predictive: 'write',
-      dg_okr: 'write',
-      dg_litiges: 'write',
-      dg_organigramme: 'write',
-      dg_agenda: 'write',
-      dg_pv: 'write',
-      dg_veille: 'write'
     }
   },
   'PDG': {
@@ -282,20 +215,6 @@ export const WORKSPACE_PRESETS = {
     description: 'Espace souverain, vision globale de la valeur et gouvernance.',
     defaultService: 'Direction',
     permissions: {
-      pdg_souverain: 'write',
-      pdg_bilan: 'write',
-      pdg_signature: 'write',
-      pdg_sites: 'write',
-      pdg_acces_maitre: 'write',
-      pdg_benchmark: 'write',
-      pdg_coffre: 'write',
-      pdg_expansion: 'write',
-      pdg_actionnaires: 'write',
-      pdg_menaces: 'write',
-      dg_vision: 'read',
-      dg_rapports: 'read',
-      dg_okr: 'read',
-      dg_agenda: 'read'
     }
   },
 
@@ -306,18 +225,12 @@ export const WORKSPACE_PRESETS = {
     description: 'Supervision terrain des agents et sites. Audits, rapports express et carnet de bord.',
     defaultService: 'Opérations',
     permissions: {
-      ctrl_feuille: 'write',
-      ctrl_audit: 'write',
       ctrl_rapport: 'write',
-      ctrl_dashboard: 'read',
       ctrl_messagerie: 'write',
-      ctrl_carnet: 'write',
+
       ctrl_tracking: 'write',
       ctrl_dispatch: 'write',
       ctrl_flotte: 'write',
-      ctrl_rondes: 'write',
-      ctrl_notation: 'write',
-      gestion_appels: 'write'
     }
   },
   'AUTRE': {
@@ -331,83 +244,38 @@ export const WORKSPACE_PRESETS = {
 };
 
 const ALL_MODULES = {
-  analytics: '📊 Tableau de Bord Analytique',
   employees: '👥 Gestion des Employés',
   payroll: '🧾 État de Paie',
   leave: '✈️ Gestion des Congés',
-  gps: '📍 Pointage GPS',
+
   dashboard: '📅 Pointage du Mois',
-  print_attendance: '🖨️ Imprimer le Pointage',
-  print_payroll: '🖨️ Imprimer Fiche de Paie',
   fluctuation: '📈 Fluctuation Salariale',
   salaries: '💰 Grille Salariale',
+  facturation: '💼 Facturation Clients',
   calcul_salaires: '🧮 Calcul des Salaires',
   reclamation_view: '👀 Réclamation (Consultation)',
   reclamation_edit: '✏️ Réclamation (Édition)',
-  new_mep: '🆕 Nouvelle MEP',
-  recrutement: '🎯 Espace E-Recrutement',
-  materiel: '📦 Suivi du Matériel',
+  suivi_personnel: '👨‍💼 SUIVI DU PERSONNEL',
   verification: '✅ Traitement du pointage',
   archives: '🗂️ Archives & Rapports',
   communication: '💬 Communication & Tickets',
   services: '⚙️ Gestion des Profils',
-  kiosk: '📱 Mode Kiosque',
+
   permissions: '⏱️ Gestion des Permissions',
   contracts: '📁 Gestion des Contrats',
   registry: '🏢 Registre Général',
   registre_visiteurs: '📝 Registre des Visiteurs',
-  annuaire_statut: '📞 Annuaire & Statut',
   pointage_courriers: '📮 Pointage Courriers/Colis',
-  gestion_salles: '🚪 Gestion des Salles',
-  reflexe_securite: '🔒 Réflexe Sécurité',
-  gestion_appels: '☎️ Main Courante & Appels',
-  gestion_flotte: '🚗 Gestion de Flotte',
-  badges_provisoires: '💳 Badges Provisoires',
-  fournitures_bureau: '📎 Fournitures de Bureau',
-  accueil_vip: '👑 Protocole VIP',
-  alertes_securite: '🚨 Alertes Confinement',
-  dg_vision: '🦅 Vision 360° (DG)',
-  dg_rapports: '📑 Rapports Stratégiques (DG)',
-  dg_validation: '🎯 Validations Exécutives (DG)',
-  dg_spy: '🕵️ Mode Espion (DG)',
-  dg_block: '🚫 Blocage de Service (DG)',
+
+
   dg_audit: '📜 Audit & Traçabilité (DG)',
-  dg_megaphone: '📢 Mégaphone Exécutif (DG)',
-  dg_predictive: '🔮 Analyse Prédictive (DG)',
-  dg_okr: '🎯 Objectifs Stratégiques (DG)',
-  dg_litiges: '⚖️ Litiges & Alertes (DG)',
-  dg_organigramme: '🗺️ Organigramme Live (DG)',
-  dg_agenda: '📅 Agenda Stratégique (DG)',
-  dg_pv: '📝 Compte Rendu Réunions (DG)',
-  dg_veille: '📰 Veille Sectorielle (DG)',
-  pdg_souverain: '👑 Tableau de Bord Souverain (PDG)',
-  pdg_bilan: '📈 Bilan & Performance Financière (PDG)',
-  pdg_signature: '✍️ Signature Électronique Exécutive (PDG)',
-  pdg_sites: '🌐 Tableau des Sites & Filiales (PDG)',
-  pdg_acces_maitre: '🔐 Accès Maître & Super-Contrôle (PDG)',
-  pdg_benchmark: '📊 Comparatif Concurrentiel (PDG)',
-  pdg_coffre: '🏦 La Salle des Coffres (PDG)',
-  pdg_expansion: '🌍 Simulateur d\'Expansion M&A (PDG)',
-  pdg_actionnaires: '📜 Rapport aux Actionnaires (PDG)',
-  pdg_menaces: '⚡ Radar des Menaces Critiques (PDG)',
-  pc_radar: '🗺️ Radar Tactique (PC)',
-  pc_alertes: '🚨 Urgences & SOS (PC)',
-  pc_cctv: '📹 Vidéosurveillance CCTV (PC)',
-  pc_dispatch: '🚔 Dispatch & Patrouilles (PC)',
-  pc_comms: '📻 Statut Réseau & Radios (PC)',
+
   pc_main_courante: '📋 Registre Central Incidents (PC)',
-  pc_tracking: '📱 Tracking & Géolocalisation Live (PC)',
-  ctrl_feuille: '📋 Feuille de Route (Contrôleur)',
-  ctrl_audit: '🔍 Contrôle & Audit Agents (Contrôleur)',
-  ctrl_rapport: '📝 Rapport d\'Incident Express (Contrôleur)',
-  ctrl_dashboard: '📊 Tableau de Bord Secteur (Contrôleur)',
-  ctrl_messagerie: '💬 Messagerie Interne (Contrôleur)',
-  ctrl_carnet: '🗒️ Carnet de Bord (Contrôleur)',
-  ctrl_tracking: '📍 Tracking & Géoloc Live (Contrôleur)',
-  ctrl_dispatch: '🚔 Dispatch & Interventions (Contrôleur)',
-  ctrl_flotte: '🚗 Gestion Flotte (Contrôleur)',
-  ctrl_rondes: '⏱️ Supervision Rondes (Contrôleur)',
-  ctrl_notation: '⭐ Évaluation & Discipline (Contrôleur)',
+
+
+
+
+
   company_config: '🏢 Configuration Entreprise'
 };
 
@@ -444,6 +312,7 @@ export default function ServiceManagement() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
+  const [genericModal, setGenericModal] = useState(null);
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
@@ -477,6 +346,63 @@ export default function ServiceManagement() {
   const [editPerms, setEditPerms] = useState({});
   const [editSaving, setEditSaving] = useState(false);
 
+  // ─── Réinitialisation de mot de passe ────────────────────────────────────────
+  const [resetPasswordUser, setResetPasswordUser] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+    let pass = '';
+    for (let i = 0; i < 12; i++) pass += chars[Math.floor(Math.random() * chars.length)];
+    setNewPassword(pass);
+  };
+
+  const handleCopyPassword = () => {
+    navigator.clipboard.writeText(newPassword).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword || newPassword.length < 8) {
+      setResetError('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
+    setResetLoading(true);
+    setResetError('');
+    try {
+      const res = await apiCall('admin_reset_password', {
+        email: resetPasswordUser.email,
+        new_password: newPassword
+      }, 'POST');
+      if (res.success) {
+        setResetSuccess(true);
+      } else {
+        setResetError(res.message || 'Erreur lors de la réinitialisation.');
+      }
+    } catch (e) {
+      setResetError('Erreur réseau.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const closeResetModal = () => {
+    setResetPasswordUser(null);
+    setNewPassword('');
+    setResetSuccess(false);
+    setResetError('');
+    setCopied(false);
+    setShowNewPassword(false);
+  };
+  // ──────────────────────────────────────────────────────────────────────────────
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -491,24 +417,30 @@ export default function ServiceManagement() {
 
   const handleUpdateStatus = async (userToUpdate, newStatus) => {
     if (userToUpdate.email === user.email) {
-      alert("Vous ne pouvez pas modifier votre propre statut.");
+      setGenericModal({ title: 'Action Interdite', message: 'Vous ne pouvez pas modifier votre propre statut.', type: 'alert' });
       return;
     }
-    const confirm = window.confirm(`Voulez-vous vraiment changer le statut de ce compte en : ${newStatus} ?`);
-    if (!confirm) return;
-    try {
-      const res = await apiCall('update_user_status', { email: userToUpdate.email, status: newStatus });
-      if (res.success) {
-        fetchUsers();
-      } else {
-        alert(res.message || "Erreur lors de la mise à jour");
+    setGenericModal({
+      title: 'Confirmation',
+      message: `Voulez-vous vraiment changer le statut de ce compte en : ${newStatus} ?`,
+      type: 'confirm',
+      onConfirm: async () => {
+        setGenericModal(null);
+        try {
+          const res = await apiCall('update_user_status', { email: userToUpdate.email, status: newStatus });
+          if (res.success) {
+            fetchUsers();
+          } else {
+            setGenericModal({ title: 'Erreur', message: res.message || "Erreur lors de la mise à jour", type: 'alert' });
+          }
+        } catch(e) { setGenericModal({ title: 'Erreur', message: "Erreur réseau", type: 'alert' }); }
       }
-    } catch(e) { alert("Erreur réseau"); }
+    });
   };
 
   const handleToggleMaintenance = (userToUpdate) => {
     if (userToUpdate.email === user.email) {
-      alert("Vous ne pouvez pas mettre votre propre compte en maintenance.");
+      setGenericModal({ title: 'Action Interdite', message: 'Vous ne pouvez pas mettre votre propre compte en maintenance.', type: 'alert' });
       return;
     }
     setMaintenanceTargetUser(userToUpdate);
@@ -542,28 +474,63 @@ export default function ServiceManagement() {
 
   const handleDeleteUser = async (userToDelete) => {
     if (userToDelete.email === user.email) {
-      alert("Vous ne pouvez pas supprimer votre propre compte.");
+      setGenericModal({ title: 'Action Interdite', message: 'Vous ne pouvez pas supprimer votre propre compte.', type: 'alert' });
       return;
     }
-    const confirmDelete = window.confirm(`Êtes-vous sûr de vouloir supprimer définitivement le compte de ${userToDelete.name} (${userToDelete.email}) et toutes ses données associées ? Cette action est irréversible.`);
-    if (!confirmDelete) return;
+    setGenericModal({
+      title: 'Confirmation de suppression',
+      message: `Êtes-vous sûr de vouloir supprimer définitivement le compte de ${userToDelete.name} (${userToDelete.email}) et toutes ses données associées ? Cette action est irréversible.`,
+      type: 'confirm',
+      onConfirm: () => {
+        setGenericModal({
+          title: 'Suppression en cours...',
+          message: 'Suppression définitive du compte et de ses données associées. Fermez cette fenêtre (X) pour annuler.',
+          type: 'progress',
+          progress: 0
+        });
 
-    try {
-      const res = await apiCall('delete_user', { id: userToDelete.id });
-      if (res.success) {
-        setUsers(users.filter(u => u.id !== userToDelete.id));
-      } else {
-        alert(res.error || res.message || 'Erreur lors de la suppression');
+        let currentProgress = 0;
+        const interval = setInterval(() => {
+          currentProgress += 1;
+          
+          setGenericModal(prev => {
+            if (!prev || prev.type !== 'progress') {
+              clearInterval(interval);
+              return prev;
+            }
+            return { ...prev, progress: currentProgress };
+          });
+
+          if (currentProgress >= 100) {
+            clearInterval(interval);
+            (async () => {
+              try {
+                const res = await apiCall('delete_user', { id: userToDelete.id });
+                if (res.success) {
+                  setGenericModal(currentModal => {
+                    if (currentModal && currentModal.type === 'progress') {
+                      setUsers(prevUsers => prevUsers.filter(u => u.id !== userToDelete.id));
+                      return null;
+                    }
+                    return currentModal;
+                  });
+                } else {
+                  setGenericModal({ title: 'Erreur', message: res.error || res.message || 'Erreur lors de la suppression', type: 'alert' });
+                }
+              } catch (e) {
+                setGenericModal({ title: 'Erreur', message: 'Erreur réseau lors de la suppression', type: 'alert' });
+              }
+            })();
+          }
+        }, 100);
       }
-    } catch (e) {
-      alert('Erreur réseau lors de la suppression');
-    }
+    });
   };
 
   useEffect(() => {
     if (user?.role === 'super_admin' || user?.role === 'admin') fetchUsers();
     else setLoading(false);
-  }, [user]);
+  }, [user?.email, user?.role]);
 
   const handleWorkspaceChange = (ws) => {
     setWorkspaceType(ws);
@@ -641,7 +608,7 @@ export default function ServiceManagement() {
                 <strong style={{ display: 'block', marginBottom: '8px' }}>💡 Suggestions :</strong>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {res.suggestions.map((sugg, idx) => (
-                    <div key={idx} style={{ color: '#38bdf8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(56,189,248,0.1)', padding: '6px 12px', borderRadius: '6px' }} onClick={() => { setEmail(sugg); setMessage(''); }}>
+                    <div key={sugg} style={{ color: '#38bdf8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(56,189,248,0.1)', padding: '6px 12px', borderRadius: '6px' }} onClick={() => { setEmail(sugg); setMessage(''); }}>
                       <span>👉</span> <strong>{sugg}</strong>
                     </div>
                   ))}
@@ -655,11 +622,141 @@ export default function ServiceManagement() {
     } catch (e) { setMessage('Erreur de connexion'); } finally { setSubmitting(false); }
   };
 
-  const hasServicesPermission = user?.role === 'super_admin' ||
+  const hasServicesPermission = user?.role === 'super_admin' || user?.role === 'admin' ||
     (Array.isArray(user?.permissions) ? user.permissions.includes('services') :
-    (user?.permissions ? Object.values(user.permissions).includes('services') || !!user.permissions['services'] : false));
+    (user?.permissions ? (user.permissions['services'] === 'write' || user.permissions['services'] === true || user.permissions['can_view_settings'] === true) : false));
 
   if (!hasServicesPermission) return <div className="alert alert-danger" style={{ margin: '20px' }}>Accès refusé.</div>;
+
+  // ─── MODAL : Réinitialisation de mot de passe ─────────────────────────────────
+  const renderResetPasswordModal = () => (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.75)',
+      backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+    }}>
+      <div style={{
+        background: '#0d1526', borderRadius: '20px', padding: '36px',
+        maxWidth: '460px', width: '100%', position: 'relative',
+        border: '1px solid rgba(249,115,22,0.25)',
+        boxShadow: '0 25px 60px rgba(0,0,0,0.7), 0 0 40px rgba(249,115,22,0.05)'
+      }}>
+        <button onClick={closeResetModal} style={{ position: 'absolute', top: '14px', right: '14px', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
+          onMouseEnter={e => e.currentTarget.style.color='#fff'} onMouseLeave={e => e.currentTarget.style.color='#64748b'}>
+          <X size={20} />
+        </button>
+
+        {!resetSuccess ? (
+          <>
+            {/* En-tête */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <KeyRound size={24} color="#f97316" />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, color: 'white', fontWeight: 800, fontSize: '1.2rem' }}>Réinitialiser le mot de passe</h3>
+                <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>
+                  Compte : <strong style={{ color: '#38bdf8' }}>{resetPasswordUser?.name}</strong>
+                </p>
+                <p style={{ margin: '2px 0 0', color: '#64748b', fontSize: '0.78rem' }}>{resetPasswordUser?.email}</p>
+              </div>
+            </div>
+
+            {/* Avertissement */}
+            <div style={{ background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+              <p style={{ margin: 0, color: '#fed7aa', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                Cette action remplace immédiatement le mot de passe actuel. Communiquez le nouveau mot de passe à l'utilisateur par un canal sécurisé (en main propre ou messagerie chiffrée). Exigez qu'il le change à sa prochaine connexion.
+              </p>
+            </div>
+
+            {resetError && (
+              <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '10px 14px', color: '#f87171', fontSize: '0.85rem', marginBottom: '16px' }}>
+                {resetError}
+              </div>
+            )}
+
+            {/* Champ nouveau mot de passe */}
+            <label style={{ display: 'block', color: '#cbd5e1', fontSize: '0.88rem', fontWeight: 600, marginBottom: '8px' }}>Nouveau mot de passe temporaire</label>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Saisir ou générer..."
+                  style={{
+                    width: '100%', padding: '11px 44px 11px 14px', background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: 'white',
+                    fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box', fontFamily: showNewPassword ? 'inherit' : 'monospace'
+                  }}
+                  onFocus={e => e.target.style.borderColor = 'rgba(249,115,22,0.5)'}
+                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                />
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>
+                  {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {/* Copier */}
+              <button onClick={handleCopyPassword} title="Copier" disabled={!newPassword}
+                style={{ padding: '0 14px', background: copied ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${copied ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '10px', color: copied ? '#22c55e' : '#94a3b8', cursor: 'pointer', transition: 'all 0.2s' }}>
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+              </button>
+              {/* Générer */}
+              <button onClick={generatePassword} title="Générer automatiquement"
+                style={{ padding: '0 14px', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '10px', color: '#38bdf8', cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.background='rgba(56,189,248,0.15)'}
+                onMouseLeave={e => e.currentTarget.style.background='rgba(56,189,248,0.08)'}>
+                <RefreshCw size={16} />
+              </button>
+            </div>
+            <p style={{ color: '#475569', fontSize: '0.78rem', marginBottom: '24px' }}>
+              💡 Cliquez sur <strong style={{ color: '#38bdf8' }}>↻</strong> pour générer un mot de passe fort aléatoire, puis copiez-le avant de confirmer.
+            </p>
+
+            {/* Bouton confirmer */}
+            <button
+              onClick={handleResetPassword}
+              disabled={resetLoading || !newPassword}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '10px',
+                background: 'linear-gradient(135deg, #f97316, #ea580c)',
+                color: 'white', border: 'none', fontWeight: 800, fontSize: '1rem',
+                cursor: (resetLoading || !newPassword) ? 'not-allowed' : 'pointer',
+                opacity: (resetLoading || !newPassword) ? 0.6 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                boxShadow: '0 4px 20px rgba(249,115,22,0.3)', transition: 'all 0.2s'
+              }}
+            >
+              {resetLoading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <KeyRound size={18} />}
+              {resetLoading ? 'Réinitialisation...' : 'Confirmer la réinitialisation'}
+            </button>
+          </>
+        ) : (
+          /* Écran de succès */
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'rgba(34,197,94,0.1)', border: '2px solid rgba(34,197,94,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+              <CheckCircle2 size={34} color="#22c55e" />
+            </div>
+            <h3 style={{ color: 'white', fontSize: '1.3rem', fontWeight: 800, marginBottom: '10px' }}>Mot de passe réinitialisé !</h3>
+            <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: 1.7, marginBottom: '8px' }}>
+              Le mot de passe de <strong style={{ color: '#38bdf8' }}>{resetPasswordUser?.name}</strong> a été mis à jour avec succès.
+            </p>
+            <p style={{ color: '#64748b', fontSize: '0.82rem', marginBottom: '28px', lineHeight: 1.6 }}>
+              📋 Communiquez le nouveau mot de passe à l'utilisateur de manière sécurisée (en main propre de préférence). L'action a été enregistrée dans les logs de l'administration.
+            </p>
+            <button onClick={closeResetModal}
+              style={{ padding: '12px 32px', borderRadius: '10px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem', transition: 'all 0.2s' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(34,197,94,0.2)'}
+              onMouseLeave={e => e.currentTarget.style.background='rgba(34,197,94,0.1)'}>
+              Fermer
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+  // ──────────────────────────────────────────────────────────────────────────────
 
   const getWorkspaceBadge = (ws) => {
     const preset = WORKSPACE_PRESETS[ws] || WORKSPACE_PRESETS['AUTRE'];
@@ -671,13 +768,13 @@ export default function ServiceManagement() {
   };
 
   // --- SHARED COMPONENTS ---
-  const UserGrid = () => (
+  const renderUserGrid = () => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
       {users.length === 0 ? (
         <div style={{ padding: '40px', color: 'var(--muted)', textAlign: 'center', gridColumn: '1 / -1' }}>Aucun compte trouvé.</div>
       ) : (
         users.map((u, idx) => (
-          <div key={idx} className="glass-panel profile-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px', position: 'relative', border: '3px solid white' }}>
+          <div key={u.id || u.email || `user-${idx}`} className="glass-panel profile-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px', position: 'relative', border: '3px solid white' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '15px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: '1 1 auto' }}>
                 <label style={{ cursor: 'pointer', flexShrink: 0 }} title="Modifier la photo">
@@ -703,6 +800,7 @@ export default function ServiceManagement() {
                       {u.status === 'suspended' ? 'SUSPENDU' : u.status === 'deactivated' ? 'DÉSACTIVÉ' : 'ACTIF'}
                     </span>
                     {u.maintenance_mode && <span style={{ fontSize: '0.65rem', padding: '2px 6px', background: '#3b82f622', color: '#3b82f6', borderRadius: '4px', border: '1px solid currentColor', fontWeight: 700, letterSpacing: '0.5px' }}>MAINTENANCE</span>}
+                    {u.password_reset_requested_at && <span style={{ fontSize: '0.65rem', padding: '2px 6px', background: '#ef444422', color: '#ef4444', borderRadius: '4px', border: '1px solid currentColor', fontWeight: 700, letterSpacing: '0.5px' }}>RÉINIT. DEMANDÉE</span>}
                   </div>
                   <span style={{ fontSize: '0.8rem', color: 'white', marginTop: '4px', display: 'block', wordBreak: 'break-word' }}>{u.email}</span>
                 </div>
@@ -729,6 +827,21 @@ export default function ServiceManagement() {
                 >
                   <Pencil size={16} />
                 </button>
+                {/* Bouton Réinitialiser le mot de passe */}
+                {u.email !== user.email && (
+                  <button
+                    onClick={() => {
+                        setResetPasswordUser(u); setNewPassword(''); setResetSuccess(false); setResetError('');
+                    }}
+                    style={{ background: 'transparent', border: 'none', color: u.password_reset_requested_at ? '#f97316' : '#64748b', cursor: 'pointer', padding: '5px', position: 'relative' }}
+                    title={u.password_reset_requested_at ? "Demande en attente : Réinitialiser le mot de passe" : "Réinitialiser le mot de passe (si autorisé)"}
+                  >
+                    <KeyRound size={16} />
+                    {u.password_reset_requested_at && (
+                      <span style={{ position: 'absolute', top: 2, right: 2, width: 8, height: 8, background: '#ef4444', borderRadius: '50%', boxShadow: '0 0 5px #ef4444' }} />
+                    )}
+                  </button>
+                )}
                 <button onClick={() => handleUpdateStatus(u, u.status === 'suspended' ? 'active' : 'suspended')} style={{ background: 'transparent', border: 'none', color: u.status === 'suspended' ? '#22c55e' : '#f59e0b', cursor: 'pointer', padding: '5px' }} title={u.status === 'suspended' ? 'Réactiver' : 'Suspendre'}>
                   <PauseCircle size={16} />
                 </button>
@@ -759,7 +872,7 @@ export default function ServiceManagement() {
     </div>
   );
 
-  const FormContent = () => (
+  const renderFormContent = () => (
     <>
       <div className="form-group" style={{ marginBottom: '15px' }}>
         <label className="form-label">Photo de profil (Optionnel)</label>
@@ -837,6 +950,8 @@ export default function ServiceManagement() {
 
   return (
     <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', position: 'relative' }}>
+      {/* Modal réinitialisation mot de passe */}
+      {resetPasswordUser && renderResetPasswordModal()}
       
       {/* HEADER & SWITCHER */}
       {!(uiDesign === 3 && viewMode === 'wizard') && (
@@ -879,7 +994,7 @@ export default function ServiceManagement() {
 
       {loading ? (
          <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}>
-           <Loader2 className="animate-spin" size={40} style={{ color: '#38bdf8' }} />
+           <div className="loader-pulsar"><div className="loader-pulsar-inner"></div></div>
          </div>
       ) : (
         <>
@@ -889,7 +1004,7 @@ export default function ServiceManagement() {
           {uiDesign === 1 && (
             <div style={{ position: 'relative', overflowX: 'hidden' }}>
               <div style={{ filter: showDrawer ? 'blur(4px)' : 'none', opacity: showDrawer ? 0.6 : 1, transition: '0.3s' }}>
-                <UserGrid />
+                {renderUserGrid()}
               </div>
               
               {/* Drawer */}
@@ -906,7 +1021,7 @@ export default function ServiceManagement() {
                 <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
                   {message && <div className={`alert ${success ? 'alert-success' : 'alert-danger'}`} style={{ marginBottom: '20px' }}>{message}</div>}
                   <form onSubmit={handleCreateAccount} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <FormContent />
+                    {renderFormContent()}
                     <button type="submit" className="btn btn-primary" disabled={submitting} style={{ marginTop: '20px', padding: '14px' }}>
                       {submitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Créer
                     </button>
@@ -926,14 +1041,14 @@ export default function ServiceManagement() {
                 <h3 style={{ fontSize: '1.1rem', marginBottom: '20px', color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} color="#38bdf8"/> Créer un compte</h3>
                 {message && <div className={`alert ${success ? 'alert-success' : 'alert-danger'}`} style={{ marginBottom: '20px' }}>{message}</div>}
                 <form onSubmit={handleCreateAccount} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <FormContent />
+                  {renderFormContent()}
                   <button type="submit" className="btn btn-primary" disabled={submitting} style={{ marginTop: '20px', padding: '14px' }}>
                     {submitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Créer le compte
                   </button>
                 </form>
               </div>
               <div>
-                 <UserGrid />
+                 {renderUserGrid()}
               </div>
             </div>
           )}
@@ -943,7 +1058,7 @@ export default function ServiceManagement() {
           ====================================================================== */}
           {uiDesign === 3 && (
             viewMode === 'wizard' ? (
-              <div className="glass-panel" style={{ maxWidth: '800px', margin: '0 auto', padding: '0', border: '1px solid rgba(255,255,255,0.8)' }}>
+              <div className="glass-panel" style={{ maxWidth: '1200px', maxHeight: '85vh', overflowY: 'auto', margin: '0 auto', padding: '0', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '20px 30px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '15px' }}>
                   <button onClick={() => setViewMode('list')} className="btn" style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', border: 'none', color: 'white' }}><ArrowLeft size={18} color="white" /></button>
                   <div style={{ flex: 1 }}>
@@ -973,7 +1088,7 @@ export default function ServiceManagement() {
                   )}
 
                   {wizardStep === 2 && (
-                    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '800px', margin: '0 auto', width: '100%' }}>
                       <h4 style={{ fontSize: '1.1rem', margin: 0, color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ fontSize: '1.5rem' }}>{WORKSPACE_PRESETS[workspaceType]?.icon}</span>2. Informations de {WORKSPACE_PRESETS[workspaceType]?.label}</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -991,13 +1106,18 @@ export default function ServiceManagement() {
                       <div className="form-group"><label className="form-label">Email (Identifiant de connexion)</label><input type="email" className="form-input" value={email} onChange={e => setEmail(e.target.value)} required /></div>
                       <div className="form-group">
                         <label className="form-label">Mot de passe sécurisé</label>
-                        <div style={{ position: 'relative' }}><KeyRound size={16} style={{ position: 'absolute', left: '12px', top: '10px', color: 'var(--muted)' }} /><input type="text" className="form-input" value={password} onChange={e => setPassword(e.target.value)} required style={{ paddingLeft: '36px' }} /></div>
-                        {password.length > 0 && (
-                          <div style={{ marginTop: '10px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '6px' }}><span style={{ color: 'var(--muted)' }}>Force :</span><span style={{ color: strengthColor, fontWeight: 700 }}>{strengthLabel}</span></div>
-                            <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}><div style={{ width: `${passwordStrength}%`, height: '100%', background: strengthColor, transition: '0.3s' }} /></div>
+                        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                          <div style={{ position: 'relative', flex: 1 }}>
+                            <KeyRound size={16} style={{ position: 'absolute', left: '12px', top: '10px', color: 'var(--muted)' }} />
+                            <input type="text" className="form-input" value={password} onChange={e => setPassword(e.target.value)} required style={{ paddingLeft: '36px' }} />
                           </div>
-                        )}
+                          {password.length > 0 && (
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '6px' }}><span style={{ color: 'var(--muted)' }}>Force :</span><span style={{ color: strengthColor, fontWeight: 700 }}>{strengthLabel}</span></div>
+                              <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}><div style={{ width: `${passwordStrength}%`, height: '100%', background: strengthColor, transition: '0.3s' }} /></div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
                         <button type="button" onClick={() => setWizardStep(1)} className="btn" style={{ background: 'rgba(255,255,255,0.05)', border: 'none' }}><ChevronLeft size={16} /> Précédent</button>
@@ -1011,7 +1131,7 @@ export default function ServiceManagement() {
                   )}
 
                   {wizardStep === 3 && (
-                    <form onSubmit={handleCreateAccount} className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <form onSubmit={handleCreateAccount} className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
                       <h4 style={{ fontSize: '1.1rem', margin: 0, color: 'white' }}>3. Révision des Droits</h4>
                       <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
                         <div className="form-group" style={{ marginBottom: '15px' }}><label className="form-label">Rôle technique</label><select className="form-input" value={role} onChange={e => setRole(e.target.value)}><option value="user">Utilisateur standard</option><option value="admin">Administrateur</option>{user?.role === 'super_admin' && <option value="super_admin">Super Administrateur</option>}</select></div>
@@ -1040,7 +1160,7 @@ export default function ServiceManagement() {
                 </div>
               </div>
             ) : (
-              <UserGrid />
+              renderUserGrid()
             )
           )}
 
@@ -1067,12 +1187,12 @@ export default function ServiceManagement() {
               </div>
               
               <div style={{ padding: '30px' }}>
-                {activeTab === 'list' && <UserGrid />}
+                {activeTab === 'list' && renderUserGrid()}
                 {activeTab === 'create' && (
                   <div style={{ maxWidth: '600px', margin: '0 auto' }}>
                     {message && <div className={`alert ${success ? 'alert-success' : 'alert-danger'}`} style={{ marginBottom: '20px' }}>{message}</div>}
                     <form onSubmit={handleCreateAccount} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <FormContent />
+                      {renderFormContent()}
                       <button type="submit" className="btn btn-primary" disabled={submitting} style={{ marginTop: '20px', padding: '14px', width: '100%' }}>
                         {submitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Créer le compte
                       </button>
@@ -1088,7 +1208,7 @@ export default function ServiceManagement() {
                     </thead>
                     <tbody>
                       {companies.map((c, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <tr key={c.id || `company-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                           <td style={{ padding: '12px 8px', color: 'white' }}>{c.name}</td><td style={{ padding: '12px 8px', color: 'var(--muted)' }}>{c.owner_email}</td><td style={{ padding: '12px 8px' }}>{new Date(c.created_at).toLocaleDateString()}</td>
                         </tr>
                       ))}
@@ -1103,6 +1223,47 @@ export default function ServiceManagement() {
           )}
 
         </>
+      )}
+
+      {/* Generic Modal (Alert / Confirm) */}
+      {genericModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(4px)' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '450px', padding: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', color: genericModal.title === 'Erreur' || genericModal.title === 'Action Interdite' || genericModal.type === 'progress' ? '#ef4444' : '#38bdf8' }}>{genericModal.title}</h3>
+              <button onClick={() => setGenericModal(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <p style={{ color: 'white', fontSize: '0.95rem', marginBottom: '25px', lineHeight: '1.5' }}>
+              {genericModal.message}
+            </p>
+            
+            {genericModal.type === 'progress' ? (
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: `${genericModal.progress}%`, height: '100%', background: '#ef4444', transition: 'width 0.1s linear' }} />
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '0.85rem', color: 'var(--muted)', marginTop: '8px', fontWeight: 600 }}>
+                  {genericModal.progress}%
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                {genericModal.type === 'confirm' && (
+                  <button onClick={() => setGenericModal(null)} style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>Annuler</button>
+                )}
+                <button onClick={() => {
+                  if (genericModal.type === 'confirm' && genericModal.onConfirm) {
+                    genericModal.onConfirm();
+                  } else {
+                    setGenericModal(null);
+                  }
+                }} style={{ padding: '10px 16px', background: genericModal.title === 'Erreur' || genericModal.title === 'Action Interdite' ? '#ef4444' : '#38bdf8', color: genericModal.title === 'Erreur' || genericModal.title === 'Action Interdite' ? 'white' : 'black', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
+                  {genericModal.type === 'confirm' ? 'Confirmer' : 'OK'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Modal Modifier Permissions */}
