@@ -1769,6 +1769,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             // Réduire les deux compteurs pour corriger le calcul du frontend
                             // (compteur ✓ = 30 - absences - entrant_sortant_count)
                             $entrant_count = max(0, $entrant_count - $entrant_adjust);
+                            $entrant_sortant_count = max(0, $entrant_sortant_count - $entrant_adjust);
                         }
                     }
 
