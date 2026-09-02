@@ -1737,42 +1737,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     }
 
 
-                    // Ajustement calendaire pour les mois de 31 jours et les agents sortants :
-                    // Le jour en trop du cycle (count($dates) - 30) est absorbé par la période
-                    // d'inactivité post-départ, afin de restituer les jours de présence réels.
-                    if (count($dates) > 30) {
-                        $month_surplus = count($dates) - 30;
-                        $exit_days_count = 0;
-                        foreach ($dates as $d_check) {
-                            $sJ_c = $att_map['J'][$d_check] ?? '';
-                            $sN_c = $att_map['N'][$d_check] ?? '';
-                            $is_ex_j = in_array($sJ_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sJ_c) && strpos($sJ_c, 'SORTANT_') === 0);
-                            $is_ex_n = in_array($sN_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sN_c) && strpos($sN_c, 'SORTANT_') === 0);
-                            if ($is_ex_j || $is_ex_n) $exit_days_count++;
-                        }
-                        if ($exit_days_count > 0) {
-                            $exit_adjust = min($exit_days_count, $month_surplus);
-                            $absences = max(0, $absences - $exit_adjust);
-                            $month_surplus -= $exit_adjust;
-                        }
 
-                        // Ajustement ENTRANT : même logique que SORTANT
-                        // Le jour excédentaire est absorbé par les jours de pré-présence (ENTRANT),
-                        // pas déduit des jours de présence réels de l'agent.
-                        $entrant_days_count = 0;
-                        foreach ($dates as $d_check) {
-                            $sJ_c = $att_map['J'][$d_check] ?? '';
-                            $sN_c = $att_map['N'][$d_check] ?? '';
-                            if (in_array($sJ_c, ['ENTRANT', 'REINTEGRATION']) || in_array($sN_c, ['ENTRANT', 'REINTEGRATION'])) $entrant_days_count++;
-                        }
-                        if ($entrant_days_count > 0) {
-                            $entrant_adjust = min($entrant_days_count, $month_surplus);
-                            // Réduire les deux compteurs pour corriger le calcul du frontend
-                            // (compteur ✓ = 30 - absences - entrant_sortant_count)
-                            $entrant_count = max(0, $entrant_count - $entrant_adjust);
-                            $entrant_sortant_count = max(0, $entrant_sortant_count - $entrant_adjust);
-                        }
-                    }
 
                     $is244872 = in_array(strtolower($agent['shift_type'] ?? ''), ['24h', '48h', '72h']);
                     $totalRuptureBackend = 0;
