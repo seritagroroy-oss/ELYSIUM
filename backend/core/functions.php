@@ -1753,6 +1753,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         if ($exit_days_count > 0) {
                             $exit_adjust = min($exit_days_count, $month_surplus);
                             $absences = max(0, $absences - $exit_adjust);
+                            $month_surplus -= $exit_adjust;
                         }
 
                         // Ajustement ENTRANT : même logique que SORTANT
