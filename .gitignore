@@ -30,3 +30,11 @@ desktop.ini
 
 # Scratch
 scratch/
+
+# Fichiers DB et SQL trop lourds pour GitHub (>100MB)
+*.db
+*.sql
+backend/elysium.db
+sauvegard/*.sql
+sauvegard/*.db
+sauvegard/*.sqlite

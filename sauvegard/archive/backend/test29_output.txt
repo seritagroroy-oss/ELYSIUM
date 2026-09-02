@@ -1,0 +1,9 @@
+Entry #1
+Site: EXTRAS BUREAU | Subsite: EXTRAS BUREAU Abidjan
+active_days: 30
+days_worked: 29
+absences: 1
+sp_details count: 1
+is_clone: Yes
+No mutation_breakdown
+--------

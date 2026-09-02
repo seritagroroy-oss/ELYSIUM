@@ -1,0 +1,115 @@
+[
+    {
+        "id": "ag_1786404430_ag_1786393167_ag_1783965360_3806",
+        "name": "KONATE MOUSTAPHA",
+        "site": "LDF",
+        "site_location": "abidjan",
+        "subsite": "ABIDJAN MALL",
+        "function": "AS",
+        "function_label": "Agent Simple",
+        "shift_type": "Jour",
+        "profile_data": {
+            "admin_schedule": false,
+            "special_service": false,
+            "special_service_base": 12,
+            "special_service_days": [],
+            "mutation_breakdown": {
+                "original": {
+                    "site": "EXTRAS BUREAU",
+                    "subsite": "EXTRAS BUREAU Abidjan",
+                    "function": "Agent Simple",
+                    "active_days": 10,
+                    "calendar_active_days": 10,
+                    "absences": 0,
+                    "map_count": 0,
+                    "permission_count": 0,
+                    "entrant_sortant_count": 0,
+                    "worked_days": 10,
+                    "base_prorata": 25000,
+                    "base_full": 75000
+                },
+                "mutated": {
+                    "site": "BUREAU",
+                    "subsite": "PNCR (CITE LEMANIA)",
+                    "function": "Agent Simple",
+                    "active_days": 20,
+                    "calendar_active_days": 20,
+                    "absences": 7,
+                    "map_count": 0,
+                    "permission_count": 0,
+                    "entrant_sortant_count": 0,
+                    "worked_days": 13,
+                    "base_prorata": 50000,
+                    "base_full": 75000
+                }
+            },
+            "payment_method": "MONEY",
+            "payment_number": "01 53 83 88 44",
+            "payment_operator": "Moov Money",
+            "payment_country": "CI"
+        },
+        "heures_travaillees": 240,
+        "base": 75000,
+        "base_full": 75000,
+        "is_special_salary": false,
+        "status_change": null,
+        "sc_active_days_old": 0,
+        "sc_active_days_new": 0,
+        "sc_assigned_days_old": 0,
+        "sc_assigned_days_new": 0,
+        "sc_base_old": 0,
+        "sc_base_new": 0,
+        "sc_abs_old": 0,
+        "sc_abs_new": 0,
+        "real_active": 31,
+        "active_days": 30,
+        "days_worked": 25,
+        "is_entrant": false,
+        "hire_date": "2026-07-07",
+        "is_sortant": false,
+        "contract_end": null,
+        "att_count": 0,
+        "absences": 5,
+        "entrant_sortant_count": 0,
+        "absence_details": [
+            {
+                "date": "2026-08-08",
+                "shift": "Jour",
+                "reason": "A"
+            },
+            {
+                "date": "2026-08-09",
+                "shift": "Jour",
+                "reason": "A"
+            },
+            {
+                "date": "2026-08-11",
+                "shift": "Jour",
+                "reason": "A"
+            },
+            {
+                "date": "2026-08-12",
+                "shift": "Jour",
+                "reason": "A"
+            },
+            {
+                "date": "2026-08-13",
+                "shift": "Jour",
+                "reason": "A"
+            }
+        ],
+        "map_count": 0,
+        "map_details": [],
+        "permission_count": 0,
+        "permission_details": [],
+        "cp_count": 0,
+        "cp_details": [],
+        "sp_count": 0,
+        "sp_details": [],
+        "deductions": 12500,
+        "gains": 0,
+        "prime_site": 5000,
+        "remboursement_pret": 0,
+        "total": 67500
+    }
+]

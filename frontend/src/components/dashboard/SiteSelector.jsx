@@ -21,7 +21,7 @@ export default function SiteSelector({ state, actions }) {
     showNextMonthModal, initializing, initProgress, sitesToKeepHS, showKeepHSModal,
     siteContextMenu, loading, showStats, showBlacklist, showDeleteSiteModal, deleteSiteData,
     lockedZones, getPeriodLabel, isEditMode, isEmptyMonth, isEmptyFutureMonth,
-    publishedPeriods, datesList, showVerificationSites, showVerificationModal, showCalendar,
+    publishedPeriods, maxInitializedPeriod, datesList, showVerificationSites, showVerificationModal, showCalendar,
     showPublishReport, showPublishSuccess, leaves, cycleStart,
     expandedFaq, siteSearchTerm, enableAnimations, editModeBehavior, agentTableMode, showRenameSiteModal,
     isVerifying, publishing, draggedSite, iconPickerSiteId, highlightedAgentId, showAgentCountHover,
@@ -588,21 +588,28 @@ export default function SiteSelector({ state, actions }) {
                   </div>
 
                   <button
-                    onClick={isVerificationMode ? null : () => setIsEditMode(!isEditMode)}
+                    onClick={(isVerificationMode || publishedPeriods.includes(period)) ? null : () => setIsEditMode(!isEditMode)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 16px', borderRadius: '8px',
-                      background: (isEditMode && !isVerificationMode) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                      border: (isEditMode && !isVerificationMode) ? '1px solid rgba(52, 211, 153, 0.4)' : '1px solid var(--border)',
-                      color: (isEditMode && !isVerificationMode) ? '#34d399' : 'var(--text-muted)',
-                      cursor: isVerificationMode ? 'default' : 'pointer',
+                      background: publishedPeriods.includes(period)
+                        ? 'rgba(255, 255, 255, 0.03)'
+                        : (isEditMode && !isVerificationMode) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                      border: publishedPeriods.includes(period)
+                        ? '1px solid rgba(255, 255, 255, 0.08)'
+                        : (isEditMode && !isVerificationMode) ? '1px solid rgba(52, 211, 153, 0.4)' : '1px solid var(--border)',
+                      color: publishedPeriods.includes(period)
+                        ? 'rgba(255, 255, 255, 0.3)'
+                        : (isEditMode && !isVerificationMode) ? '#34d399' : 'var(--text-muted)',
+                      cursor: (isVerificationMode || publishedPeriods.includes(period)) ? 'not-allowed' : 'pointer',
                       fontWeight: 'bold',
                       fontSize: '0.9rem',
+                      opacity: publishedPeriods.includes(period) ? 0.6 : 1,
                       transition: 'all 0.2s'
                     }}
-                    title={isVerificationMode ? "Sécurité activée. Mode lecture seule uniquement." : (isEditMode ? "Le pointage est modifiable (Clic pour verrouiller)" : "Sécurité activée. Clic-gauche et modifications désactivés (Clic pour déverrouiller)")}
+                    title={publishedPeriods.includes(period) ? "Pointage publié — Lecture seule. Dépubliez pour modifier." : isVerificationMode ? "Sécurité activée. Mode lecture seule uniquement." : (isEditMode ? "Le pointage est modifiable (Clic pour verrouiller)" : "Sécurité activée. Clic-gauche et modifications désactivés (Clic pour déverrouiller)")}
                   >
-                    <span style={{ fontSize: '1.2rem' }}>{(isEditMode && !isVerificationMode) ? '🔓' : '🔒'}</span>
-                    {isVerificationMode ? 'Mode Lecture' : (isEditMode ? 'Mode Édition' : 'Mode Lecture')}
+                    <span style={{ fontSize: '1.2rem' }}>{publishedPeriods.includes(period) ? '🔒' : (isEditMode && !isVerificationMode) ? '🔓' : '🔒'}</span>
+                    {publishedPeriods.includes(period) ? 'Lecture seule' : isVerificationMode ? 'Mode Lecture' : (isEditMode ? 'Mode Édition' : 'Mode Lecture')}
                   </button>
                 </div>
               )}
@@ -705,6 +712,8 @@ export default function SiteSelector({ state, actions }) {
                       </div>
                     </>
                   ) : (
+                    // Masquer le bouton "Mois Suivant" si l'utilisateur a déjà avancé au-delà de ce mois
+                    maxInitializedPeriod && maxInitializedPeriod > period ? null : (
                     <button
                       className="btn btn-primary"
                       onClick={() => setShowNextMonthModal(true)}
@@ -722,6 +731,7 @@ export default function SiteSelector({ state, actions }) {
                     >
                       <CalendarDays size={14} /> Mois Suivant ➔
                     </button>
+                    )
                   )}
                 </div>
               )}
@@ -1138,12 +1148,7 @@ export default function SiteSelector({ state, actions }) {
                               <span>📍</span> {site.subsites ? site.subsites.length : 0} zone{site.subsites && site.subsites.length > 1 ? 's' : ''}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b' }}>
-                              <Users size={14} color="#f59e0b" /> {(() => {
-                                return (site.subsites || []).reduce((acc, sub) => acc + (sub.agents ? sub.agents.length : 0), 0);
-                              })()} agent{(() => {
-                                const total = (site.subsites || []).reduce((acc, sub) => acc + (sub.agents ? sub.agents.length : 0), 0);
-                                return total > 1 ? 's' : '';
-                              })()}
+                              <Users size={14} color="#f59e0b" /> {site.agents_count || 0} agent{(site.agents_count || 0) > 1 ? 's' : ''}
                             </div>
                           </div>
                         )}

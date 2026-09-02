@@ -102,18 +102,17 @@ export default function SpecialServiceModal({
   const cycleTotalDays = calculateCycleTotalDays();
   const realDaysCount = calculateRealWorkedDays();
 
-  // Évaluer dynamiquement l'incohérence de la base de jours en temps réel
+  // Ajuster dynamiquement et automatiquement la base de jours en temps réel
   useEffect(() => {
-    if (specialServiceDays.length > 0 && specialServiceBase > 0) {
-      if (specialServiceBase !== cycleTotalDays) {
-        setErrorMsg(`Incohérence détectée : vous avez saisi ${specialServiceBase} jours alors que cet agent travaillera réellement ${cycleTotalDays} jours sur l'ensemble de ce mois.`);
-      } else {
-        setErrorMsg('');
+    if (specialServiceDays.length > 0) {
+      if (cycleTotalDays > 0 && specialServiceBase !== cycleTotalDays) {
+        setSpecialServiceBase(cycleTotalDays);
       }
+      setErrorMsg('');
     } else {
       setErrorMsg('');
     }
-  }, [specialServiceBase, specialServiceDays, cycleTotalDays]);
+  }, [specialServiceBase, specialServiceDays, cycleTotalDays, setSpecialServiceBase]);
 
   if (!isOpen) return null;
 
@@ -127,11 +126,7 @@ export default function SpecialServiceModal({
       return;
     }
 
-    // Validation de la base par rapport au cycle COMPLET (se déclenche toujours s'il y a incohérence)
-    if (specialServiceBase !== cycleTotalDays) {
-      setErrorMsg(`Incohérence détectée : vous avez saisi ${specialServiceBase} jours alors que cet agent travaillera réellement ${cycleTotalDays} jours sur l'ensemble de ce mois.`);
-      return;
-    }
+    // On ne bloque plus la validation pour cause d'incohérence, le système gère ça en auto
 
     // Validation de la date de début si active
     if (isDebut && debutDate) {

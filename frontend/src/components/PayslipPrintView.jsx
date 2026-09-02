@@ -242,8 +242,8 @@ export default function PayslipPrintView({ onClose }) {
         const list = res.map(ag => {
           const baseFull = Number(ag.base_full) || Number(ag.base) || 75000;
           const baseSalary = Number(ag.base) || 0;
-          const specialBase = (ag.profile_data?.special_service) ? (ag.profile_data.special_service_base || 12) : 30;
-          const dailyRate = Math.round(baseFull / specialBase);
+          // Règle absolue: le taux journalier est toujours calculé sur base 30
+          const dailyRate = Math.round(baseFull / 30);
           const deductions = Number(ag.deductions) || 0;
           const spGains = Number(ag.gains) || 0;
           const primeSite = Number(ag.prime_site) || 0;

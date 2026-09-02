@@ -13,7 +13,7 @@ export function initSettingsInterceptor() {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && (k.startsWith('pontage_') || k.startsWith('map_selection_mode') || k.startsWith('elysium_'))) {
-          if (!k.includes('pontage_current_service') && !k.includes('pontage_csrf_token') && !k.includes('pontage_activeSiteId') && !k.includes('pontage_activeSiteName') && !k.includes('pontage_period') && !k.includes('pontage_active_view')) {
+          if (!k.includes('pontage_current_service') && !k.includes('pontage_csrf_token') && !k.includes('pontage_activeSiteId') && !k.includes('pontage_activeSiteName') && !k.includes('pontage_period') && !k.includes('pontage_active_view') && !k.includes('cache')) {
             settings[k] = originalGetItem.call(localStorage, k);
           }
         }
@@ -38,7 +38,8 @@ export function initSettingsInterceptor() {
         'pontage_activeSiteId',
         'pontage_activeSiteName',
         'pontage_period',
-        'pontage_active_view'
+        'pontage_active_view',
+        'cache'
       ];
       for (let ex of exclusions) {
         if (key.includes(ex)) return false;

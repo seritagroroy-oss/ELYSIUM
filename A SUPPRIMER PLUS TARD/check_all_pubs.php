@@ -1,0 +1,1 @@
+<?php try { $db = new PDO("mysql:host=127.0.0.1;port=3306;dbname=elysium;charset=utf8mb4", "root", ""); $stmt = $db->query("SELECT service_id, data_value FROM service_data WHERE data_key='published_periods'"); print_r($stmt->fetchAll(PDO::FETCH_ASSOC)); } catch(Exception $e) { echo $e->getMessage(); }

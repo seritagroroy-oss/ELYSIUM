@@ -176,18 +176,23 @@ const PermissionDetailsModal = ({
               >Non, annuler</button>
               <button 
                 disabled={isDeletingPermission}
-                onClick={async () => {
+                onClick={() => {
                   setIsDeletingPermission(true);
-                  try {
-                    await handleDeleteLeave(deletePermissionConfirm.leave);
-                    setDeletePermissionConfirm(null);
-                    setPermissionDetailsModal(null);
-                  } catch (error) {
-                    console.error('Error deleting leave:', error);
-                    alert("Erreur de connexion lors de la suppression.");
-                  } finally {
-                    setIsDeletingPermission(false);
-                  }
+                  // Fermeture visuelle immédiate pour un effet instantané (Optimistic UI)
+                  setDeletePermissionConfirm(null);
+                  setPermissionDetailsModal(null);
+                  
+                  // Yield to browser event loop pour laisser le modal se fermer avant le lourd re-render du tableau
+                  setTimeout(async () => {
+                    try {
+                      await handleDeleteLeave(deletePermissionConfirm.leave);
+                    } catch (error) {
+                      console.error('Error deleting leave:', error);
+                      alert("Erreur de connexion lors de la suppression.");
+                    } finally {
+                      setIsDeletingPermission(false);
+                    }
+                  }, 50);
                 }}
                 style={{ flex: 1, padding: '12px', background: deletePermissionConfirm.type === 'MAP' ? '#f97316' : '#0ea5e9', border: 'none', borderRadius: '12px', color: '#fff', fontWeight: 600, cursor: isDeletingPermission ? 'not-allowed' : 'pointer', transition: 'all 0.2s', boxShadow: deletePermissionConfirm.type === 'MAP' ? '0 4px 12px rgba(249,115,22,0.3)' : '0 4px 12px rgba(14,165,233,0.3)' }}
                 onMouseOver={e => { if(!isDeletingPermission) { e.currentTarget.style.background = deletePermissionConfirm.type === 'MAP' ? '#ea580c' : '#0284c7'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}

@@ -1,0 +1,24 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Rediriger toutes les requêtes API vers api_new.php
+    RewriteRule ^api\.php$ api_new.php [L]
+    
+    # Ne pas rediriger si le fichier ou le dossier existe réellement
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    
+    # Rediriger tout le reste vers l'application frontend (React)
+    RewriteRule ^(.*)$ dist/index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Ne jamais mettre en cache le fichier index.html
+    <FilesMatch "\.(html|htm)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires 0
+    </FilesMatch>
+</IfModule>
+
+php_flag opcache.enable Off

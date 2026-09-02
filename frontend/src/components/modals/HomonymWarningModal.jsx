@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, UserCheck, Edit3, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, UserCheck, Edit3, CheckCircle2, Info } from 'lucide-react';
 
 export default function HomonymWarningModal({
   homonyms = [],
@@ -7,6 +7,8 @@ export default function HomonymWarningModal({
   onModify
 }) {
   if (!homonyms || homonyms.length === 0) return null;
+
+  const hasPartTime = homonyms.some(h => h.isPartTime);
 
   return (
     <div style={{
@@ -39,24 +41,27 @@ export default function HomonymWarningModal({
             width: '42px',
             height: '42px',
             borderRadius: '10px',
-            background: 'rgba(234, 179, 8, 0.15)',
-            border: '1px solid rgba(234, 179, 8, 0.3)',
+            background: hasPartTime ? 'rgba(56, 189, 248, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+            border: hasPartTime ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(234, 179, 8, 0.3)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#facc15',
+            color: hasPartTime ? '#38bdf8' : '#facc15',
             flexShrink: 0
           }}>
-            <AlertTriangle size={24} />
+            {hasPartTime ? <Info size={24} /> : <AlertTriangle size={24} />}
           </div>
           <div>
-            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: '#fef08a' }}>
-              Homonyme{homonyms.length > 1 ? 's' : ''} Détecté{homonyms.length > 1 ? 's' : ''}
+            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: hasPartTime ? '#bae6fd' : '#fef08a' }}>
+              {hasPartTime ? 'Agent multi-sites détecté' : `Homonyme${homonyms.length > 1 ? 's' : ''} Détecté${homonyms.length > 1 ? 's' : ''}`}
             </h3>
             <p style={{ margin: '2px 0 0 0', fontSize: '0.875rem', color: '#94a3b8' }}>
-              {homonyms.length > 1
-                ? `${homonyms.length} agents portent déjà ce nom exact dans le système :`
-                : `Un agent porte déjà ce nom exact dans le système :`}
+              {hasPartTime 
+                ? 'Cet agent est déjà enregistré dans le système :' 
+                : (homonyms.length > 1
+                  ? `${homonyms.length} agents portent déjà ce nom exact dans le système :`
+                  : `Un agent porte déjà ce nom exact dans le système :`)
+              }
             </p>
           </div>
         </div>
@@ -107,42 +112,53 @@ export default function HomonymWarningModal({
         <div style={{
           margin: '16px 0 24px 0',
           padding: '12px 14px',
-          background: 'rgba(234, 179, 8, 0.08)',
-          border: '1px solid rgba(234, 179, 8, 0.25)',
+          background: hasPartTime ? 'rgba(56, 189, 248, 0.08)' : 'rgba(234, 179, 8, 0.08)',
+          border: hasPartTime ? '1px solid rgba(56, 189, 248, 0.25)' : '1px solid rgba(234, 179, 8, 0.25)',
           borderRadius: '10px',
           color: '#e2e8f0',
           fontSize: '0.85rem',
           lineHeight: '1.45'
         }}>
-          <strong style={{ color: '#fde047', display: 'block', marginBottom: '4px' }}>💡 Conseil :</strong>
-          Vous pouvez ajouter un signe ou une lettre de distinction au nom (ex: <em>{homonyms[0]?.name} (2)</em> ou <em>{homonyms[0]?.name} B</em>), ou écrire le NOM en majuscules et le Prénom en minuscules, pour le repérer plus facilement dans vos listes.
-          <span style={{ display: 'block', marginTop: '4px', color: '#94a3b8', fontSize: '0.8rem' }}>
-            * Cela reste facultatif car le système gère déjà automatiquement les identifiants uniques et la séparation des fiches en paie.
-          </span>
+          {hasPartTime ? (
+            <>
+              <strong style={{ color: '#38bdf8', display: 'block', marginBottom: '4px' }}>ℹ️ Information :</strong>
+              Cet agent travaille déjà à temps partiel sur un autre site. En l'ajoutant ici, le système le reconnaîtra comme la même personne et il partagera ses pointages entre les sites.
+            </>
+          ) : (
+            <>
+              <strong style={{ color: '#fde047', display: 'block', marginBottom: '4px' }}>💡 Conseil :</strong>
+              Vous pouvez ajouter un signe ou une lettre de distinction au nom (ex: <em>{homonyms[0]?.name} (2)</em> ou <em>{homonyms[0]?.name} B</em>), ou écrire le NOM en majuscules et le Prénom en minuscules, pour le repérer plus facilement dans vos listes.
+              <span style={{ display: 'block', marginTop: '4px', color: '#94a3b8', fontSize: '0.8rem' }}>
+                * Cela reste facultatif car le système gère déjà automatiquement les identifiants uniques et la séparation des fiches en paie.
+              </span>
+            </>
+          )}
         </div>
 
         {/* Boutons d'action */}
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            onClick={onModify}
-            style={{
-              padding: '10px 18px',
-              borderRadius: '8px',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              background: 'rgba(255, 255, 255, 0.05)',
-              color: '#cbd5e1',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <Edit3 size={16} />
-            Modifier le nom
-          </button>
+          {!hasPartTime && (
+            <button
+              type="button"
+              onClick={onModify}
+              style={{
+                padding: '10px 18px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: '#cbd5e1',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Edit3 size={16} />
+              Modifier le nom
+            </button>
+          )}
 
           <button
             type="button"
@@ -163,7 +179,7 @@ export default function HomonymWarningModal({
             }}
           >
             <CheckCircle2 size={16} />
-            Continuer avec ce nom
+            {hasPartTime ? 'Ajouter sur ce site' : 'Continuer avec ce nom'}
           </button>
         </div>
       </div>

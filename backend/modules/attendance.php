@@ -230,15 +230,35 @@ switch ($action) {
         $stmtIns = $sqlite->prepare('INSERT INTO attendance (agent_id, date, shift_code, status, company_id, service_id, period) VALUES (?, ?, ?, ?, ?, ?, ?)');
 
         $filling = false;
+        $stype_lower = strtolower($shiftType);
+        $is_cyclic = in_array($stype_lower, ['24h', '48h', '72h']);
+
         foreach ($dates as $d) {
             if ($d >= $departure_date) $filling = true;
             if ($filling) {
                 $stmtDel->execute([$agent_id, $d, $period]);
-                $stmtIns->execute([$agent_id, $d, $targetShift, $type, $company_id, $serviceKey, $period]);
+                if ($is_cyclic) {
+                    $stmtIns->execute([$agent_id, $d, 'J', $type, $company_id, $serviceKey, $period]);
+                    $stmtIns->execute([$agent_id, $d, 'N', $type, $company_id, $serviceKey, $period]);
+                } else {
+                    $stmtIns->execute([$agent_id, $d, $targetShift, $type, $company_id, $serviceKey, $period]);
+                }
             }
         }
         $sqlite->commit();
-        echo json_encode(['success' => true]);
+        
+        $stmtFetch = $sqlite->prepare("SELECT date, shift_code, status FROM attendance WHERE agent_id = ? AND period = ?");
+        $stmtFetch->execute([$agent_id, $period]);
+        $updated_attendance = [];
+        while ($row = $stmtFetch->fetch(PDO::FETCH_ASSOC)) {
+            $updated_attendance[] = [
+                'date' => $row['date'],
+                'shift_code' => $row['shift_code'],
+                'status' => $row['status']
+            ];
+        }
+        
+        echo json_encode(['success' => true, 'attendance' => $updated_attendance]);
         break;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -303,9 +323,26 @@ switch ($action) {
                 
                 if ($stype === 'Nuit' || $stype === 'Jour') {
                     $shift_key = ($stype === 'Nuit') ? 'N' : 'J';
+
+                    // Déduire le jour de repos à partir des pointages existants ou du profil
+                    $stmtFindR = $sqlite->prepare("SELECT date FROM attendance WHERE agent_id = ? AND period = ? AND status = 'R' LIMIT 1");
+                    $stmtFindR->execute([$agentToRestore['id'], $period]);
+                    $existingRDate = $stmtFindR->fetchColumn();
+                    $defaultRDay = null;
+                    if ($existingRDate) {
+                        $dObjR = DateTime::createFromFormat('Y-m-d', $existingRDate);
+                        if ($dObjR) $defaultRDay = (int)$dObjR->format('w');
+                    } else if (isset($profile['shiftPattern']['reposDay'])) {
+                        $defaultRDay = (int)$profile['shiftPattern']['reposDay'];
+                    } else if (isset($profile['reposDay'])) {
+                        $defaultRDay = (int)$profile['reposDay'];
+                    }
+                    if ($defaultRDay === null) $defaultRDay = 0; // Dimanche par défaut
+
                     foreach ($datesList as $ds) {
                         $ts = strtotime($ds);
                         $jsDay = (int)date('N', $ts); // 1 to 7
+                        $w_0_6 = (int)date('w', $ts); // 0 to 6
 
                         $skip = false;
                         if ($isSpecial) {
@@ -314,6 +351,8 @@ switch ($action) {
                             $adminDays = $profile['admin_schedule_days'] ?? [6, 7];
                             $adminDays = array_map(function($d) { return $d == 0 ? 7 : $d; }, $adminDays);
                             if (in_array($jsDay, $adminDays) || in_array((string)$jsDay, $adminDays)) $skip = true;
+                        } else {
+                            if ($w_0_6 === $defaultRDay) $skip = true;
                         }
 
                         if (!$skip) {
@@ -324,27 +363,50 @@ switch ($action) {
                     }
                 } else {
                     $stype_lower = strtolower($stype);
+                    $cycle = 1; $work = 1;
                     if ($stype_lower === '24h') { $cycle = 2; $work = 1; }
-                    elseif ($stype_lower === '48h') { $cycle = 3; $work = 1; }
-                    elseif ($stype_lower === '72h') { $cycle = 4; $work = 1; }
+                    elseif ($stype_lower === '48h') { $cycle = 4; $work = 2; }
+                    elseif ($stype_lower === '72h') { $cycle = 6; $work = 3; }
                     
                     if ($cycle > 1) {
-                        $dayIndex = 0;
-                        foreach ($datesList as $ds) {
-                            $rem = $dayIndex % $cycle;
-                            if ($rem < $work) {
+                        $profileDataStr = $agentToRestore['profile_data'] ?? '{}';
+                        $profileData = json_decode($profileDataStr, true);
+                        if (isset($profileData['shiftPattern'])) {
+                            $cycle = (int)($profileData['shiftPattern']['cycle'] ?? $cycle);
+                            $work = (int)($profileData['shiftPattern']['work'] ?? $work);
+                        }
+                        $offset = (int)($profileData['shiftPattern']['offset'] ?? 0);
+
+                        foreach ($datesList as $i => $ds) {
+                            $pos = ($i - $offset) % $cycle;
+                            if ($pos < 0) $pos += $cycle;
+
+                            if ($pos < $work) {
                                 $stmtAtt->execute([$agentToRestore['id'], $ds, 'J', '1', $agentToRestore['company_id'], $serviceKey, $period]);
+                                $stmtAtt->execute([$agentToRestore['id'], $ds, 'N', '1', $agentToRestore['company_id'], $serviceKey, $period]);
                             } else {
                                 $stmtAtt->execute([$agentToRestore['id'], $ds, 'J', 'R', $agentToRestore['company_id'], $serviceKey, $period]);
+                                $stmtAtt->execute([$agentToRestore['id'], $ds, 'N', 'R', $agentToRestore['company_id'], $serviceKey, $period]);
                             }
-                            $dayIndex++;
                         }
                     }
                 }
             }
 
             $sqlite->commit();
-            echo json_encode(['success' => true]);
+            
+            $stmtFetch = $sqlite->prepare("SELECT date, shift_code, status FROM attendance WHERE agent_id = ? AND period = ?");
+            $stmtFetch->execute([$agent_id, $period]);
+            $updated_attendance = [];
+            while ($row = $stmtFetch->fetch(PDO::FETCH_ASSOC)) {
+                $updated_attendance[] = [
+                    'date' => $row['date'],
+                    'shift_code' => $row['shift_code'],
+                    'status' => $row['status']
+                ];
+            }
+            
+            echo json_encode(['success' => true, 'attendance' => $updated_attendance]);
         } catch (Exception $e) {
             $sqlite->rollBack();
             echo json_encode(['success' => false, 'message' => 'Erreur lors de la suppression de l\'abandon.']);
@@ -391,7 +453,7 @@ switch ($action) {
         $settingsRow = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21, 'cycle_end' => 20]);
         $dates = getPeriodDates($period, (int)($settingsRow['cycle_start'] ?? 21), (int)($settingsRow['cycle_end'] ?? 20));
 
-        $stmtShift = $sqlite->prepare("SELECT shift_type FROM agents WHERE id = ?");
+        $stmtShift = $sqlite->prepare("SELECT * FROM agents WHERE id = ?");
         $stmtShift->execute([$agent_id]);
         $agentRow    = $stmtShift->fetch();
         $shiftType   = $agentRow['shift_type'] ?? '';
@@ -399,16 +461,125 @@ switch ($action) {
 
         $sqlite->beginTransaction();
         $stmtDel = $sqlite->prepare('DELETE FROM attendance WHERE agent_id = ? AND date = ? AND period = ?');
-        $stmtIns = $sqlite->prepare('INSERT INTO attendance (agent_id, date, shift_code, status, company_id, service_id, period) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $stmtInsBase = $sqlite->prepare('INSERT INTO attendance (agent_id, date, shift_code, status, company_id, service_id, period) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $checkAttStmt = $sqlite->prepare("SELECT 1 FROM attendance WHERE agent_id = ? AND date = ?");
 
-        foreach ($dates as $d) {
+        $specialDaysStr = $agentRow['scheduled_days'] ?? '';
+        $specialDays = $specialDaysStr !== '' ? explode(',', $specialDaysStr) : [];
+        $profileDataStr = $agentRow['profile_data'] ?? '{}';
+        $profileData = json_decode($profileDataStr, true);
+        $isAdminSchedule = !empty($profileData['admin_schedule']);
+        $adminDays = $profileData['admin_schedule_days'] ?? [6, 7];
+        $adminDays = array_map(function($x) { return $x == 0 ? 7 : $x; }, $adminDays);
+        $stype_lower = strtolower($shiftType);
+        
+        $is_cyclic = false;
+        $cycle = 1; $work = 1;
+        if ($stype_lower === '24h') { $cycle = 2; $work = 1; $is_cyclic = true; }
+        elseif ($stype_lower === '48h') { $cycle = 4; $work = 2; $is_cyclic = true; }
+        elseif ($stype_lower === '72h') { $cycle = 6; $work = 3; $is_cyclic = true; }
+
+        if ($is_cyclic && isset($profileData['shiftPattern'])) {
+            $cycle = (int)($profileData['shiftPattern']['cycle'] ?? $cycle);
+            $work = (int)($profileData['shiftPattern']['work'] ?? $work);
+        }
+        $offset = (int)($profileData['shiftPattern']['offset'] ?? 0);
+
+        foreach ($dates as $i => $d) {
             if ($d < $start_date) {
                 $stmtDel->execute([$agent_id, $d, $period]);
-                $stmtIns->execute([$agent_id, $d, $targetShift, $entrant_motif, $company_id, $serviceKey, $period]);
+                if ($is_cyclic) {
+                    $stmtInsBase->execute([$agent_id, $d, 'J', $entrant_motif, $company_id, $serviceKey, $period]);
+                    $stmtInsBase->execute([$agent_id, $d, 'N', $entrant_motif, $company_id, $serviceKey, $period]);
+                } else {
+                    $stmtInsBase->execute([$agent_id, $d, $targetShift, $entrant_motif, $company_id, $serviceKey, $period]);
+                }
+            } else {
+                $sqlite->prepare('DELETE FROM attendance WHERE agent_id = ? AND date = ? AND period = ? AND status IN ("ENTRANT", "REINTEGRATION")')
+                       ->execute([$agent_id, $d, $period]);
+
+                if ($is_cyclic && $cycle > 1) {
+                    $checkJ = $sqlite->prepare("SELECT 1 FROM attendance WHERE agent_id = ? AND date = ? AND shift_code = 'J'");
+                    $checkJ->execute([$agent_id, $d]);
+                    $jExists = $checkJ->fetch();
+
+                    $checkN = $sqlite->prepare("SELECT 1 FROM attendance WHERE agent_id = ? AND date = ? AND shift_code = 'N'");
+                    $checkN->execute([$agent_id, $d]);
+                    $nExists = $checkN->fetch();
+
+                    if (!$jExists || !$nExists) {
+                        $pos = ($i - $offset) % $cycle;
+                        if ($pos < 0) $pos += $cycle;
+                        $status = ($pos < $work) ? '1' : 'R';
+                        
+                        if (!$jExists) {
+                            $stmtInsBase->execute([$agent_id, $d, 'J', $status, $company_id, $serviceKey, $period]);
+                        }
+                        if (!$nExists) {
+                            $stmtInsBase->execute([$agent_id, $d, 'N', $status, $company_id, $serviceKey, $period]);
+                        }
+                        
+                        // Regenerate permanent supplements for this day
+                        $permanent_supps = $profileData['permanent_supps'] ?? [];
+                        if (!empty($permanent_supps)) {
+                            $dObj = DateTime::createFromFormat('Y-m-d', $d);
+                            $jsDay = $dObj ? (int)$dObj->format('w') : 0;
+                            if ($jsDay === 0) $jsDay = 7;
+                            
+                            $daySupps = [];
+                            if (isset($permanent_supps[0])) {
+                                if (in_array($jsDay, $permanent_supps) || in_array((string)$jsDay, $permanent_supps)) {
+                                    $daySupps['S'] = '1';
+                                }
+                            } else {
+                                $val = $permanent_supps[$jsDay] ?? $permanent_supps[(string)$jsDay] ?? null;
+                                if ($val !== null) {
+                                    if (is_array($val)) {
+                                        $daySupps = $val;
+                                    } else {
+                                        $daySupps['S'] = $val;
+                                    }
+                                }
+                            }
+                            foreach ($daySupps as $shiftKey => $codeToInsert) {
+                                $stmtInsBase->execute([$agent_id, $d, $shiftKey, $codeToInsert, $company_id, $serviceKey, $period]);
+                            }
+                        }
+                    }
+                } else if (in_array($stype_lower, ['jour', 'j', 'nuit', 'n', ''])) {
+                    $checkAttStmt->execute([$agent_id, $d]);
+                    if (!$checkAttStmt->fetch()) {
+                        $dObj = DateTime::createFromFormat('Y-m-d', $d);
+                        $jsDay = $dObj ? (int)$dObj->format('w') : 0;
+                        if ($jsDay === 0) $jsDay = 7;
+
+                        $skip = false;
+                        if (count($specialDays) > 0) {
+                            if (!in_array($jsDay, $specialDays) && !in_array((string)$jsDay, $specialDays)) $skip = true;
+                        } else if ($isAdminSchedule) {
+                            if (in_array($jsDay, $adminDays) || in_array((string)$jsDay, $adminDays)) $skip = true;
+                        }
+
+                        $status = $skip ? 'R' : '1';
+                        $stmtInsBase->execute([$agent_id, $d, $targetShift, $status, $company_id, $serviceKey, $period]);
+                    }
+                }
             }
         }
         $sqlite->commit();
-        echo json_encode(['success' => true]);
+        
+        $stmtFetch = $sqlite->prepare("SELECT date, shift_code, status FROM attendance WHERE agent_id = ? AND period = ?");
+        $stmtFetch->execute([$agent_id, $period]);
+        $updated_attendance = [];
+        while ($row = $stmtFetch->fetch(PDO::FETCH_ASSOC)) {
+            $updated_attendance[] = [
+                'date' => $row['date'],
+                'shift_code' => $row['shift_code'],
+                'status' => $row['status']
+            ];
+        }
+        
+        echo json_encode(['success' => true, 'attendance' => $updated_attendance]);
         break;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -453,28 +624,46 @@ switch ($action) {
                 $stype = $agentToRestore['shift_type'] ?? '';
 
                 if (in_array(strtolower($stype), ['jour', 'j', 'nuit', 'n', ''])) {
-                    $specialDaysStr = $agentToRestore['scheduled_days'] ?? '';
-                    $specialDays = $specialDaysStr !== '' ? explode(',', $specialDaysStr) : [];
                     $profileDataStr = $agentToRestore['profile_data'] ?? '{}';
                     $profileData = json_decode($profileDataStr, true);
                     $isAdminSchedule = !empty($profileData['admin_schedule']);
+                    $isSpecial = !empty($profileData['special_service']);
+                    $specialDays = $profileData['special_service_days'] ?? [];
 
+                    // Déduire le jour de repos à partir des pointages existants ou du profil
+                    $stmtFindR = $sqlite->prepare("SELECT date FROM attendance WHERE agent_id = ? AND period = ? AND status = 'R' LIMIT 1");
+                    $stmtFindR->execute([$agentToRestore['id'], $period]);
+                    $existingRDate = $stmtFindR->fetchColumn();
+                    $defaultRDay = null;
+                    if ($existingRDate) {
+                        $dObjR = DateTime::createFromFormat('Y-m-d', $existingRDate);
+                        if ($dObjR) $defaultRDay = (int)$dObjR->format('w');
+                    } else if (isset($profileData['shiftPattern']['reposDay'])) {
+                        $defaultRDay = (int)$profileData['shiftPattern']['reposDay'];
+                    } else if (isset($profileData['reposDay'])) {
+                        $defaultRDay = (int)$profileData['reposDay'];
+                    }
+                    if ($defaultRDay === null) $defaultRDay = 0; // Dimanche par défaut
+
+                    $checkAttStmt = $sqlite->prepare("SELECT 1 FROM attendance WHERE agent_id = ? AND date = ?");
                     foreach ($datesList as $ds) {
-                        $checkAtt = $sqlite->prepare("SELECT 1 FROM attendance WHERE agent_id = ? AND date = ?");
-                        $checkAtt->execute([$agentToRestore['id'], $ds]);
-                        if ($checkAtt->fetch()) continue;
+                        $checkAttStmt->execute([$agentToRestore['id'], $ds]);
+                        if ($checkAttStmt->fetch()) continue;
 
                         $dObj = DateTime::createFromFormat('Y-m-d', $ds);
                         $jsDay = $dObj ? (int)$dObj->format('w') : 0;
+                        $w_0_6 = $jsDay; // 0-6 pour le jour de repos normal
                         if ($jsDay === 0) $jsDay = 7;
 
                         $skip = false;
-                        if (count($specialDays) > 0) {
+                        if ($isSpecial) {
                             if (!in_array($jsDay, $specialDays) && !in_array((string)$jsDay, $specialDays)) $skip = true;
                         } else if ($isAdminSchedule) {
                             $adminDays = $profileData['admin_schedule_days'] ?? [6, 7];
                             $adminDays = array_map(function($d) { return $d == 0 ? 7 : $d; }, $adminDays);
                             if (in_array($jsDay, $adminDays) || in_array((string)$jsDay, $adminDays)) $skip = true;
+                        } else {
+                            if ($w_0_6 === $defaultRDay) $skip = true;
                         }
 
                         if (!$skip) {
@@ -485,31 +674,89 @@ switch ($action) {
                     }
                 } else {
                     $stype_lower = strtolower($stype);
+                    $cycle = 1; $work = 1;
                     if ($stype_lower === '24h') { $cycle = 2; $work = 1; }
-                    elseif ($stype_lower === '48h') { $cycle = 3; $work = 1; }
-                    elseif ($stype_lower === '72h') { $cycle = 4; $work = 1; }
+                    elseif ($stype_lower === '48h') { $cycle = 4; $work = 2; }
+                    elseif ($stype_lower === '72h') { $cycle = 6; $work = 3; }
                     
-                    if (isset($cycle) && $cycle > 1) {
-                        $dayIndex = 0;
-                        foreach ($datesList as $ds) {
-                            $checkAtt = $sqlite->prepare("SELECT 1 FROM attendance WHERE agent_id = ? AND date = ?");
-                            $checkAtt->execute([$agentToRestore['id'], $ds]);
-                            if (!$checkAtt->fetch()) {
-                                $rem = $dayIndex % $cycle;
-                                if ($rem < $work) {
-                                    $stmtAtt->execute([$agentToRestore['id'], $ds, 'J', '1', $agentToRestore['company_id'], $serviceKey, $period]);
-                                } else {
-                                    $stmtAtt->execute([$agentToRestore['id'], $ds, 'J', 'R', $agentToRestore['company_id'], $serviceKey, $period]);
+                    if ($cycle > 1) {
+                        $profileDataStr = $agentToRestore['profile_data'] ?? '{}';
+                        $profileData = json_decode($profileDataStr, true);
+                        if (isset($profileData['shiftPattern'])) {
+                            $cycle = (int)($profileData['shiftPattern']['cycle'] ?? $cycle);
+                            $work = (int)($profileData['shiftPattern']['work'] ?? $work);
+                        }
+                        $offset = (int)($profileData['shiftPattern']['offset'] ?? 0);
+
+                        $checkJStmt = $sqlite->prepare("SELECT 1 FROM attendance WHERE agent_id = ? AND date = ? AND shift_code = 'J'");
+                        $checkNStmt = $sqlite->prepare("SELECT 1 FROM attendance WHERE agent_id = ? AND date = ? AND shift_code = 'N'");
+
+                        foreach ($datesList as $i => $ds) {
+                            $checkJStmt->execute([$agentToRestore['id'], $ds]);
+                            $jExists = $checkJStmt->fetch();
+
+                            $checkNStmt->execute([$agentToRestore['id'], $ds]);
+                            $nExists = $checkNStmt->fetch();
+
+                            if (!$jExists || !$nExists) {
+                                $pos = ($i - $offset) % $cycle;
+                                if ($pos < 0) $pos += $cycle;
+
+                                $status = ($pos < $work) ? '1' : 'R';
+                                
+                                if (!$jExists) {
+                                    $stmtAtt->execute([$agentToRestore['id'], $ds, 'J', $status, $agentToRestore['company_id'], $serviceKey, $period]);
+                                }
+                                if (!$nExists) {
+                                    $stmtAtt->execute([$agentToRestore['id'], $ds, 'N', $status, $agentToRestore['company_id'], $serviceKey, $period]);
+                                }
+                                
+                                // Regenerate permanent supplements for this day
+                                $permanent_supps = $profileData['permanent_supps'] ?? [];
+                                if (!empty($permanent_supps)) {
+                                    $dObj = DateTime::createFromFormat('Y-m-d', $ds);
+                                    $jsDay = $dObj ? (int)$dObj->format('w') : 0;
+                                    if ($jsDay === 0) $jsDay = 7;
+                                    
+                                    $daySupps = [];
+                                    if (isset($permanent_supps[0])) {
+                                        if (in_array($jsDay, $permanent_supps) || in_array((string)$jsDay, $permanent_supps)) {
+                                            $daySupps['S'] = '1';
+                                        }
+                                    } else {
+                                        $val = $permanent_supps[$jsDay] ?? $permanent_supps[(string)$jsDay] ?? null;
+                                        if ($val !== null) {
+                                            if (is_array($val)) {
+                                                $daySupps = $val;
+                                            } else {
+                                                $daySupps['S'] = $val;
+                                            }
+                                        }
+                                    }
+                                    foreach ($daySupps as $shiftKey => $codeToInsert) {
+                                        $stmtAtt->execute([$agentToRestore['id'], $ds, $shiftKey, $codeToInsert, $agentToRestore['company_id'], $serviceKey, $period]);
+                                    }
                                 }
                             }
-                            $dayIndex++;
                         }
                     }
                 }
             }
 
             $sqlite->commit();
-            echo json_encode(['success' => true]);
+            
+            $stmtFetch = $sqlite->prepare("SELECT date, shift_code, status FROM attendance WHERE agent_id = ? AND period = ?");
+            $stmtFetch->execute([$agent_id, $period]);
+            $updated_attendance = [];
+            while ($row = $stmtFetch->fetch(PDO::FETCH_ASSOC)) {
+                $updated_attendance[] = [
+                    'date' => $row['date'],
+                    'shift_code' => $row['shift_code'],
+                    'status' => $row['status']
+                ];
+            }
+            
+            echo json_encode(['success' => true, 'attendance' => $updated_attendance]);
         } catch (Exception $e) {
             $sqlite->rollBack();
             echo json_encode(['success' => false, 'message' => 'Erreur: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()]);
@@ -867,11 +1114,24 @@ switch ($action) {
         $settingsRow = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21, 'cycle_end' => 20]);
 
         $stype = $data['shift_type'] ?? '';
-        if (!$stype) {
-            $stmt  = $sqlite->prepare("SELECT shift_type FROM agents WHERE id = ?");
-            $stmt->execute([$agent_id]);
-            $res   = $stmt->fetch();
-            $stype = $res['shift_type'] ?? 'Jour';
+        $history = [];
+        $stmtHist = $sqlite->prepare("SELECT shift_type, shift_history FROM agents WHERE id = ?");
+        $stmtHist->execute([$agent_id]);
+        $agentRow = $stmtHist->fetch();
+        if ($agentRow) {
+            if (!$stype) $stype = $agentRow['shift_type'] ?? 'Jour';
+            if (!empty($agentRow['shift_history'])) {
+                $history = json_decode($agentRow['shift_history'], true) ?: [];
+            }
+        }
+        if (!$stype) $stype = 'Jour';
+
+        $datesList = getPeriodDates($period, (int)($settingsRow['cycle_start'] ?? 21), (int)($settingsRow['cycle_end'] ?? 20));
+        $start_date = $datesList[0] ?? date('Y-m-21');
+
+        if (!empty($history)) {
+            $history[] = ['type' => $stype, 'from' => $start_date];
+            $sqlite->prepare("UPDATE agents SET shift_type = ?, shift_history = ? WHERE id = ?")->execute([$stype, json_encode($history), $agent_id]);
         } else {
             $sqlite->prepare("UPDATE agents SET shift_type = ? WHERE id = ?")->execute([$stype, $agent_id]);
         }
@@ -894,7 +1154,6 @@ switch ($action) {
         try {
             $sqlite->prepare('DELETE FROM attendance WHERE agent_id = ? AND period = ?')->execute([$agent_id, $period]);
             $stmtAtt   = $sqlite->prepare('INSERT INTO attendance (agent_id, date, shift_code, status, company_id, service_id, period) VALUES (?, ?, ?, ?, ?, ?, ?)');
-            $datesList = getPeriodDates($period, (int)($settingsRow['cycle_start'] ?? 21), (int)($settingsRow['cycle_end'] ?? 20));
 
             foreach ($datesList as $i => $t_str) {
                 $pos = ($i - $offset) % $cycle;
@@ -941,7 +1200,17 @@ switch ($action) {
                 }
             }
             $sqlite->commit();
-            echo json_encode(['success' => true]);
+            
+            $stmtNewAtt = $sqlite->prepare("SELECT date, shift_code, status, id FROM attendance WHERE agent_id = ? AND period = ?");
+            $stmtNewAtt->execute([$agent_id, $period]);
+            $new_attendance = $stmtNewAtt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            echo json_encode([
+                'success' => true,
+                'shift_type' => $stype,
+                'shift_history' => !empty($history) ? json_encode($history) : null,
+                'attendance' => $new_attendance
+            ]);
         } catch (Exception $e) {
             $sqlite->rollBack();
             echo json_encode(['success' => false, 'message' => 'Erreur lors de la génération.']);

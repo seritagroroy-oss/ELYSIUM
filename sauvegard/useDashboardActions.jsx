@@ -163,6 +163,24 @@ export function useDashboardActions(props) {
   const [shiftChangeDate, setShiftChangeDate] = useState('');
   const [shiftChangeNewType, setShiftChangeNewType] = useState('Jour');
 
+  // Modal: Permanent Supplements
+  const [permanentSuppModal, setPermanentSuppModal] = useState(null);
+
+  const handleSavePermanentSupps = async (agentId, selectedDays) => {
+    try {
+      const res = await apiCall('toggle_permanent_supplement', { agent_id: agentId, days: selectedDays });
+      if (res.success) {
+        setPermanentSuppModal(null);
+        await loadDashboardData(true);
+      } else {
+        alert(res.error || 'Erreur lors de la sauvegarde.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erreur réseau lors de la sauvegarde.');
+    }
+  };
+
   // Modal: Agent Sortant
   const [showSortantModal, setShowSortantModal] = useState(false);
   const [sortantAgentId, setSortantAgentId] = useState('');
@@ -178,6 +196,10 @@ export function useDashboardActions(props) {
   const [entrantAgentName, setEntrantAgentName] = useState('');
   const [entrantDate, setEntrantDate] = useState('');
   const [entrantFunction, setEntrantFunction] = useState('');
+
+  // Modal: Cancel Entrant / Sortant
+  const [cancelEntrantModalData, setCancelEntrantModalData] = useState(null);
+  const [cancelSortantModalData, setCancelSortantModalData] = useState(null);
 
   // Excel-like cell selection (especially useful in archive mode)
   const [selectedCell, setSelectedCell] = useState(null);
@@ -223,44 +245,64 @@ export function useDashboardActions(props) {
     }
 
     setShowEntrantModal(false);
-    setTimeout(() => {
-      setSiteData(prevData => {
-        return prevData.map(subsite => {
-          return {
+
+    setTimeout(async () => {
+      // OPTIMISTIC UI: Mettre à jour l'état local
+      setSiteData(prevData => prevData.map(subsite => ({
+        ...subsite,
+        agents: subsite.agents.map(agent => {
+          if (String(agent.id) === String(entrantAgentId)) {
+            const newAttendance = [...(agent.attendance || [])];
+            let d = new Date(entrantDate);
+            d.setDate(d.getDate() - 1);
+            for(let i=0; i<31; i++) {
+               const dStr = d.toISOString().split('T')[0];
+               const existingIndex = newAttendance.findIndex(a => a.date === dStr);
+               if (existingIndex >= 0) {
+                  newAttendance[existingIndex] = { ...newAttendance[existingIndex], status: 'ENTRANT' };
+               } else {
+                  newAttendance.push({ date: dStr, status: 'ENTRANT', shift_code: 'J' });
+               }
+               d.setDate(d.getDate() - 1);
+            }
+            return { 
+              ...agent, 
+              hire_date: entrantDate, 
+              function: entrantFunction, 
+              is_entrant: true,
+              attendance: newAttendance 
+            };
+          }
+          return agent;
+        })
+      })));
+
+      try {
+        const res = await apiCall('mark_agent_entrant', {
+          agent_id: entrantAgentId,
+          start_date: entrantDate,
+          function: entrantFunction,
+          period
+        });
+        if (!res || !res.success) {
+          alert('❌ Erreur: ' + (res?.message || 'Réponse inattendue'));
+          window.location.reload();
+        } else {
+          setSiteData(prevData => prevData.map(subsite => ({
             ...subsite,
             agents: subsite.agents.map(agent => {
               if (String(agent.id) === String(entrantAgentId)) {
-                let updatedAttendance = [...(agent.attendance || [])];
-                const targetShift = (agent.shift_type === 'Nuit' || agent.shift_type === 'N') ? 'N' : 'J';
-                datesList.forEach(d => {
-                  const dk = formatDateKey(d);
-                  if (dk < entrantDate) {
-                    updatedAttendance = updatedAttendance.filter(a => a.date !== dk);
-                    updatedAttendance.push({ date: dk, shift_code: targetShift, status: 'ENTRANT' });
-                  }
-                });
-                return { ...agent, hire_date: entrantDate, function: entrantFunction, attendance: updatedAttendance };
+                return { ...agent, hire_date: entrantDate, function: entrantFunction, attendance: res.attendance || [] };
               }
               return agent;
             })
-          };
-        });
-      });
-    }, 10);
-
-    try {
-      const res = await apiCall('mark_agent_entrant', {
-        agent_id: entrantAgentId,
-        start_date: entrantDate,
-        function: entrantFunction,
-        period
-      });
-      if (!res || !res.success) {
-        alert('❌ Erreur: ' + (res?.message || 'Réponse inattendue'));
+          })));
+        }
+      } catch (err) {
+        alert('❌ Erreur réseau: ' + err.message);
+        window.location.reload();
       }
-    } catch (err) {
-      alert('❌ Erreur réseau: ' + err.message);
-    }
+    }, 10);
   };
 
   const handleConfirmSortant = async (e) => {
@@ -285,48 +327,75 @@ export function useDashboardActions(props) {
     }
 
     setShowSortantModal(false);
-    setTimeout(() => {
-      setSiteData(prevData => {
-        return prevData.map(subsite => {
-          return {
+
+    // Démarrer le traitement de manière asynchrone pour libérer la modale instantanément
+    setTimeout(async () => {
+      // OPTIMISTIC UI: Mettre à jour l'état local avant la réponse du serveur pour un affichage instantané
+      setSiteData(prevData => prevData.map(subsite => ({
+        ...subsite,
+        agents: subsite.agents.map(agent => {
+          if (String(agent.id) === String(sortantAgentId)) {
+            const newAttendance = [...(agent.attendance || [])];
+            let d = new Date(sortantDate);
+            for(let i=0; i<31; i++) {
+               const dStr = d.toISOString().split('T')[0];
+               const existingIndex = newAttendance.findIndex(a => a.date === dStr);
+               if (existingIndex >= 0) {
+                  newAttendance[existingIndex] = { ...newAttendance[existingIndex], status: finalType };
+               } else {
+                  newAttendance.push({ date: dStr, status: finalType, shift_code: 'J' });
+               }
+               d.setDate(d.getDate() + 1);
+            }
+
+            return { 
+              ...agent, 
+              exit_date: sortantDate, 
+              exit_reason: finalType, 
+              status: finalType,
+              is_sortant: true,
+              contract_end: sortantDate,
+              attendance: newAttendance
+            };
+          }
+          return agent;
+        })
+      })));
+
+      try {
+        const res = await apiCall('mark_agent_sortant', {
+          agent_id: sortantAgentId,
+          departure_date: sortantDate,
+          type: finalType,
+          period
+        });
+        if (!res || !res.success) {
+          if (res?.period_locked) {
+            showPeriodLockedToast(getPeriodLabel());
+          } else {
+            alert('❌ Erreur: ' + (res?.message || 'Réponse inattendue'));
+          }
+          window.location.reload(); // Revert optimistic UI on error
+        } else {
+          // Mettre à jour l'attendance avec les données réelles du serveur (pour griser les bonnes cases)
+          setSiteData(prevData => prevData.map(subsite => ({
             ...subsite,
             agents: subsite.agents.map(agent => {
               if (String(agent.id) === String(sortantAgentId)) {
-                let updatedAttendance = [...(agent.attendance || [])];
-                const targetShift = (agent.shift_type === 'Nuit' || agent.shift_type === 'N') ? 'N' : 'J';
-                datesList.forEach(d => {
-                  const dk = formatDateKey(d);
-                  if (dk >= sortantDate) {
-                    updatedAttendance = updatedAttendance.filter(a => a.date !== dk);
-                    updatedAttendance.push({ date: dk, shift_code: targetShift, status: finalType });
-                  }
-                });
-                return { ...agent, exit_date: sortantDate, exit_reason: finalType, attendance: updatedAttendance };
+                return { 
+                  ...agent, 
+                  attendance: res.attendance || []
+                };
               }
               return agent;
             })
-          };
-        });
-      });
-    }, 10);
-
-    try {
-      const res = await apiCall('mark_agent_sortant', {
-        agent_id: sortantAgentId,
-        departure_date: sortantDate,
-        type: finalType,
-        period
-      });
-      if (!res || !res.success) {
-        if (res?.period_locked) {
-          showPeriodLockedToast(getPeriodLabel());
-        } else {
-          alert('❌ Erreur: ' + (res?.message || 'Réponse inattendue'));
+          })));
         }
+      } catch (err) {
+        alert('❌ Erreur réseau: ' + err.message);
+        window.location.reload();
       }
-    } catch (err) {
-      alert('❌ Erreur réseau: ' + err.message);
-    }
+    }, 10); // Petit délai pour laisser le temps à la modale de se fermer visuellement
   };
 
   const [contextMenu, setContextMenu] = useState(null);
@@ -349,7 +418,7 @@ export function useDashboardActions(props) {
   const { showMapModal, mapAgentId, mapAgentName, mapStartDate, mapEndDate, mapNavOffset, mapManualDuration, editingMapLeaveId } = mapState;
   const { setShowMapModal, setMapAgentId, setMapAgentName, setMapStartDate, setMapEndDate, setMapNavOffset, setMapManualDuration, setEditingMapLeaveId, handleMapSubmit } = mapActions;
 
-  const { showAbsenceModal, absenceAgentId, absenceAgentName, absenceStartDate, absenceEndDate, absenceNavOffset, absenceManualDuration, editingAbsenceLeaveId } = absenceState;
+  const { showAbsenceModal, absenceAgentId, absenceAgentName, absenceStartDate, absenceEndDate, absenceNavOffset, absenceManualDuration, editingAbsenceLeaveId, isSubmittingLeave } = absenceState;
   const { setShowAbsenceModal, setAbsenceAgentId, setAbsenceAgentName, setAbsenceStartDate, setAbsenceEndDate, setAbsenceNavOffset, setAbsenceManualDuration, setEditingAbsenceLeaveId, handleAbsenceSubmit } = absenceActions;
 
   const { showMaladieModal, maladieAgentId, maladieAgentName, maladieStartDate, maladieEndDate, maladieNavOffset, maladieManualDuration, editingMaladieLeaveId } = maladieState;
@@ -439,6 +508,9 @@ export function useDashboardActions(props) {
   const [hasAutoSnapped, setHasAutoSnapped] = useState(false);
   const [manuallyAdvancedToFuture, setManuallyAdvancedToFuture] = useState(false);
   const [showFirstVisitModal, setShowFirstVisitModal] = useState(false);
+  // ✅ Verrou silencieux : true quand le tableau de bord lit la photo figée (mois publié)
+  // Tous les clics sur les cellules sont ignorés sans toast ni flash visuel.
+  const [isLockedByArchive, setIsLockedByArchive] = useState(false);
 
   // ─── Notification : Période Verrouillée ────────────────────────────────────
   // Affiche un toast rouge non-bloquant en bas de l'écran pendant 5 secondes
@@ -641,7 +713,10 @@ export function useDashboardActions(props) {
     }
   }, [period, activeSiteId, activeSiteName, editModeBehavior]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardReqId = useRef(0);
+
+  const loadDashboardData = async (silent = false) => {
+    const currentReqId = ++loadDashboardReqId.current;
     if (isArchiveMode) {
       setSites(archiveData.sites || []);
       setGlobalAgents(archiveData.globalAgents || []);
@@ -652,20 +727,69 @@ export function useDashboardActions(props) {
       } else {
         setSiteData([]);
       }
-      setLoading(false); // Stop le spinner en mode archive
+      if (!silent) setLoading(false); // Stop le spinner en mode archive
       return;
     }
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const params = { period };
       if (activeSiteId) {
         params.site_id = activeSiteId;
       }
-      const [res, leavesRes, uiPrefsRes, pubPeriodsRes] = await Promise.all([
+
+      // ── FIRE-AND-FORGET : charger le statut de publication IMMÉDIATEMENT ──
+      // Cette requête légère met à jour le badge "Pointage publié" et le bouton
+      // "Mois Suivant" sans attendre le chargement lourd de get_dashboard_init.
+      apiCall('get_published_periods', { scope: 'company' }, 'GET').then(pubPeriodsRes => {
+        if (!pubPeriodsRes) return;
+        // Mettre à jour max_initialized_period depuis le backend (source de vérité)
+        if (pubPeriodsRes.max_initialized_period) {
+          setMaxInitializedPeriod(pubPeriodsRes.max_initialized_period);
+          if (!hasAutoSnapped && !isVerificationMode) {
+            if (period !== pubPeriodsRes.max_initialized_period) {
+              setPeriod(pubPeriodsRes.max_initialized_period);
+            }
+            setHasAutoSnapped(true);
+          }
+        } else if (Array.isArray(pubPeriodsRes.published_periods) && pubPeriodsRes.published_periods.length > 0) {
+          const sortedPubs = [...pubPeriodsRes.published_periods].sort().reverse();
+          const latestPub = sortedPubs[0];
+          setMaxInitializedPeriod(latestPub);
+          if (!hasAutoSnapped && !isVerificationMode) {
+            if (period !== latestPub) {
+              setPeriod(latestPub);
+            }
+            setHasAutoSnapped(true);
+          }
+        }
+
+        // Mettre à jour publishedPeriods immédiatement
+        if (pubPeriodsRes.published_periods) {
+          setPublishedPeriods(pubPeriodsRes.published_periods);
+        }
+
+        // Détecter la "première visite" dans le module
+        const isFirstVisit =
+          (!pubPeriodsRes.published_periods ||
+            (Array.isArray(pubPeriodsRes.published_periods) ? pubPeriodsRes.published_periods.length === 0 : Object.keys(pubPeriodsRes.published_periods).length === 0)) &&
+          (!pubPeriodsRes.max_initialized_period || pubPeriodsRes.max_initialized_period === 'null' || pubPeriodsRes.max_initialized_period === null);
+
+        const today = new Date();
+        const currentRealMonthLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        const isCurrentRealMonth = period === currentRealMonthLocal;
+
+        if (isFirstVisit && isCurrentRealMonth && !activeSiteId) {
+          setShowFirstVisitModal(true);
+        } else {
+          setShowFirstVisitModal(false);
+        }
+      }).catch(e => console.error('Erreur chargement statut publication:', e));
+
+      // ── Chargement principal (données lourdes) — n'impacte plus le badge publication ──
+      const [res, leavesRes, uiPrefsRes] = await Promise.all([
         apiCall('get_dashboard_init', params, 'GET'),
         apiCall('get_leaves', {}, 'GET'),
-        apiCall('get_ui_prefs', {}, 'GET'),
-        apiCall('get_published_periods', { scope: 'company' }, 'GET')
+        apiCall('get_ui_prefs', {}, 'GET')
       ]);
       if (uiPrefsRes && uiPrefsRes.success && uiPrefsRes.prefs) {
         const savedMode = uiPrefsRes.prefs['agent_table_mode'];
@@ -677,59 +801,12 @@ export function useDashboardActions(props) {
       if (leavesRes && leavesRes.success) {
         setLeaves(leavesRes.leaves || []);
       }
-      // ── Mettre à jour max_initialized_period depuis le backend (source de vérité) ──
       let periodSnapped = false;
-      if (pubPeriodsRes && pubPeriodsRes.max_initialized_period) {
-        setMaxInitializedPeriod(pubPeriodsRes.max_initialized_period);
-        if (!hasAutoSnapped && !isVerificationMode) {
-          if (period !== pubPeriodsRes.max_initialized_period) {
-            setPeriod(pubPeriodsRes.max_initialized_period);
-            periodSnapped = true;
-          }
-          setHasAutoSnapped(true);
-        }
-      } else if (pubPeriodsRes && Array.isArray(pubPeriodsRes.published_periods) && pubPeriodsRes.published_periods.length > 0) {
-        // Fallback : si max_initialized_period est null (jamais défini ou après reset),
-        // on considère que le mois courant publié est le dernier initialisé
-        const sortedPubs = [...pubPeriodsRes.published_periods].sort().reverse();
-        const latestPub = sortedPubs[0];
-        setMaxInitializedPeriod(latestPub);
-        if (!hasAutoSnapped && !isVerificationMode) {
-          if (period !== latestPub) {
-            setPeriod(latestPub);
-            periodSnapped = true;
-          }
-          setHasAutoSnapped(true);
-        }
-      }
 
-      // Détecter la "première visite" dans le module
-      // isFirstVisit = vrai SEULEMENT si :
-      //   - aucune période publiée
-      //   - max_initialized_period jamais défini (null, vide ou "null")
-      //   - on n'a pas déjà répondu à la popup dans cette session
-      const isFirstVisit =
-        pubPeriodsRes &&
-        (!pubPeriodsRes.published_periods ||
-          (Array.isArray(pubPeriodsRes.published_periods) ? pubPeriodsRes.published_periods.length === 0 : Object.keys(pubPeriodsRes.published_periods).length === 0)) &&
-        (!pubPeriodsRes.max_initialized_period || pubPeriodsRes.max_initialized_period === 'null' || pubPeriodsRes.max_initialized_period === null);
-
-      const today = new Date();
-      const currentRealMonthLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-      const isCurrentRealMonth = period === currentRealMonthLocal;
-
-      // La popup ne s'affiche qu'une seule fois : mois courant réel, première visite, pas de site sélectionné
-      // ET l'utilisateur n'a pas encore répondu (showFirstVisitModal pas déjà résolu)
-      if (isFirstVisit && isCurrentRealMonth && !activeSiteId) {
-        setShowFirstVisitModal(true);
-      } else {
-        // Si l'utilisateur a déjà répondu (max_initialized_period défini), on s'assure que la popup est fermée
-        setShowFirstVisitModal(false);
-      }
-
-      if (res && res.success) {
+      if (res && res.success && currentReqId === loadDashboardReqId.current) {
         if (res.is_from_archive && res.archive_data) {
           // LECTURE DIRECTE DE LA PHOTO FIGEE (Court-circuit du mode temps réel)
+          setIsLockedByArchive(true);
           setSites(res.archive_data.sites || []);
           setGlobalAgents(res.archive_data.globalAgents || []);
           setLeaves(res.archive_data.leaves || []);
@@ -742,7 +819,8 @@ export function useDashboardActions(props) {
             setPublishedPeriods(res.published_periods);
           }
         } else {
-          // LOGIQUE NORMALE (TEMPS REEL)
+          // LOGIQUE NORMALE (TEMPS REEL) → déverrouiller
+          setIsLockedByArchive(false);
           if (Array.isArray(res.sites)) {
             setSites(res.sites);
             localStorage.setItem('pontage_sites_cache', JSON.stringify(res.sites));
@@ -779,7 +857,9 @@ export function useDashboardActions(props) {
     } catch (e) {
       console.error("Erreur de chargement du tableau de bord:", e);
     } finally {
-      setLoading(false);
+      if (currentReqId === loadDashboardReqId.current) {
+        if (!silent) setLoading(false);
+      }
     }
   };
 
@@ -826,61 +906,32 @@ export function useDashboardActions(props) {
     setPublishing(true);
     setPublishProgress(0);
 
-    // Simulate a 10-second progression before calling API
-    for (let i = 0; i <= 100; i++) {
+    // Progression rapide simulée (1 seconde au lieu de 10 pour ne pas bloquer l'utilisateur)
+    for (let i = 0; i <= 100; i += 5) {
       setPublishProgress(i);
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
 
     try {
       const res = await apiCall('publish_period', { period });
       if (res.success) {
         setPublishedPeriods([period]);
-        // Archiver l'ordre des sites (opération technique annexe)
         await apiCall('archive_all_sites', { period, siteOrder: [] });
         
-        // ✅ Photo figée : utiliser get_pointage_for_archive qui retourne les agents
-        // AVEC leurs pointages complets (contrairement à archive_all_sites)
-        try {
-            const [snapshotRes, leavesRes] = await Promise.all([
-                apiCall('get_pointage_for_archive', { period }, 'GET'),
-                apiCall('get_leaves', {}, 'GET')
-            ]);
-
-            if (!snapshotRes.success) {
-                throw new Error(snapshotRes.message || "Impossible de récupérer les données complètes du pointage.");
-            }
-
-            const pointageData = { 
-                sites: snapshotRes.sites || [],
-                leaves: leavesRes.success ? (leavesRes.leaves || []) : leaves,
-                globalAgents: snapshotRes.global_agents || []
-            };
-
-            const archiveRes = await apiCall('archive_pointage', {
-                period: period,
-                data: JSON.stringify(pointageData)
-            });
-            
-            if (archiveRes && archiveRes.success === false) {
-                throw new Error(archiveRes.message || "La base de données n'a pas pu créer l'archive.");
-            }
-            console.log('✅ Photo figée enregistrée avec succès (agents + pointages complets)');
-            
-            // Activer la modale de succès AVANT de fermer la modale de publication
-            setShowPublishSuccess(true);
-            setShowPublishModal(false);
-            // Recharger pour confirmer
-            await loadPublishedPeriods();
-        } catch (err) {
-            console.error('Erreur lors de la sauvegarde dans archives_pointage', err);
-            alert("Publication incomplète : Erreur lors de la création de la photo figée (archive_pointage). " + (err.message || err));
-            // Ne pas fermer la modale de publication ou afficher le succès
-        }
+        // L'archive du pointage est désormais créée directement côté serveur
+        // lors de l'appel publish_period (via SQL direct, sans HTTP interne).
+        // Plus besoin d'un appel séparé archive_pointage.
+        console.log('✅ Publication réussie. Archive créée côté serveur.');
+        
+        setShowPublishSuccess(true);
+        setShowPublishModal(false);
+        await loadPublishedPeriods();
+      } else {
+        setErrorMsg("Erreur lors de la publication : " + (res.message || "Inconnue"));
       }
     } catch (e) {
       console.error("Erreur publish_period", e);
-      alert("Erreur lors de la publication : " + (e.message || e));
+      setErrorMsg("Erreur lors de la publication : " + (e.message || e));
     } finally {
       setPublishing(false);
       setPublishProgress(0);
@@ -1411,6 +1462,7 @@ export function useDashboardActions(props) {
     cycleStart,
     isArchiveMode,
     isVerificationMode,
+    isLockedByArchive,
     lockedZones,
     lockedMaps,
     lockedPermissions,
@@ -1476,6 +1528,32 @@ export function useDashboardActions(props) {
     }
   };
 
+  const executeRenameSite = async (newName) => {
+    if (!newName || !renameModalData) return;
+    const { siteId, currentName } = renameModalData;
+    const trimmedNewName = newName.trim();
+    
+    if (trimmedNewName === currentName) {
+      setRenameModalData(null);
+      return;
+    }
+
+    try {
+      const res = await apiCall('rename_site', { site_id: siteId, name: trimmedNewName });
+      if (res.success) {
+        setRenameModalData(null);
+        await loadDashboardData();
+        if (activeSiteId === siteId) {
+          setActiveSiteName(trimmedNewName);
+        }
+      } else {
+        alert(res.message || "Erreur lors du renommage");
+      }
+    } catch (e) {
+      alert("Erreur réseau");
+    }
+  };
+
   const handleDeleteSite = async () => {
     if (!siteContextMenu.siteId) return;
     try {
@@ -1500,21 +1578,41 @@ export function useDashboardActions(props) {
   const handleCreateSubsite = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (!newSubsiteName.trim() || !activeSiteId) return;
+    const trimmedName = newSubsiteName.trim();
+    if (!trimmedName || !activeSiteId) return;
 
-    try {
-      const res = await apiCall('add_subsite', { site_id: activeSiteId, name: newSubsiteName });
-      if (res.success) {
-        setNewSubsiteName('');
-        setShowAddSubsite(false);
-        loadSiteData();
-        loadDashboardData();
-      } else {
-        setErrorMsg(res.message);
-      }
-    } catch (e) {
-      setErrorMsg("Erreur réseau");
-    }
+    // Fermeture immédiate de la modale
+    setShowAddSubsite(false);
+
+    // Mise à jour optimiste pour faire apparaître la zone vide immédiatement
+    const optimisticSubsite = {
+      id: `temp-${Date.now()}`,
+      name: trimmedName,
+      agents: [],
+      is_optimistic_loading: true
+    };
+    
+    // Ajout de la zone fictive temporaire à la fin de la liste
+    setSiteData(prev => [...(prev || []), optimisticSubsite]);
+    setNewSubsiteName('');
+
+    // Exécution en arrière-plan
+    setTimeout(() => {
+      apiCall('add_subsite', { site_id: activeSiteId, name: trimmedName }).then(res => {
+        if (res.success) {
+          loadSiteData(true);
+          loadDashboardData(true);
+        } else {
+          setErrorMsg(res.message);
+          setShowAddSubsite(true); // Réouverture en cas d'erreur
+          loadDashboardData(true); // On annule l'optimistic update
+        }
+      }).catch(e => {
+        setErrorMsg("Erreur réseau");
+        setShowAddSubsite(true);
+        loadDashboardData(true); // On annule l'optimistic update
+      });
+    }, 10);
   };
 
   const handleEditAdminScheduleClick = (agentId) => {
@@ -1663,6 +1761,7 @@ export function useDashboardActions(props) {
         // Pour les agents TP avec "Définir une date" : la date de début est traitée directement
         // côté serveur dans add_agent (marque les jours avant comme ENTRANT)
         debutDate: (agentData.specialService && agentData.isDebut && agentData.debutDate) ? agentData.debutDate : undefined,
+        isReleve: agentData.isReleve || false,
         period
       });
       if (res.success) {
@@ -1693,12 +1792,31 @@ export function useDashboardActions(props) {
             }
           }
         }
-        // Fermer le modal IMMÉDIATEMENT (avant le rechargement)
-        // siteData existant reste visible — aucun flash possible
+        // 1. Fermer la modale immédiatement pour une sensation de rapidité
         setShowAddAgent(false);
-        // Rechargement silencieux : met à jour les données complètes depuis le serveur
-        // sans déclencher l'indicateur de chargement (évite le flash "Aucune zone ou agent")
-        loadSiteData(true);
+
+        // 2. Mise à jour optimiste du tableau de bord pour afficher l'agent instantanément
+        setSiteData(prev => prev.map(sub => {
+          if (String(sub.id) === String(agentData.subsiteId)) {
+            const newAgent = {
+              id: res.agent_id,
+              name: agentData.name,
+              function_name: agentData.agentFunction || '',
+              shift_type: agentData.shiftType,
+              contract_end_date: agentData.contractEnd || null,
+              subsite_id: agentData.subsiteId,
+              attendance: [],
+              shift_history: [],
+              is_optimistic_loading: true,
+              is_releve: agentData.isReleve || false
+            };
+            return { ...sub, agents: [...(sub.agents || []), newAgent] };
+          }
+          return sub;
+        }));
+
+        // 3. Lancer le rechargement complet en arrière-plan sans bloquer
+        loadDashboardData(true);
       } else {
         setErrorMsg(res.message);
       }
@@ -1707,8 +1825,10 @@ export function useDashboardActions(props) {
     }
   };
 
-  const handleDeleteAgent = (agentId) => {
+  const handleDeleteAgent = (agent) => {
     // Bloquer si la zone est verrouillée
+    const agentId = typeof agent === 'object' ? agent.id : agent;
+    
     let agentSubsiteId = null;
     for (let sub of siteData) {
       if (sub.agents?.some(a => String(a.id) === String(agentId))) {
@@ -1720,21 +1840,52 @@ export function useDashboardActions(props) {
       return;
     }
 
-    setDeleteAgentConfirm(agentId);
+    if (typeof agent === 'object') {
+       setDeleteAgentConfirm(agent);
+    } else {
+       let foundAgent = null;
+       for (let sub of siteData) {
+         foundAgent = sub.agents?.find(a => String(a.id) === String(agentId));
+         if (foundAgent) break;
+       }
+       setDeleteAgentConfirm(foundAgent || agentId);
+    }
   };
 
-  const confirmDeleteAgent = async () => {
+  const confirmDeleteAgent = async (deleteAllSites = false) => {
     if (!deleteAgentConfirm) return;
-    try {
-      const res = await apiCall('delete_agent', { agent_id: deleteAgentConfirm });
-      if (res.success) {
-        setDeleteAgentConfirm(null);
-        loadSiteData(true); // Rechargement silencieux
+    const agentId = typeof deleteAgentConfirm === 'object' ? deleteAgentConfirm.id : deleteAgentConfirm;
+    const agentName = typeof deleteAgentConfirm === 'object' ? deleteAgentConfirm.name : null;
+
+    // 1. On ferme la modale immédiatement
+    setDeleteAgentConfirm(null);
+
+    // 2. Optimistic update: on retire l'agent de l'écran tout de suite
+    setSiteData(prev => prev.map(sub => {
+      if (deleteAllSites && agentName) {
+         return { ...sub, agents: sub.agents?.filter(a => a.name !== agentName) };
       } else {
+         if (sub.agents?.some(a => String(a.id) === String(agentId))) {
+           return { ...sub, agents: sub.agents.filter(a => String(a.id) !== String(agentId)) };
+         }
+      }
+      return sub;
+    }));
+
+    try {
+      // 3. Appel serveur en arrière-plan
+      const res = await apiCall('delete_agent', { 
+          agent_id: agentId, 
+          delete_all_sites: deleteAllSites,
+          name: agentName 
+      });
+      if (!res.success) {
         alert(res.message || "Erreur lors de la suppression");
+        loadSiteData(true); // Recharger les données si échec
       }
     } catch (e) {
       console.error(e);
+      loadSiteData(true);
     }
   };
 
@@ -1771,19 +1922,31 @@ export function useDashboardActions(props) {
 
   const executeDeleteSubsite = async () => {
     if (!deleteZoneConfirmId) return;
-    try {
-      const res = await apiCall('delete_subsite', { subsite_id: deleteZoneConfirmId });
-      if (res.success) {
-        loadSiteData(true); // Rechargement silencieux
-        loadDashboardData();
-      } else {
-        alert(res.message);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setDeleteZoneConfirmId(null);
-    }
+    const targetId = deleteZoneConfirmId;
+    
+    // Fermeture immédiate de la modale
+    setDeleteZoneConfirmId(null);
+    
+    // Utilisation d'un court délai pour laisser le navigateur effacer la modale de l'écran
+    setTimeout(() => {
+      // Mise à jour optimiste : on retire la zone du tableau de bord
+      setSiteData(prev => prev.filter(sub => String(sub.id) !== String(targetId)));
+
+      apiCall('delete_subsite', { subsite_id: targetId }).then(res => {
+        if (res.success) {
+          // Rafraîchissement silencieux de la liste des zones (menu latéral)
+          loadSiteData(true);
+          // Inutile de recharger tout le Dashboard puisque la zone est déjà retirée localement !
+        } else {
+          alert(res.message);
+          // Annulation de l'optimistic update en cas d'erreur
+          loadDashboardData(true);
+        }
+      }).catch(e => {
+        console.error(e);
+        loadDashboardData(true);
+      });
+    }, 10);
   };
 
   const handleInitPeriodRotation = async () => {
@@ -1938,15 +2101,47 @@ export function useDashboardActions(props) {
       });
       if (res.success) {
         setShiftModalAgent(null);
-        await loadSiteData();
+        setIsGenerating(false);
+
+        // Yield au navigateur pour fermer la modale instantanément
+        setTimeout(async () => {
+          if (res.attendance) {
+            const updatedAgentProps = {
+              shift_type: res.shift_type,
+              attendance: res.attendance
+            };
+            if (res.shift_history) {
+              updatedAgentProps.shift_history = res.shift_history;
+            }
+            
+            setSiteData(prev => prev.map(sub => ({
+              ...sub,
+              agents: sub.agents?.map(ag => {
+                if (String(ag.id) === String(shiftModalAgent.id)) {
+                  return { ...ag, ...updatedAgentProps };
+                }
+                return ag;
+              })
+            })));
+            
+            setGlobalAgents(prev => prev.map(ag => {
+              if (String(ag.id) === String(shiftModalAgent.id)) {
+                return { ...ag, ...updatedAgentProps };
+              }
+              return ag;
+            }));
+          } else {
+            await loadSiteData();
+          }
+        }, 50);
+        return; // Ne pas exécuter le finally
       } else {
         alert(res.message);
       }
     } catch (e) {
       alert("Erreur réseau");
-    } finally {
-      setIsGenerating(false);
     }
+    setIsGenerating(false);
   };
 
   const handleRenameSubsite = (subsiteId, currentName) => {
@@ -1956,21 +2151,27 @@ export function useDashboardActions(props) {
   const executeRenameSubsite = async (newName) => {
     if (!newName || !renameSubsiteModalData) return;
     const { subsiteId, currentName } = renameSubsiteModalData;
-    if (newName === currentName) {
+    const trimmedNewName = newName.trim();
+    
+    if (trimmedNewName === currentName) {
       setRenameSubsiteModalData(null);
       return;
     }
+
     try {
-      const res = await apiCall('rename_subsite', { subsite_id: subsiteId, name: newName.trim() });
+      const res = await apiCall('rename_subsite', { subsite_id: subsiteId, name: trimmedNewName });
       if (res.success) {
-        loadSiteData();
-        loadDashboardData();
+        setSiteData(prev => prev.map(sub => 
+          String(sub.id) === String(subsiteId) ? { ...sub, name: trimmedNewName } : sub
+        ));
         setRenameSubsiteModalData(null);
       } else {
-        alert(res.message);
+        alert(res.message || "Erreur lors du renommage");
+        loadDashboardData(true);
       }
     } catch (e) {
       alert("Erreur réseau");
+      loadDashboardData(true);
     }
   };
 
@@ -2069,7 +2270,6 @@ export function useDashboardActions(props) {
           return (
             <button key={offset} className="btn" style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: '100%', textAlign: 'left', marginBottom: '8px' }}
               onClick={async () => {
-                await handleUpdateAgentField(shiftModalAgent.id, 'shift_type', shiftModalType);
                 await handleApplyPattern(cycleLen, workDays, offset, shiftModalType);
               }}>
               <span style={{ fontFamily: 'Segoe UI Emoji' }}>{preview}</span>
@@ -2107,7 +2307,6 @@ export function useDashboardActions(props) {
                     customOffset = (customRotationDate - workDays) % cycleLen;
                     if (customOffset < 0) customOffset += cycleLen;
                   }
-                  await handleUpdateAgentField(shiftModalAgent.id, 'shift_type', shiftModalType);
                   await handleApplyPattern(cycleLen, workDays, customOffset, shiftModalType);
                   setShowCustomRotation(false);
                 }}>Générer</button>
@@ -2416,6 +2615,7 @@ export function useDashboardActions(props) {
     absenceNavOffset,
     absenceManualDuration,
     editingAbsenceLeaveId,
+    isSubmittingLeave,
     setShowAbsenceModal,
     setAbsenceAgentId,
     setAbsenceAgentName,
@@ -2538,6 +2738,7 @@ export function useDashboardActions(props) {
     setManuallyAdvancedToFuture,
     showFirstVisitModal,
     setShowFirstVisitModal,
+    isLockedByArchive,
     showPeriodLockedToast,
     showStats,
     setShowStats,
@@ -2625,6 +2826,7 @@ export function useDashboardActions(props) {
     formatDateKey,
     handleCreateSite,
     handleRenameSite,
+    executeRenameSite,
     handleDeleteSite,
     handleCreateSubsite,
     handleEditSpecialServiceClick,
@@ -2686,6 +2888,16 @@ export function useDashboardActions(props) {
     setMaladieNavOffset,
     setMaladieManualDuration,
     setEditingMaladieLeaveId,
-    handleMaladieSubmit
+    handleMaladieSubmit,
+    permanentSuppModal,
+    setPermanentSuppModal,
+    handleSavePermanentSupps,
+    overlapWarning,
+    setOverlapWarning,
+    handleDeleteLeave,
+    cancelEntrantModalData,
+    setCancelEntrantModalData,
+    cancelSortantModalData,
+    setCancelSortantModalData
   };
 }

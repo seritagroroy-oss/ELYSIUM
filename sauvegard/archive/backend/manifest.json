@@ -1,0 +1,16 @@
+{
+  "name": "Pointage Pro",
+  "short_name": "PointagePro",
+  "description": "Logiciel de gestion de pointage",
+  "start_url": "./index.php",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "assets/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

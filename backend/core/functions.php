@@ -1350,7 +1350,8 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
         $has_admin = false;
         $has_itc = false;
         foreach ($sites_rows as $s) {
-            if ($s['id'] === 'site_extras') $has_extras = true;
+            // Reconnaitre aussi le vrai site EXTRAS BUREAU cree manuellement (pas seulement le virtuel 'site_extras')
+            if ($s['id'] === 'site_extras' || stripos($s['name'], 'EXTRA BUREAU') !== false || stripos($s['name'], 'EXTRAS BUREAU') !== false) $has_extras = true;
             if ($s['id'] === 'site_releves') $has_releves = true;
             if ($s['id'] === 'site_administration') $has_admin = true;
             if ($s['id'] === 'site_itc') $has_itc = true;
@@ -2337,9 +2338,20 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     $merged_profile['mutated_from_function'] = $oldest['function'];
                 }
                 
-                // Add mutation breakdown
-                $merged_profile['mutation_breakdown'] = [
-                    'original' => [
+                // Add mutation breakdown — tableau sequentiel pour supporter N mutations
+                // On accumule les etapes successives au lieu d'ecraser original/mutated
+                $stages_oldest = [];
+                $stages_newest = [];
+                
+                // Recuperer les stages deja accumules si l'entree est deja le resultat d'une fusion
+                if (!empty($oldest['profile_data']['mutation_breakdown']['stages'])) {
+                    $stages_oldest = $oldest['profile_data']['mutation_breakdown']['stages'];
+                } elseif (!empty($oldest['profile_data']['mutation_breakdown']['original'])) {
+                    // Convertir l'ancienne structure original/mutated en stages
+                    $stages_oldest[] = $oldest['profile_data']['mutation_breakdown']['original'];
+                    $stages_oldest[] = $oldest['profile_data']['mutation_breakdown']['mutated'];
+                } else {
+                    $stages_oldest[] = [
                         'site' => $oldest['site'],
                         'subsite' => $oldest['subsite'],
                         'function' => $oldest['function_label'] ?? $oldest['function'],
@@ -2352,8 +2364,16 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         'worked_days' => $adjusted_old_active - (($oldest['absences'] ?? 0) + ($oldest['map_count'] ?? 0) + ($oldest['permission_count'] ?? 0) + ($oldest['entrant_sortant_count'] ?? 0)),
                         'base_prorata' => $adjusted_old_base,
                         'base_full' => $oldest['base_full'] ?? 0,
-                    ],
-                    'mutated' => [
+                    ];
+                }
+                
+                if (!empty($newest['profile_data']['mutation_breakdown']['stages'])) {
+                    $stages_newest = $newest['profile_data']['mutation_breakdown']['stages'];
+                } elseif (!empty($newest['profile_data']['mutation_breakdown']['original'])) {
+                    $stages_newest[] = $newest['profile_data']['mutation_breakdown']['original'];
+                    $stages_newest[] = $newest['profile_data']['mutation_breakdown']['mutated'];
+                } else {
+                    $stages_newest[] = [
                         'site' => $newest['site'],
                         'subsite' => $newest['subsite'],
                         'function' => $newest['function_label'] ?? $newest['function'],
@@ -2366,7 +2386,16 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         'worked_days' => $adjusted_new_active - (($newest['absences'] ?? 0) + ($newest['map_count'] ?? 0) + ($newest['permission_count'] ?? 0) + ($newest['entrant_sortant_count'] ?? 0)),
                         'base_prorata' => $adjusted_new_base,
                         'base_full' => $newest['base_full'] ?? 0,
-                    ]
+                    ];
+                }
+                
+                $all_stages = array_merge($stages_oldest, $stages_newest);
+                
+                // Conserver aussi original/mutated pour la compatibilite avec l'ancien frontend
+                $merged_profile['mutation_breakdown'] = [
+                    'stages' => $all_stages,
+                    'original' => $all_stages[0] ?? [],
+                    'mutated' => end($all_stages) ?: [],
                 ];
 
                 $merged_map[$matched_key] = [

@@ -60,16 +60,13 @@ switch ($action) {
                 $has_itc = true;
         }
         if (($is_billed === null || $is_billed != '0') && $module !== 'FACTURATION') {
-            if (!$has_extras)
-                $sites_rows[] = ['id' => 'site_extras', 'name' => '🌟 EXTRA BUREAU', 'is_billed' => 1];
+
             if (!$has_releves)
                 $sites_rows[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves', 'is_billed' => 1];
             if (!array_filter($sites_rows, fn($s) => $s['id'] === 'site_extras_sur_site'))
                 $sites_rows[] = ['id' => 'site_extras_sur_site', 'name' => '🌟 EXTRA SUR SITE', 'is_billed' => 1];
-            if (!$has_admin)
-                $sites_rows[] = ['id' => 'site_administration', 'name' => '🏢 Administration', 'is_billed' => 1];
-            if (!$has_itc)
-                $sites_rows[] = ['id' => 'site_itc', 'name' => 'ITC / IFM', 'is_billed' => 1];
+
+
         }
 
         $sites = $sites_rows;
@@ -78,11 +75,9 @@ switch ($action) {
             $stmtSub->execute([$site['id'], $serviceKey]);
             $subs = $stmtSub->fetchAll();
             
-            if (empty($subs) && in_array($site['id'], ['site_extras', 'site_releves', 'site_administration', 'site_itc'])) {
-                if ($site['id'] === 'site_extras') $subs = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
+            if (empty($subs) && in_array($site['id'], ['site_releves'])) {
                 if ($site['id'] === 'site_releves') $subs = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-                if ($site['id'] === 'site_administration') $subs = [['id' => 'site_admin_1', 'name' => 'Bureau']];
-                if ($site['id'] === 'site_itc') {
+                if (false) {
                     $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($companyKey ?? '')), 0, 12);
                     $subs = [
                         ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Régulière'],
@@ -419,7 +414,7 @@ switch ($action) {
             
             // Si toujours 0 ligne → la zone est virtuelle, on l'insère en base avec le bon nom
             if ($stmtFallback->rowCount() === 0) {
-                $stmtInsItc = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, ?, 'site_itc', '', ?)");
+                $stmtInsItc = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, ?, '', ?)");
                 $stmtInsItc->execute([$subsite_id, $new_name, $company_id]);
             }
         }
@@ -553,7 +548,7 @@ switch ($action) {
         $site_data = [];
 
         if ($site_id !== null && $site_id !== '' && $serviceKey) {
-            $is_hardcoded = in_array($site_id, ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration', 'site_itc']);
+            $is_hardcoded = in_array($site_id, ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration']);
 
             if ($is_hardcoded) {
                 $site = ['id' => $site_id, 'name' => ''];
@@ -586,7 +581,7 @@ switch ($action) {
                             ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS']
                         ];
                         try {
-                            $stmtIns = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, ?, 'site_itc', '', ?)");
+                            $stmtIns = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, ?, '', ?)");
                             foreach ($default_zones as $dz) {
                                 $stmtIns->execute([$dz['id'], $dz['name'], $company_id]);
                             }
@@ -1371,47 +1366,71 @@ switch ($action) {
         saveScopedData($db, $serviceKey);
         echo json_encode(['success' => true, 'agent_id' => $new_agent_id]);
         break;
-    case 'delete_agent':
-        $agent_id = $data['agent_id'] ?? '';
-        if (!$agent_id) {
-            echo json_encode(['success' => false, 'message' => 'Agent invalide']);
+
+    case 'check_agent_multisite':
+        $agent_name = $data['name'] ?? '';
+        if (!$agent_name) {
+            echo json_encode(['success' => false, 'sites' => []]);
             break;
         }
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $sqlite = getDb();
-        $sqlite->prepare("DELETE FROM agents WHERE id = ?")->execute([$agent_id]);
-        $sqlite->prepare("DELETE FROM attendance WHERE agent_id = ?")->execute([$agent_id]);
-
-        $serviceKey = resolveCurrentServiceKeySql();
-        $db = getScopedData($serviceKey);
-        if (isset($db['attendance']) && is_array($db['attendance'])) {
-            foreach ($db['attendance'] as $period_key => $agents_data) {
-                if (isset($db['attendance'][$period_key][$agent_id])) {
-                    unset($db['attendance'][$period_key][$agent_id]);
-                }
+        $stmt = $sqlite->prepare("
+            SELECT sub.name as subsite, s.name as site 
+            FROM agents a
+            LEFT JOIN subsites sub ON a.subsite_id = sub.id
+            LEFT JOIN sites s ON sub.site_id = s.id
+            WHERE a.name = ? AND a.company_id = ? AND (a.exit_date IS NULL OR a.exit_date = '')
+        ");
+        $stmt->execute([$agent_name, $company_id]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $sites = [];
+        foreach ($rows as $r) {
+            $siteName = $r['subsite'] ? $r['subsite'] : $r['site'];
+            if (!$siteName) $siteName = "Service Indépendant";
+            if (!in_array($siteName, $sites)) {
+                $sites[] = $siteName;
             }
         }
-        saveScopedData($db, $serviceKey);
-        echo json_encode(['success' => true]);
+        echo json_encode(['success' => true, 'sites' => $sites]);
         break;
     case 'delete_agent':
         $agent_id = $data['agent_id'] ?? '';
+        $delete_all_sites = !empty($data['delete_all_sites']);
+        $agent_name = $data['name'] ?? '';
+        
         if (!$agent_id) {
             echo json_encode(['success' => false, 'message' => 'Agent invalide']);
             break;
         }
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $sqlite = getDb();
-        $sqlite->prepare("DELETE FROM agents WHERE id = ?")->execute([$agent_id]);
-        $sqlite->prepare("DELETE FROM attendance WHERE agent_id = ?")->execute([$agent_id]);
-
+        
+        $ids_to_delete = [$agent_id];
+        
+        if ($delete_all_sites && $agent_name) {
+            $stmt = $sqlite->prepare("SELECT id FROM agents WHERE name = ? AND company_id = ? AND exit_date IS NULL");
+            $stmt->execute([$agent_name, $company_id]);
+            $ids_to_delete = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        }
+        
         $serviceKey = resolveCurrentServiceKeySql();
         $db = getScopedData($serviceKey);
-        if (isset($db['attendance']) && is_array($db['attendance'])) {
-            foreach ($db['attendance'] as $period_key => $agents_data) {
-                if (isset($db['attendance'][$period_key][$agent_id])) {
-                    unset($db['attendance'][$period_key][$agent_id]);
+        
+        foreach ($ids_to_delete as $id) {
+            $sqlite->prepare("DELETE FROM agents WHERE id = ?")->execute([$id]);
+            $sqlite->prepare("DELETE FROM attendance WHERE agent_id = ?")->execute([$id]);
+            
+            if (isset($db['attendance']) && is_array($db['attendance'])) {
+                foreach ($db['attendance'] as $period_key => $agents_data) {
+                    if (isset($db['attendance'][$period_key][$id])) {
+                        unset($db['attendance'][$period_key][$id]);
+                    }
                 }
             }
         }
+        
         saveScopedData($db, $serviceKey);
         echo json_encode(['success' => true]);
         break;

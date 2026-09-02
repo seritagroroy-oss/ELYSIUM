@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 export default function RenameSiteModal({ isOpen, onClose, currentName, onConfirm }) {
   const [name, setName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) setName(currentName || '');
@@ -9,14 +10,18 @@ export default function RenameSiteModal({ isOpen, onClose, currentName, onConfir
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (name.trim() && name.trim() !== currentName) {
-      onConfirm(name.trim());
+      setIsSaving(true);
+      await onConfirm(name.trim());
+      setIsSaving(false);
     } else {
       onClose();
     }
   };
+
+  const isDisabled = !name.trim() || name.trim() === currentName || isSaving;
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(10px)' }}>
@@ -81,24 +86,31 @@ export default function RenameSiteModal({ isOpen, onClose, currentName, onConfir
             </button>
             <button
               type="submit"
-              disabled={!name.trim() || name.trim() === currentName}
+              disabled={isDisabled}
               style={{
                 flex: 2,
                 padding: '14px',
-                background: (!name.trim() || name.trim() === currentName) ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)',
+                background: isDisabled ? 'rgba(99,102,241,0.25)' : 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '12px',
-                cursor: (!name.trim() || name.trim() === currentName) ? 'not-allowed' : 'pointer',
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
                 fontSize: '0.95rem',
                 fontWeight: 700,
                 transition: 'all 0.2s',
-                boxShadow: (!name.trim() || name.trim() === currentName) ? 'none' : '0 4px 20px rgba(99,102,241,0.4)'
+                boxShadow: isDisabled ? 'none' : '0 4px 20px rgba(99,102,241,0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
               }}
-              onMouseEnter={e => { if (name.trim() && name.trim() !== currentName) e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              onMouseEnter={e => { if (!isDisabled) e.currentTarget.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
             >
-              Enregistrer
+              {isSaving && (
+                <div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+              )}
+              {isSaving ? 'Enregistrement...' : 'Enregistrer'}
             </button>
           </div>
         </form>

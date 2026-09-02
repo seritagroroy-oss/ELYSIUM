@@ -1895,7 +1895,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         $base_used_for_deductions = $base;
                         // ENTRANT exclus des déductions : l'agent n'était pas encore en poste, ce n'est pas une absence
                         if ($is_special) {
-                            $deductions = (int) round(($absences + $map_count + $permission_count) * ($base_used_for_deductions / 30));
+                            $deductions = 0;
                         } else {
                             $deductions = (int) round(($absences + ($entrant_sortant_count - $entrant_count) + $map_count + $permission_count) * ($base_used_for_deductions / $divisor));
                         }

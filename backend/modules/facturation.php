@@ -177,10 +177,12 @@ switch ($action) {
         $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $sqlite = getDb();
         
-        $stmt = $sqlite->prepare("SELECT id, name, `function`, salary FROM agents WHERE salary IS NOT NULL AND salary > 0 AND company_id = ? ORDER BY name");
+        // Lecture depuis la table dédiée special_agents (plus de pollution du Registre Général)
+        $stmt = $sqlite->prepare("SELECT id, name, `function`, salary FROM special_agents WHERE company_id = ? ORDER BY name");
         $stmt->execute([$company_id]);
         $special_agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Les noms suggérés viennent toujours du Registre Général pour l'autocomplétion
         $stmtAll = $sqlite->prepare("SELECT DISTINCT name FROM agents WHERE company_id = ? AND archived_period IS NULL ORDER BY name");
         $stmtAll->execute([$company_id]);
         $all_names = array_column($stmtAll->fetchAll(PDO::FETCH_ASSOC), 'name');
@@ -190,7 +192,7 @@ switch ($action) {
 
     case 'save_special_agent':
         if (!hasPermission('fluctuation') && !hasPermission('salaries') && !hasWritePermission('company_config')) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
@@ -204,40 +206,36 @@ switch ($action) {
         }
 
         $sqlite = getDb();
-        $stmtCheck = $sqlite->prepare("SELECT id FROM agents WHERE name LIKE ? AND company_id = ? LIMIT 1");
+        // Vérification dans la table dédiée (jamais dans agents!)
+        $stmtCheck = $sqlite->prepare("SELECT id FROM special_agents WHERE name LIKE ? AND company_id = ? LIMIT 1");
         $stmtCheck->execute([$name, $company_id]);
         $exists = $stmtCheck->fetch();
 
         if ($exists) {
-            // Mettre Ã  jour TOUTES les instances de cet agent s'il existe dÃ©jÃ 
-            $stmtUpdate = $sqlite->prepare("UPDATE agents SET `function` = ?, salary = ? WHERE name LIKE ? AND company_id = ?");
+            // Mise à jour dans la table dédiée
+            $stmtUpdate = $sqlite->prepare("UPDATE special_agents SET `function` = ?, salary = ? WHERE name LIKE ? AND company_id = ?");
             $stmtUpdate->execute([$func, $salary, $name, $company_id]);
         } else {
-            // S'il n'existait pas du tout, on le prÃ©-crÃ©e
+            // Insertion dans la table dédiée (JAMAIS dans agents)
             $new_id = uniqid('agt_sp_');
-            $stmtInsert = $sqlite->prepare("INSERT INTO agents (id, name, `function`, salary, company_id) VALUES (?, ?, ?, ?, ?)");
-            $stmtInsert->execute([$new_id, $name, $func, $salary, $company_id]);
+            $stmtInsert = $sqlite->prepare("INSERT INTO special_agents (id, company_id, name, `function`, salary) VALUES (?, ?, ?, ?, ?)");
+            $stmtInsert->execute([$new_id, $company_id, $name, $func, $salary]);
         }
         echo json_encode(['success' => true]);
         break;
 
     case 'remove_special_agent':
         if (!hasPermission('fluctuation') && !hasPermission('salaries') && !hasWritePermission('company_config')) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $agent_id = $data['agent_id'] ?? '';
         $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $sqlite = getDb();
         
-        $stmtFind  = $sqlite->prepare("SELECT name FROM agents WHERE id = ? AND company_id = ? LIMIT 1");
-        $stmtFind->execute([$agent_id, resolveCurrentCompanyIdSql()]);
-        $agent = $stmtFind->fetch(PDO::FETCH_ASSOC);
-
-        if ($agent) {
-            $stmtUpdate = $sqlite->prepare("UPDATE agents SET salary = NULL WHERE name LIKE ? AND company_id = ?");
-            $stmtUpdate->execute([$agent['name'], $company_id]);
-        }
+        // Suppression uniquement dans la table dédiée (jamais dans agents!)
+        $stmtDel = $sqlite->prepare("DELETE FROM special_agents WHERE id = ? AND company_id = ?");
+        $stmtDel->execute([$agent_id, $company_id]);
         echo json_encode(['success' => true]);
         break;
 
@@ -313,6 +311,16 @@ switch ($action) {
         $stmtAg->execute([$companyId]);
         $allAgents = $stmtAg->fetchAll();
 
+        // OPTIMISATION N+1: Récupérer toutes les présences de la période en une seule requête
+        $stmtAttAll = $sqlite->prepare("SELECT agent_id, shift_code, status FROM attendance WHERE period = ? AND company_id = ?");
+        $stmtAttAll->execute([$period, $companyId]);
+        $allAttRows = $stmtAttAll->fetchAll(PDO::FETCH_ASSOC);
+        
+        $attendanceByAgent = [];
+        foreach ($allAttRows as $row) {
+            $attendanceByAgent[$row['agent_id']][] = $row;
+        }
+
         $sites_rentability = [];
 
         foreach ($allAgents as $agent) {
@@ -331,9 +339,7 @@ switch ($action) {
             }
             if (!empty($agent['exit_date']) && strpos($agent['exit_date'], $period) === 0) continue;
 
-            $stmtAtt  = $sqlite->prepare("SELECT shift_code, status FROM attendance WHERE agent_id = ? AND period = ? AND company_id = ?");
-        $stmtAtt->execute([$agent_id, $period, resolveCurrentCompanyIdSql()]);
-            $attRows = $stmtAtt->fetchAll();
+            $attRows = $attendanceByAgent[$agent_id] ?? [];
             $absences = $sp_count = 0;
             foreach ($attRows as $row) {
                 if ($row['status'] === 'A' || in_array($row['status'], ['ABANDON', 'DEMISSION'])) $absences++;
@@ -578,17 +584,8 @@ switch ($action) {
         }
         // Inject virtual sites and their zones so they appear in autocomplete
         $virtualSites = [
-            'ðŸŒŸ EXTRA BUREAU',
-            'ðŸŒŸ EXTRA BUREAU / Agents Disponibles',
-            'ðŸ”„ Vivier des relÃ¨ves',
-            'ðŸ”„ Vivier des relÃ¨ves / Agents Disponibles',
-            'ðŸŒŸ EXTRA SUR SITE',
-            'ðŸ ¢ Administration',
-            'ðŸ ¢ Administration / Bureau',
-            'ITC / IFM',
-            'ITC / IFM / Tenue RÃ©guliÃ¨re',
-            'ITC / IFM / Costume',
-            'ITC / IFM / Agent SpÃ©cial'
+            '🔄 Vivier des relèves',
+            '🔄 Vivier des relèves / Agents Disponibles'
         ];
         $siteNames = array_merge($siteNames, $virtualSites);
 
@@ -658,7 +655,7 @@ switch ($action) {
         // Enregistrer dans l'historique global (visible dans le bouton Historique)
         $pubHistoryData = [
             'period'               => $mois,
-            'type'                 => $toStatus === 'ClÃ´turÃ©' ? 'close_reclamations' : 'publish_reclamations',
+            'type'                 => $toStatus === 'Clôturé' ? 'close_reclamations' : 'publish_reclamations',
             'services_cibles'      => $services,
             'publisher_service_id' => $serviceKey,
             'timestamp'            => time(),
@@ -901,11 +898,11 @@ switch ($action) {
         $status = getServiceDataSql($companyId, 'fluctuation_status_' . $period, '');
         
         $sqlite = getDb();
-        $stmtRec = $sqlite->prepare("SELECT SUM(montant_estime) as total_rec FROM reclamations WHERE company_id = ? AND mois_concerne = ? AND statut IN ('ClÃ´turÃ©', 'ValidÃ©e')");
+        $stmtRec = $sqlite->prepare("SELECT SUM(montant_estime) as total_rec FROM reclamations WHERE company_id = ? AND mois_concerne = ? AND statut IN ('Clôturé', 'Validée')");
         $stmtRec->execute([$companyId, $period]);
         $live_reclamations_total = (float)($stmtRec->fetchColumn() ?: 0);
 
-        $stmtPonc = $sqlite->prepare("SELECT SUM(montant_estime) as total_ponc FROM reclamations WHERE company_id = ? AND mois_concerne = ? AND statut IN ('ClÃ´turÃ©', 'Transmis') AND (LOWER(type_erreur) = 'ponction' OR LOWER(reclamation_categorie) = 'ponction')");
+        $stmtPonc = $sqlite->prepare("SELECT SUM(montant_estime) as total_ponc FROM reclamations WHERE company_id = ? AND mois_concerne = ? AND statut IN ('Clôturé', 'Transmis') AND (LOWER(type_erreur) = 'ponction' OR LOWER(reclamation_categorie) = 'ponction')");
         $stmtPonc->execute([$companyId, $period]);
         $live_ponctions_total = (float)($stmtPonc->fetchColumn() ?: 0);
 

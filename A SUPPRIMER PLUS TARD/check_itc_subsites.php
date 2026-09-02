@@ -1,0 +1,13 @@
+<?php
+$db = new PDO('mysql:host=127.0.0.1;dbname=elysium', 'root', '');
+$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+$stmt = $db->query("
+    SELECT subsite_id, COUNT(id) as count 
+    FROM agents 
+    WHERE company_id = 'comp_cf66d02f' AND subsite_id LIKE 'itc_%'
+    GROUP BY subsite_id
+");
+$stats = $stmt->fetchAll(PDO::FETCH_ASSOC);
+print_r($stats);
+?>

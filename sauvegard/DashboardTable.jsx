@@ -40,7 +40,7 @@ export default function DashboardTable({
   highlightedAgentId, setHighlightedAgentId,
   siteData, datesList, period, activeSiteId, isArchiveMode, isVerificationMode, searchTerm, filterShiftType, filterFunction, filterShowOnlyAbsences, zoneSortOrder, agentSortOrder, agentSpacingMode, agentTableMode, costumeModes, setCostumeModes, functionModes, setFunctionModes, leaves, functions, selectionStart, selectionEnd, isSelecting, setIsSelecting, setSelectionStart, setSelectionEnd, selectedCell, setSelectedCell, handleCellClick, setContextMenu, setCellContextMenu, setSupplModal, setReposMenu, setSelectedKpiAgent, setShowKPICards, handleMouseEnterCell, handleMouseLeaveCell, isDraggingRef, cellContextMenu, isEditMode, lockedAbsences, setLockedAbsences, lockedMaps, setLockedMaps, lockedPermissions, setLockedPermissions, setCpAgentId, setCpAgentName, setCpStartDate, setCpEndDate, setShowCpModal, setCpInfoModal, setScheduleModalAgent, handleUpdateAgentField, handleClearAgentMutations, handleDeleteAgent, setFunctionModalAgent, setShiftModalAgent, setShiftModalType, setShowCustomRotation, setStatusChangeInfoModal, handleValidationSelect, openDeployExtraModal, openDeployReleveModal, requireEditMode, getDayLabel, formatDateKey, getPeriodLabel, sites, subsite, setZoneConfigModalData, handleRenameSubsite, handleDeleteSubsite, activeSiteName, setTransferModal, setReleveSupplModal, setPermissionDetailsModal, isSaving, paintModeActive, paintStatus, siteTableModes, isModernTheme, lockedSp, setLockedSp, savingCells, openMutateModal, setShowShiftChangeMenu, setShiftChangeDate, setShiftChangeNewType, setMapAgentId, setMapAgentName, setMapStartDate, setMapEndDate, setMapNavOffset, setMapManualDuration, setShowMapModal, setPermissionAgentId, setPermissionAgentName, setPermissionStartDate, setPermissionEndDate, setShowPermissionModal, setEntrantAgentId, setEntrantAgentName, setEntrantDate, setShowEntrantModal, setSortantAgentId, setSortantAgentName, setSortantDate, setShowSortantModal, handleContextMenuAction
   , enableAnimations, setEnableAnimations, clipboardWeek, setClipboardWeek, pasteConfirmModal, setPasteConfirmModal, handleCopyWeek, handlePasteWeek, handleConfirmPaste, cancelPaste, isZenMode, setIsZenMode, statsCardScale, setStatsCardScale, showAgentCountHover
-  , setShowTransferDetailsModal, setTransferDetailsData, setExternalSuppModal, setExternalSuppDetailsModal, setMoveZoneAgent, setShiftChangeInfoModal
+  , setShowTransferDetailsModal, setTransferDetailsData, setExternalSuppModal, setExternalSuppDetailsModal, setMoveZoneAgent, setShiftChangeInfoModal, setPermanentSuppModal, onEditSpecialService
 }) {
   // Helper to resolve site/subsite names
   const resolveSiteName = (destId) => {
@@ -452,6 +452,8 @@ export default function DashboardTable({
             let totalPermission = 0;
             let totalRupture = 0;
             let isOriginMutationForAgent = false;
+            let hasAgentAbandon = false;
+            let agentSupps = [];
 
             datesList.forEach(d => {
               const dk = formatDateKey(d);
@@ -462,7 +464,10 @@ export default function DashboardTable({
               let hasMutation = false;
               ['J', 'N'].forEach(sc => {
                 const st = String(attMap[sc]?.[dk] ?? '');
-                if (['ABANDON', 'DEMISSION', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT'].includes(st) || st.startsWith('SORTANT_')) hasAbandon = true;
+                if (['ABANDON', 'DEMISSION', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT'].includes(st) || st.startsWith('SORTANT_')) {
+                    hasAbandon = true;
+                    hasAgentAbandon = true;
+                }
                 if (st === 'ENTRANT' || st === 'REINTEGRATION') hasEntrant = true;
                 if (st.startsWith('M|')) {
                     hasMutation = true;
@@ -492,11 +497,17 @@ export default function DashboardTable({
                 });
                 ['S', 'SJ', 'SN'].forEach(s => {
                   const sp = attMap[s]?.[dk];
-                  if (sp === '1' || Number(sp) > 0 || (sp && sp.startsWith('Suppl'))) totalSP++;
+                  if (sp === '1' || Number(sp) > 0 || (sp && sp.startsWith('Suppl'))) {
+                    totalSP++;
+                    agentSupps.push({ date: dk, shift: s, code: sp });
+                  }
                 });
                 ['J', 'N'].forEach(s => {
                   const sp = attMap[s]?.[dk];
-                  if (sp && sp.startsWith('Suppl')) totalSP++;
+                  if (sp && sp.startsWith('Suppl')) {
+                    totalSP++;
+                    agentSupps.push({ date: dk, shift: s, code: sp });
+                  }
                 });
 
                 // Compter les jours hors planning TP avec présence manuelle
@@ -517,9 +528,13 @@ export default function DashboardTable({
 
             // --- DEBUT CORRECTION MOIS DE 31 JOURS (RUPTURES) ---
             // On absorbe le surplus des 31 jours dans les jours de rupture (Entrant, Sortant, Mutation)
+            
+            // Le surplus est toujours absorbé, peu importe le type de mutation
+            
             if (datesList.length > 30 && totalRupture > 0) {
               const surplus = datesList.length - 30;
-              const adjust = Math.min(totalRupture, surplus);
+              let adjust = Math.min(totalRupture, surplus);
+              
               if (totalEntrant >= adjust) {
                   totalEntrant -= adjust;
               } else {
@@ -535,7 +550,7 @@ export default function DashboardTable({
             else if (agentSpacingMode === 'dashed') bottomCellClass = 'border-mode-dashed';
             else if (agentSpacingMode === 'colored_border') bottomCellClass = 'border-mode-colored';
 
-            let baseStickyBg = agent.is_extra ? (localStorage.getItem('pontage_extra_name_bg') || '#2a121a') : (agent.is_releve ? (localStorage.getItem('pontage_releve_name_bg') || '#2a121a') : '#0b1220');
+            let baseStickyBg = (agent.is_mutated || agent.is_extra) ? '#1e40af' : (agent.is_releve ? '#065f46' : '#0b1220');
             if (agentSpacingMode === 'zebra' && agentIdx % 2 === 1) {
               if (baseStickyBg === '#0b1220') baseStickyBg = '#141c2c';
               else baseStickyBg = '#3b1c26';
@@ -545,7 +560,23 @@ export default function DashboardTable({
               baseStickyBg = '#064e3b'; // Un vert nettement plus visible (Emerald 900)
             }
 
-            const specialBase = (agent.profile_data && agent.profile_data.special_service) ? (agent.profile_data.special_service_base || 12) : 30;
+            let specialBase = 30;
+            if (agent.profile_data && agent.profile_data.special_service) {
+                const spDays = agent.profile_data.special_service_days || [];
+                if (spDays.length > 0 && datesList && datesList.length > 0) {
+                    let count = 0;
+                    datesList.forEach(d => {
+                        const jsDay = d.getDay();
+                        const appDay = jsDay === 0 ? 7 : jsDay;
+                        if (spDays.includes(appDay) || spDays.includes(String(appDay))) {
+                            count++;
+                        }
+                    });
+                    specialBase = count > 0 ? count : (agent.profile_data.special_service_base || 12);
+                } else {
+                    specialBase = agent.profile_data.special_service_base || 12;
+                }
+            }
             
             // Le prorata a été désactivé pour tous les agents afin d'afficher les absences brutes réelles.
             // Aucune mise à l'échelle n'est effectuée, 1 absence ratée = 1 absence déduite.
@@ -554,8 +585,37 @@ export default function DashboardTable({
             // On ajoute les jours hors planning TP avec présence manuelle (totalSpecialExtra)
             let totalP = Math.max(0, specialBase - totalA - totalMAP - totalEntrant - totalPermission) + totalSpecialExtra;
             
+            const isSpecialService = agent.profile_data?.special_service;
+            if (isSpecialService) {
+              let totalRealWorkedUnits = 0;
+              datesList.forEach(d => {
+                const dk = formatDateKey(d);
+                ['J', 'N'].forEach(sc => {
+                  const st = attMap[sc]?.[dk];
+                  if (st === '1' || st === 'COST' || (st && st.startsWith('COST|')) || (st && st.startsWith('F_'))) {
+                    totalRealWorkedUnits++;
+                  }
+                });
+              });
+              totalP = totalRealWorkedUnits; // Remplace totalement le calcul par soustraction
+            }
+            
             const is244872 = ['24h', '48h', '72h'].includes(String(agent.shift_type).toLowerCase());
-            if (is244872 && totalRupture > 0) {
+            
+            let isDestinationMutation = false;
+            if (datesList && datesList.length > 0) {
+                const firstDateKey = formatDateKey(datesList[0]);
+                ['J', 'N'].forEach(sc => {
+                    const st = attMap[sc]?.[firstDateKey];
+                    if (st && (st.startsWith('M|') || st.startsWith('PM|'))) {
+                        isDestinationMutation = true;
+                    }
+                });
+            }
+            
+            const isStrictRuptureFor24h = totalRupture > 0;
+            
+            if (is244872 && isStrictRuptureFor24h) {
               let totalRealWorkedUnits = 0;
               datesList.forEach(d => {
                 const dk = formatDateKey(d);
@@ -659,17 +719,31 @@ export default function DashboardTable({
                                     ✅
                                   </span>
                                   <span
-                                style={{
-                                  color: agent.is_extra ? '#f59e0b' : 'inherit',
-                                  cursor: activeSiteId === 'site_administration' ? 'default' : 'pointer',
-                                  textDecoration: treatedAgents[agent.id] ? 'line-through' : 'none',
-                                  opacity: treatedAgents[agent.id] ? 0.6 : 1
-                                }}
-                                onClick={() => { if (activeSiteId !== 'site_administration') { setSelectedKpiAgent(agent); setShowKPICards(true); } }}
-                                title={activeSiteId === 'site_administration' ? "" : `Voir aperçu salarial de ${agent.name}`}
-                              >
-                                {agent.name}
-                              </span>
+                                  style={{
+                                    color: (agent.is_mutated || agent.is_extra || agent.is_releve) ? '#ffffff' : 'inherit',
+                                    cursor: activeSiteId === 'site_administration' ? 'default' : 'pointer',
+                                    textDecoration: treatedAgents[agent.id] ? 'line-through' : 'none',
+                                    opacity: treatedAgents[agent.id] ? 0.6 : 1
+                                  }}
+                                  onClick={() => { if (activeSiteId !== 'site_administration') { setSelectedKpiAgent(agent); setShowKPICards(true); } }}
+                                  title={activeSiteId === 'site_administration' ? "" : `Voir aperçu salarial de ${agent.name}`}
+                                >
+                                  {agent.name}
+                                  {agent.profile_data?.special_service && (
+                                    <Edit2 
+                                      size={14} 
+                                      style={{ marginLeft: '6px', cursor: 'pointer', color: '#38bdf8', display: 'inline-block', verticalAlign: 'middle' }} 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onEditSpecialService) onEditSpecialService(agent);
+                                      }}
+                                      title="Configurer Temps Partiel"
+                                    />
+                                  )}
+                                  {agent.is_optimistic_loading && (
+                                    <span style={{ marginLeft: '8px', display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'var(--c)', animation: 'spin 1s linear infinite', verticalAlign: 'middle' }} title="Chargement du planning en cours..."></span>
+                                  )}
+                                </span>
                             {(totalCost > 0 || (subsite && subsite.costume_enabled === 1)) && (
                               <div style={{ display: 'flex', alignItems: 'center', marginLeft: '8px', gap: '4px' }}>
 
@@ -824,12 +898,14 @@ export default function DashboardTable({
                             )}
                           </div>
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' }}>
-                            {agent.is_extra && (
-                              <span style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 'bold' }}>Extra</span>
-                            )}
-                            {agent.is_releve && (
+                            {(agent.is_mutated || agent.is_extra) && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontSize: '0.72rem', color: '#f97316', fontWeight: 'bold' }}>Relève</span>
+                                <span style={{ fontSize: '0.72rem', color: '#ffffff', fontWeight: 'bold' }}>Supplémentaire</span>
+                              </div>
+                            )}
+                            {(agent.is_releve) && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '0.72rem', color: '#ffffff', fontWeight: 'bold' }}>Relève</span>
                               </div>
                             )}
                             {activeSiteId === 'site_releves' && (
@@ -898,9 +974,27 @@ export default function DashboardTable({
                                       🎟️ {totalPermission} {!lockedPermissions[agent.id] ? '🔓' : '🔒'}
                                     </span>
                                   )}
-                                  {totalSP > 0 && (
-                                    <span style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: 'var(--b)', padding: '2px 6px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }} title="Total Supplémentaires">+ {totalSP}</span>
-                                  )}
+                                  {totalSP > 0 && (() => {
+                                    const hasPermanentSupps = agent.profile_data?.permanent_supps && (Array.isArray(agent.profile_data.permanent_supps) ? agent.profile_data.permanent_supps.length > 0 : Object.keys(agent.profile_data.permanent_supps).length > 0);
+                                    return (
+                                    <span 
+                                      onClick={requireEditMode((e) => {
+                                        e.stopPropagation();
+                                        setPermanentSuppModal({ agent, supps: agentSupps });
+                                      })}
+                                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.25)'}
+                                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.15)'}
+                                      style={{ position: 'relative', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: 'var(--b)', padding: '2px 6px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s' }} 
+                                      title={hasPermanentSupps ? "Supplémentaire Permanent Actif" : "Total Supplémentaires (Cliquez pour paramétrer la sauvegarde définitive)"}>
+                                      + {totalSP}
+                                      {hasPermanentSupps && (
+                                        <div style={{ position: 'absolute', bottom: '-8px', left: '50%', transform: 'translateX(-50%)', background: '#0ea5e9', color: '#fff', fontSize: '0.55rem', fontWeight: '900', borderRadius: '50%', width: '12px', height: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', zIndex: 10 }}>
+                                          ✓
+                                        </div>
+                                      )}
+                                    </span>
+                                    );
+                                  })()}
 
                                 </div>
                                 {!isVerificationMode && !isArchiveMode && (
@@ -929,9 +1023,9 @@ export default function DashboardTable({
                                     )}
 
                                     <button
-                                      onClick={requireEditMode(() => (agent.is_mutated || agent.is_extra || agent.is_releve) ? handleClearAgentMutations(agent.id) : handleDeleteAgent(agent.id))}
+                                      onClick={requireEditMode(() => (agent.is_mutated || agent.is_extra || agent.is_releve) ? handleClearAgentMutations(agent.id) : handleDeleteAgent(agent))}
                                       className="btn btn-logout"
-                                      style={{ padding: '2px 6px', borderRadius: '8px', background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', opacity: 0.6, height: 'fit-content' }}
+                                      style={{ padding: '2px 6px', borderRadius: '8px', background: 'transparent', border: 'none', color: (agent.is_mutated || agent.is_extra || agent.is_releve) ? '#ffffff' : 'var(--danger)', cursor: 'pointer', opacity: 0.6, height: 'fit-content' }}
                                       title={(agent.is_mutated || agent.is_extra || agent.is_releve) ? "Retirer l'agent du site" : "Supprimer l'agent"}
                                     >
                                       <Trash size={14} />
@@ -964,9 +1058,9 @@ export default function DashboardTable({
                                     )}
 
                                     <button
-                                      onClick={requireEditMode(() => (agent.is_mutated || agent.is_extra || agent.is_releve) ? handleClearAgentMutations(agent.id) : handleDeleteAgent(agent.id))}
+                                      onClick={requireEditMode(() => (agent.is_mutated || agent.is_extra || agent.is_releve) ? handleClearAgentMutations(agent.id) : handleDeleteAgent(agent))}
                                       className="btn btn-logout"
-                                      style={{ padding: '2px 4px', borderRadius: '4px', background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', opacity: 0.6 }}
+                                      style={{ padding: '2px 4px', borderRadius: '4px', background: 'transparent', border: 'none', color: (agent.is_mutated || agent.is_extra || agent.is_releve) ? '#ffffff' : 'var(--danger)', cursor: 'pointer', opacity: 0.6 }}
                                       title={(agent.is_mutated || agent.is_extra || agent.is_releve) ? "Retirer l'agent du site" : "Supprimer l'agent"}
                                     >
                                       <Trash size={12} />
@@ -982,7 +1076,7 @@ export default function DashboardTable({
                   ) : null}
 
                   {scIdx === 0 ? (
-                    <td rowSpan={shiftRows.length} className={`agent-rowspan-cell ${bottomCellClass}`} style={{ verticalAlign: 'middle', padding: '0 4px', width: '65px', minWidth: '65px', maxWidth: '65px', position: 'sticky', left: '250px', background: agent.is_extra ? (localStorage.getItem('pontage_extra_name_bg') || '#2a121a') : (agent.is_releve ? (localStorage.getItem('pontage_releve_name_bg') || '#2a121a') : '#0b1220'), zIndex: 40, borderRight: '1px solid var(--border)' }}>
+                    <td rowSpan={shiftRows.length} className={`agent-rowspan-cell ${bottomCellClass}`} style={{ verticalAlign: 'middle', padding: '0 4px', width: '65px', minWidth: '65px', maxWidth: '65px', position: 'sticky', left: '250px', background: (agent.is_mutated || agent.is_extra) ? '#1e40af' : (agent.is_releve ? '#065f46' : '#0b1220'), zIndex: 40, borderRight: '1px solid var(--border)' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '4px 0' }}>
                         <span
                           style={{
@@ -1014,7 +1108,7 @@ export default function DashboardTable({
                             return agent.function || '-';
                           })()}
                         </span>
-                        {!agent.is_mutated && !isArchiveMode && !agent.is_releve && (
+                        {(!agent.is_mutated && !agent.is_extra && !agent.is_releve && !isArchiveMode) && (
                           <button
                             onClick={requireEditMode(() => setFunctionModalAgent(agent))}
                             style={{ padding: '2px 4px', fontSize: '0.65rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', width: '100%', cursor: 'pointer', color: 'rgba(255,255,255,0.7)' }}
@@ -1026,24 +1120,24 @@ export default function DashboardTable({
                   ) : null}
 
                   {!isVerificationMode && !isArchiveMode && scIdx === 0 ? (
-                    <td rowSpan={shiftRows.length} className={`agent-rowspan-cell ${bottomCellClass}`} style={{ verticalAlign: 'middle', padding: '0 4px', width: '45px', minWidth: '45px', maxWidth: '45px', position: 'sticky', left: '315px', background: agent.is_extra ? (localStorage.getItem('pontage_extra_name_bg') || '#2a121a') : (agent.is_releve ? (localStorage.getItem('pontage_releve_name_bg') || '#2a121a') : '#0b1220'), zIndex: 40, borderRight: '1px solid var(--border)' }}>
+                    <td rowSpan={shiftRows.length} className={`agent-rowspan-cell ${bottomCellClass}`} style={{ verticalAlign: 'middle', padding: '0 4px', width: '45px', minWidth: '45px', maxWidth: '45px', position: 'sticky', left: '315px', background: (agent.is_mutated || agent.is_extra) ? '#1e40af' : (agent.is_releve ? '#065f46' : '#0b1220'), zIndex: 40, borderRight: '1px solid var(--border)' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '4px 0' }}>
                         <span style={{ fontWeight: 'bold', color: 'white', fontSize: '0.85rem' }}>{agent.shift_type || 'Jour'}</span>
-                        <div
-                          className="form-input"
-                          style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', width: '100%', cursor: (agent.is_mutated) ? 'not-allowed' : 'pointer', color: 'white' }}
-                          onClick={requireEditMode((e) => {
-                            e.stopPropagation();
-                            if (!agent.is_mutated) {
+                        {(!agent.is_mutated && !agent.is_extra && !agent.is_releve && !isArchiveMode) && (
+                          <div
+                            className="form-input"
+                            style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', width: '100%', cursor: 'pointer', color: 'white' }}
+                            onClick={requireEditMode((e) => {
+                              e.stopPropagation();
                               setShiftModalAgent(agent);
                               setShiftModalType(agent.shift_type || 'Jour');
                               setShowCustomRotation(false);
-                            }
-                          })}
-                          title="Modifier la vacation"
-                        >
-                          {!agent.is_mutated && <Edit size={14} style={{ opacity: 0.8 }} />}
-                        </div>
+                            })}
+                            title="Modifier la vacation"
+                          >
+                            <Edit size={14} style={{ opacity: 0.8 }} />
+                          </div>
+                        )}
                         {(() => {
                           // Check if there are shift history changes within the current period
                           let shiftHistory = agent.shift_history;
@@ -1267,20 +1361,12 @@ export default function DashboardTable({
                         textStyle = 'transparent';
                         content = '';
                         cursorStyle = 'not-allowed';
-                      } else if (isSpecialRest) {
-                        if (status === '1') {
-                          // Jour hors planning mais présence manuelle ajoutée
-                          bgStyle = 'rgba(34, 197, 94, 0.2)';
-                          textStyle = 'var(--a)';
-                          content = <span className="text-present">1</span>;
-                          cursorStyle = 'pointer';
-                        } else {
-                          // Jour hors planning - grisé mais cliquable
-                          bgStyle = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 10px, transparent 10px, transparent 20px)';
-                          textStyle = 'transparent';
-                          content = '';
-                          cursorStyle = 'pointer';
-                        }
+                      } else if (isSpecial && (!status || status === '' || status === 'R' || status === 'CG')) {
+                        // Jour de repos pour temps partiel (prévu ou non) - grisé hachuré
+                        bgStyle = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 10px, transparent 10px, transparent 20px)';
+                        textStyle = 'transparent';
+                        content = '';
+                        cursorStyle = 'pointer';
                       } else if (isCp || status === 'CP') {
                         bgStyle = localStorage.getItem('pontage_cp_bg') || 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)';
                         textStyle = localStorage.getItem('pontage_cp_text') || '#ffffff';
@@ -1435,6 +1521,10 @@ export default function DashboardTable({
                           bgStyle = (!agent.is_extra && !agent.is_releve) ? reposCellBg : 'transparent';
                           textStyle = '#888';
                           content = <span>R</span>;
+                        } else if (status === 'CG') {
+                          bgStyle = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 10px, transparent 10px, transparent 20px)';
+                          textStyle = 'transparent';
+                          content = '';
                         } else if (status === 'A') {
                           bgStyle = 'rgba(239, 68, 68, 0.2)';
                           textStyle = 'var(--danger)';
@@ -1848,11 +1938,7 @@ export default function DashboardTable({
                             const isDistantReleve = agent.is_releve && activeSiteId !== 'site_releves';
                             if (activeSiteId === 'site_releves' && agent.is_releve && (sc === 'SJ' || sc === 'SN')) return;
                             if (isNonPresent || isPrevMutated || isCp || isSortant || isEntrant) return;
-                            // Temps partiel : clic sur jour hors planning -> toggle 1 / vide
-                            if (isSpecialRest) {
-                              handleCellClick(agent.id, dk, sc, status, status === '1' ? '' : '1');
-                              return;
-                            }
+                            // Suppression de la limite du clic pour le temps partiel pour permettre le cycle complet
                             if (status === 'P' && lockedPermissions[agent.id]) return;
                             if (status && status.startsWith('Suppl')) return;
                             if (status === 'T' || (status && status.startsWith('T|'))) return;
@@ -2332,27 +2418,6 @@ return (
               
               return (
                 <React.Fragment key={agent.id}>
-                  {isFirstMutated && (
-                    <tr>
-                      <td colSpan={datesList.length + 4} style={{ background: 'rgba(14, 165, 233, 0.05)', padding: '4px', textAlign: 'center', borderTop: '2px solid rgba(14, 165, 233, 0.3)', borderBottom: '2px solid rgba(14, 165, 233, 0.3)' }}>
-                        <span style={{ fontWeight: 'bold', color: '#0ea5e9', letterSpacing: '1px', fontSize: '0.8rem' }}>🔄 AGENTS MUTÉS (Temporaire)</span>
-                      </td>
-                    </tr>
-                  )}
-                  {isFirstExtra && (
-                    <tr>
-                      <td colSpan={datesList.length + 4} style={{ background: 'rgba(245, 158, 11, 0.05)', padding: '4px', textAlign: 'center', borderTop: '2px solid rgba(245, 158, 11, 0.3)', borderBottom: '2px solid rgba(245, 158, 11, 0.3)' }}>
-                        <span style={{ fontWeight: 'bold', color: '#f59e0b', letterSpacing: '1px', fontSize: '0.8rem' }}>⚡ EXTRAS</span>
-                      </td>
-                    </tr>
-                  )}
-                  {isFirstReleve && (
-                    <tr>
-                      <td colSpan={datesList.length + 4} style={{ background: 'rgba(56, 189, 248, 0.05)', padding: '4px', textAlign: 'center', borderTop: '2px solid rgba(56, 189, 248, 0.3)', borderBottom: '2px solid rgba(56, 189, 248, 0.3)' }}>
-                        <span style={{ fontWeight: 'bold', color: '#38bdf8', letterSpacing: '1px', fontSize: '0.8rem' }}>🔄 AGENTS RELÈVE</span>
-                      </td>
-                    </tr>
-                  )}
                   {rows}
                 </React.Fragment>
               );

@@ -134,6 +134,13 @@ const BlacklistModal = ({ onClose }) => {
                       <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginTop: '4px' }}>
                         Fonction: {agent.function || 'N/A'} • Sortie le {agent.exit_date ? new Date(agent.exit_date).toLocaleDateString('fr-FR') : 'N/A'} • Motif: {agent.exit_reason?.replace('SORTANT_', '') || 'N/A'}
                       </div>
+                      <div style={{ fontSize: '0.82rem', color: 'rgba(99,179,237,0.8)', marginTop: '3px' }}>
+                        📍 {agent.site_name
+                          ? (agent.subsite_name && agent.subsite_name !== agent.site_name
+                              ? `${agent.site_name} › ${agent.subsite_name}`
+                              : agent.site_name)
+                          : 'Site non renseigné'}
+                      </div>
                     </div>
                     <button 
                       onClick={() => toggleBlacklist(agent.id, agent.is_blacklisted)}

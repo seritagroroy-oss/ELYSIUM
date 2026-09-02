@@ -58,6 +58,7 @@ $allowed_php = [
     '/router.php',
     '/index.php',
     '/check_data.php',
+    '/force_regen.php',
     '/sync.php',
     '/debug_dash.php',
     '/unpublish_juillet.php',

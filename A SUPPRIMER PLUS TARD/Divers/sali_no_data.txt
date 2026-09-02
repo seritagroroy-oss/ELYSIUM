@@ -1,0 +1,17 @@
+Array
+(
+    [admin_schedule] => 
+    [admin_schedule_days] => Array
+        (
+        )
+
+    [special_service] => 1
+    [special_service_base] => 12
+    [special_service_days] => Array
+        (
+            [0] => 2
+            [1] => 4
+            [2] => 6
+        )
+
+)

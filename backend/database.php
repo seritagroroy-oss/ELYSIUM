@@ -272,86 +272,126 @@ function getDb()
         $pass = $env['DB_PASSWORD'] ?? '';
         $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
         $db = new ElysiumPdoDb($dsn, $user, $pass);
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN statut_final VARCHAR(255) DEFAULT ''"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN motif_refus TEXT"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN services_cibles TEXT"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN agent_nom TEXT"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN agent_matricule TEXT"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN reclamation_categorie TEXT"); } catch (Exception $e) {}
-        // Unified definition for archives_pointage table – MySQL only
-        try {
-            $db->exec("CREATE TABLE IF NOT EXISTS archives_pointage (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                company_id VARCHAR(100),
-                period VARCHAR(20),
-                archived_date DATETIME,
-                archived_by VARCHAR(255),
-                data LONGTEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )");
-            // Indexes for faster queries
-            $db->exec("CREATE INDEX IF NOT EXISTS idx_archives_pointage_company ON archives_pointage(company_id)");
-            $db->exec("CREATE INDEX IF NOT EXISTS idx_archives_pointage_period ON archives_pointage(period)");
-        } catch (Exception $e) {}
-        // Migration: add columns if table existed before the unified schema
-        try { $db->exec("ALTER TABLE archives_pointage ADD COLUMN archived_date DATETIME"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE archives_pointage ADD COLUMN archived_by VARCHAR(255)"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE archives_pointage ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE archives_pointage MODIFY COLUMN company_id VARCHAR(100)"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN jours_concernes TEXT"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN montant_estime TEXT"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN mois_concerne TEXT"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN statut TEXT DEFAULT 'En attente'"); } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE reclamations ADD COLUMN description TEXT"); } catch (Exception $e) {}
+        
+        // Optimisation : Ne pas exécuter les lourdes requêtes DDL à chaque requête API (crée un goulet d'étranglement)
+        $migration_flag = __DIR__ . '/mysql_migrated_v2.flag';
+        if (!file_exists($migration_flag)) {
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN statut_final VARCHAR(255) DEFAULT ''"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN motif_refus TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN services_cibles TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN agent_nom TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN agent_matricule TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN reclamation_categorie TEXT"); } catch (Exception $e) {}
+            // Unified definition for archives_pointage table – MySQL only
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS archives_pointage (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    company_id VARCHAR(100),
+                    period VARCHAR(20),
+                    archived_date DATETIME,
+                    archived_by VARCHAR(255),
+                    data LONGTEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )");
+                // Indexes for faster queries
+                $db->exec("CREATE INDEX IF NOT EXISTS idx_archives_pointage_company ON archives_pointage(company_id)");
+                $db->exec("CREATE INDEX IF NOT EXISTS idx_archives_pointage_period ON archives_pointage(period)");
+            } catch (Exception $e) {}
+            // Migration: add columns if table existed before the unified schema
+            try { $db->exec("ALTER TABLE archives_pointage ADD COLUMN archived_date DATETIME"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE archives_pointage ADD COLUMN archived_by VARCHAR(255)"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE archives_pointage ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE archives_pointage MODIFY COLUMN company_id VARCHAR(100)"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN jours_concernes TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN montant_estime TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN mois_concerne TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN statut TEXT DEFAULT 'En attente'"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN description TEXT"); } catch (Exception $e) {}
 
-        try { $db->exec("ALTER TABLE attendance ADD INDEX idx_att_agent_period_date (agent_id, period, date)"); } catch (Exception $e) {}
-        try {
-            $db->exec("CREATE TABLE IF NOT EXISTS treated_agents (
-                company_id VARCHAR(100),
-                service_id VARCHAR(100),
-                site_id VARCHAR(100),
-                period VARCHAR(30),
-                agent_id VARCHAR(100),
-                PRIMARY KEY (company_id, service_id, site_id, period, agent_id)
-            )");
-        } catch (Exception $e) {}
-        // Migration: table payroll_statuses pour persister les statuts de paie
-        try {
-            $db->exec("CREATE TABLE IF NOT EXISTS payroll_statuses (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                company_id VARCHAR(100) NOT NULL,
-                period VARCHAR(7) NOT NULL,
-                site_id VARCHAR(100) NOT NULL DEFAULT '',
-                zone_name VARCHAR(255) NOT NULL DEFAULT '',
-                agent_name VARCHAR(255) NOT NULL,
-                status VARCHAR(20) NOT NULL DEFAULT 'brouillon',
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY uk_payroll_status (company_id, period, site_id, zone_name, agent_name)
-            )");
-        } catch (Exception $e) {}
-        try {
-            $db->exec("CREATE TABLE IF NOT EXISTS payroll_snapshots (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                company_id VARCHAR(100) NOT NULL,
-                period VARCHAR(20) NOT NULL,
-                snapshot LONGTEXT NOT NULL,
-                published_by VARCHAR(255),
-                published_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uk_snapshot (company_id, period)
-            )");
-        } catch (Exception $e) {}
-        try {
-            $db->exec("CREATE TABLE IF NOT EXISTS archives (
-                id VARCHAR(255) PRIMARY KEY,
-                service_id VARCHAR(100),
-                company_id VARCHAR(100),
-                period VARCHAR(20),
-                data LONGTEXT,
-                archived_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                archived_by VARCHAR(255)
-            )");
-        } catch (Exception $e) {}
-        try { $db->exec("ALTER TABLE agent_loans ADD COLUMN agent_id VARCHAR(100)"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE attendance ADD INDEX idx_att_agent_period_date (agent_id, period, date)"); } catch (Exception $e) {}
+            try { $db->exec("CREATE INDEX idx_attendance_period ON attendance (period)"); } catch (Exception $e) {}
+            try { $db->exec("CREATE INDEX idx_attendance_agent_period ON attendance (agent_id, period)"); } catch (Exception $e) {}
+            try { $db->exec("CREATE INDEX idx_agents_company ON agents (company_id)"); } catch (Exception $e) {}
+            try { $db->exec("CREATE INDEX idx_agents_subsite ON agents (subsite_id)"); } catch (Exception $e) {}
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS treated_agents (
+                    company_id VARCHAR(100),
+                    service_id VARCHAR(100),
+                    site_id VARCHAR(100),
+                    period VARCHAR(30),
+                    agent_id VARCHAR(100),
+                    PRIMARY KEY (company_id, service_id, site_id, period, agent_id)
+                )");
+            } catch (Exception $e) {}
+            
+            // Migration: table calendar_progress
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS calendar_progress (
+                    email VARCHAR(255), 
+                    period VARCHAR(50), 
+                    data TEXT, 
+                    PRIMARY KEY(email, period)
+                )");
+            } catch (Exception $e) {}
+
+            // Migration: table payroll_statuses pour persister les statuts de paie
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS payroll_statuses (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    company_id VARCHAR(100) NOT NULL,
+                    period VARCHAR(7) NOT NULL,
+                    site_id VARCHAR(100) NOT NULL DEFAULT '',
+                    zone_name VARCHAR(255) NOT NULL DEFAULT '',
+                    agent_name VARCHAR(255) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'brouillon',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_payroll_status (company_id, period, site_id, zone_name, agent_name)
+                )");
+            } catch (Exception $e) {}
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS payroll_snapshots (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    company_id VARCHAR(100) NOT NULL,
+                    period VARCHAR(20) NOT NULL,
+                    snapshot LONGTEXT NOT NULL,
+                    published_by VARCHAR(255),
+                    published_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_snapshot (company_id, period)
+                )");
+            } catch (Exception $e) {}
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS archives (
+                    id VARCHAR(255) PRIMARY KEY,
+                    service_id VARCHAR(100),
+                    company_id VARCHAR(100),
+                    period VARCHAR(20),
+                    data LONGTEXT,
+                    archived_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    archived_by VARCHAR(255)
+                )");
+            } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE agent_loans ADD COLUMN agent_id VARCHAR(100)"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE agent_loans ADD COLUMN already_paid INTEGER DEFAULT 0"); } catch (Exception $e) {}
+            
+            // Migration: table user_column_prefs pour les préférences de colonnes par utilisateur
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS user_column_prefs (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id     VARCHAR(255) NOT NULL,
+                    company_id  VARCHAR(100) NOT NULL,
+                    view_key    VARCHAR(50) NOT NULL DEFAULT 'payroll_table',
+                    prefs       TEXT NOT NULL,
+                    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_user_column_prefs (user_id, company_id, view_key)
+                )");
+                // Migration: corriger le type si la table existait déjà avec user_id INT
+                try { $db->exec("ALTER TABLE user_column_prefs MODIFY COLUMN user_id VARCHAR(255) NOT NULL"); } catch (Exception $ex) {}
+            } catch (Exception $e) {}
+
+            // Marquer la migration initiale comme effectuée
+            @file_put_contents($migration_flag, date('Y-m-d H:i:s'));
+
+        }
     } else {
         $db = new ElysiumDb(SQLITE_FILE);
     }
@@ -558,6 +598,16 @@ function initSchema(ElysiumDb $pdo): void
             motif TEXT,
             period TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_column_prefs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            company_id  TEXT NOT NULL,
+            view_key    TEXT NOT NULL DEFAULT 'payroll_table',
+            prefs       TEXT NOT NULL,
+            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, company_id, view_key)
         );
 
         CREATE TABLE IF NOT EXISTS agent_sanctions (

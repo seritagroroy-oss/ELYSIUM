@@ -16,8 +16,13 @@ const AbsenceModal = ({
   onSubmit,
   getSafePeriod,
   formatDateKey,
-  getDayLabel
+  getDayLabel,
+  isEditing,
+  isSubmittingLeave
 }) => {
+  const [isSubmittingLocal, setIsSubmittingLocal] = React.useState(false);
+  const isSubmitting = isSubmittingLocal || isSubmittingLeave;
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(8px)' }} />
@@ -46,8 +51,7 @@ const AbsenceModal = ({
           </div>
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
-          <div style={{ marginBottom: '24px' }}>
+        <div style={{ marginBottom: '24px' }}>
             {/* Options de sélection */}
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
               <button type="button" onClick={() => { localStorage.setItem('absence_selection_mode', 'nav'); setAbsenceNavOffset(0); }} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: (localStorage.getItem('absence_selection_mode') || 'nav') === 'nav' ? 'rgba(239,68,68,0.2)' : 'transparent', color: (localStorage.getItem('absence_selection_mode') || 'nav') === 'nav' ? '#f87171' : 'rgba(255,255,255,0.5)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>Mois par mois</button>
@@ -223,30 +227,89 @@ const AbsenceModal = ({
           {/* Boutons */}
           <div style={{ display: 'flex', gap: '12px' }}>
             <button
-              onClick={onClose}
               type="button"
-              style={{ flex: 1, padding: '12px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, transition: 'all 0.2s' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+              onClick={onClose}
+              disabled={isSubmitting}
+              style={{
+                flex: 1, padding: '12px', borderRadius: '10px',
+                background: 'rgba(255,255,255,0.06)', color: '#fff',
+                border: '1px solid rgba(255,255,255,0.1)', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '0.95rem', fontWeight: 600,
+                transition: 'all 0.2s', opacity: isSubmitting ? 0.5 : 1
+              }}
+              onMouseEnter={e => {
+                if (!isSubmitting) {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }
+              }}
+              onMouseLeave={e => {
+                if (!isSubmitting) {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
             >
               Annuler
             </button>
             <button
-              type="submit"
-              disabled={!startDate || !endDate}
+              type="button"
+              onClick={() => {
+                setIsSubmittingLocal(true);
+                try {
+                  const p = onSubmit();
+                  if (p && p.finally) {
+                    p.catch(err => {
+                      alert("Erreur asynchrone : " + (err.message || err));
+                    }).finally(() => setIsSubmittingLocal(false));
+                  } else {
+                    setIsSubmittingLocal(false);
+                  }
+                } catch (err) {
+                  alert("Erreur synchrone : " + (err.message || err));
+                  setIsSubmittingLocal(false);
+                }
+              }}
+              disabled={!startDate || !endDate || isSubmitting}
               style={{
                 flex: 2, padding: '12px', borderRadius: '10px',
                 background: (!startDate || !endDate) ? 'rgba(245,158,11,0.3)' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                 color: (!startDate || !endDate) ? 'rgba(255,255,255,0.3)' : '#fff',
-                border: 'none', cursor: (!startDate || !endDate) ? 'not-allowed' : 'pointer', fontSize: '0.95rem', fontWeight: 700,
-                boxShadow: (!startDate || !endDate) ? 'none' : '0 6px 15px rgba(245,158,11,0.3)',
-                transition: 'all 0.2s'
+                border: 'none', cursor: (!startDate || !endDate || isSubmitting) ? 'not-allowed' : 'pointer', fontSize: '0.95rem', fontWeight: 700,
+                boxShadow: (!startDate || !endDate || isSubmitting) ? 'none' : '0 6px 15px rgba(245,158,11,0.3)',
+                transition: 'all 0.2s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                opacity: isSubmitting ? 0.7 : 1
+              }}
+              onMouseEnter={e => {
+                if (startDate && endDate && !isSubmitting) {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 8px 20px rgba(245,158,11,0.5)';
+                }
+              }}
+              onMouseLeave={e => {
+                if (startDate && endDate && !isSubmitting) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 6px 15px rgba(245,158,11,0.3)';
+                }
               }}
             >
-              {(!startDate || !endDate) ? 'Sélectionnez une période' : 'Valider l\'Absence'}
+              {isSubmitting ? (
+                <>
+                  <svg style={{ animation: 'spin 1s linear infinite', height: '1.25rem', width: '1.25rem', color: '#fff' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Enregistrement...
+                </>
+              ) : (!startDate || !endDate) ? 'Sélectionnez une période' : 'Valider l\'Absence (v2)'}
             </button>
           </div>
-        </form>
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+          `}} />
       </div>
     </div>
   );

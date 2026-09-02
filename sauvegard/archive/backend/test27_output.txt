@@ -1,0 +1,6 @@
+Site: EXTRAS BUREAU
+active_days: 30
+days_worked: 29
+absences: 1
+No mutation_breakdown
+--------

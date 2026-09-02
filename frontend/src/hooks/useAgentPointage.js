@@ -212,14 +212,19 @@ export function useAgentPointage({
           if (currentStatus === 'COST') newStatus = '';
           else newStatus = 'COST';
         } else {
-          // Détecter si l'agent est rotatif (24h/48h/72h)
+          // Détecter si l'agent est rotatif (24h/48h/72h) et s'il est à temps partiel
           let agentShiftType = null;
           let agentScheduledDays = null;
+          let isPartTime = false;
           for (let sub of siteData) {
             const ag = sub.agents?.find(a => String(a.id) === String(agentId));
             if (ag) { 
               agentShiftType = ag.shift_type; 
               agentScheduledDays = ag.scheduled_days;
+              try {
+                const profile = typeof ag.profile_data === 'string' ? JSON.parse(ag.profile_data) : (ag.profile_data || {});
+                if (profile.special_service) isPartTime = true;
+              } catch(e) {}
               break; 
             }
           }
@@ -261,7 +266,7 @@ export function useAgentPointage({
               newStatus = (currentStatus === reposState) ? '1' : reposState;
             } else {
               // Jour de montée : cycle complet 1 → A → P → MAP → R
-              if (currentStatus === '' || currentStatus === 'R') newStatus = '1';
+              if (currentStatus === '' || currentStatus === 'R' || currentStatus === 'CG') newStatus = '1';
               else if (currentStatus === '1') newStatus = 'A';
               else if (currentStatus === 'A') newStatus = 'P';
               else if (currentStatus === 'P') newStatus = 'MAP';
@@ -270,18 +275,34 @@ export function useAgentPointage({
             }
           } else {
             // Agents non-rotatifs ou lignes SP : cycle normal
-            if (currentStatus === '' || currentStatus === 'R') newStatus = '1';
-            else if (currentStatus === '1') newStatus = 'A';
-            else if (currentStatus === 'A') newStatus = 'P';
-            else if (currentStatus === 'P') newStatus = 'MAP';
-            else if (['MAP', 'M', 'CP', 'AT'].includes(currentStatus)) newStatus = 'R';
-            else newStatus = '1';
+            if (isPartTime) {
+              // Cycle spécifique pour le temps partiel : inclut 'M' (Maladie) et 'CG' (Case Grisée)
+              if (currentStatus === '' || currentStatus === 'R' || currentStatus === 'CG') newStatus = '1';
+              else if (currentStatus === '1') newStatus = 'A';
+              else if (currentStatus === 'A') newStatus = 'P';
+              else if (currentStatus === 'P') newStatus = 'M';
+              else if (currentStatus === 'M') newStatus = 'MAP';
+              else if (['MAP', 'CP', 'AT'].includes(currentStatus)) newStatus = 'CG';
+              else newStatus = '1';
+            } else {
+              // Cycle normal pour les autres agents non-rotatifs
+              if (currentStatus === '' || currentStatus === 'R' || currentStatus === 'CG') newStatus = '1';
+              else if (currentStatus === '1') newStatus = 'A';
+              else if (currentStatus === 'A') newStatus = 'P';
+              else if (currentStatus === 'P') newStatus = 'MAP';
+              else if (['MAP', 'M', 'CP', 'AT'].includes(currentStatus)) newStatus = 'R';
+              else newStatus = '1';
+            }
           }
         }
       }
     }
 
-    if (currentStatus !== '' && (currentStatus.startsWith('M|') || currentStatus.startsWith('PM|'))) return; // Mutation protégée
+    // On protège les M| (muté vers un autre site) car c'est ce qui indique à l'ancien site de ne pas facturer.
+    // On déverrouille les PM| pour permettre de corriger une absence passée sur le nouveau site.
+    if (currentStatus !== '' && currentStatus.startsWith('M|')) {
+        return; 
+    }
 
     const cellKey = `${agentId}-${dateKey}-${shiftCode}`;
     // Créer un nouveau AbortController pour cette requête

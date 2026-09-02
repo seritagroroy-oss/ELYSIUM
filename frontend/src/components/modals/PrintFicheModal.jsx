@@ -108,16 +108,51 @@ export default function PrintFicheModal({
 
   const periodeText = `Période de ${currentMonthName.toUpperCase()} : Du ${cStart} ${prevMonthName} au ${cEnd} ${currentMonthName}`;
 
+  const handlePrint = () => {
+    const printContent = document.getElementById('printable-fiche').innerHTML;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Fiche de Paie - ${agent.name}</title>
+          <style>
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              color: black; 
+              margin: 0;
+              padding: 20px;
+              background: white;
+            }
+            @media print {
+              @page { size: portrait; margin: 10mm; }
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .no-print { display: none !important; }
+            }
+          </style>
+        </head>
+        <body>
+          <div style="width: 100%; max-width: 800px; margin: auto;">
+            ${printContent}
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000000, padding: '20px', overflowY: 'auto' }}>
-      <style>{`@media print { @page { size: portrait; margin: 10mm; } }`}</style>
-      <div className="printable-section" style={{ width: '100%', maxWidth: '800px', background: 'white', color: 'black', padding: '40px', borderRadius: '8px', margin: 'auto' }}>
+    <div className="print-modal-wrapper" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000000, padding: '20px', overflowY: 'auto' }}>
+      <div id="printable-fiche" className="printable-section" style={{ width: '100%', maxWidth: '800px', background: 'white', color: 'black', padding: '40px', borderRadius: '8px', margin: 'auto' }}>
         <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '20px' }}>
           <button className="btn" onClick={onClose} style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}>Fermer</button>
-          <button className="btn btn-primary" onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Printer size={16} /> Imprimer</button>
+          <button className="btn btn-primary" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Printer size={16} /> Imprimer</button>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', borderBottom: '3px solid #0f172a', paddingBottom: '15px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', borderBottom: '3px solid #0f172a', paddingBottom: '15px' }}>
           <div>
             <h1 style={{ margin: '0 0 10px 0', fontSize: '1.8rem', color: '#0f172a', fontWeight: '900', letterSpacing: '-0.5px' }}>FICHE DE POINTAGE & PAIE</h1>
             <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#64748b', fontWeight: 'normal', textTransform: 'capitalize' }}>{periodeText}</h3>
@@ -131,7 +166,7 @@ export default function PrintFicheModal({
                   const d = new Date(entrantDate);
                   const formatted = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
                   return (
-                    <div style={{ marginTop: '10px', fontSize: '0.85rem', color: '#0284c7', fontStyle: 'italic', display: 'inline-block', background: '#e0f2fe', padding: '4px 10px', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+                    <div style={{ marginTop: '10px', fontSize: '0.85rem', color: '#0284c7', fontStyle: 'italic', display: 'inline-block', background: '#e0f2fe', padding: '4px 10px', borderRadius: '6px', border: '1px solid #bae6fd', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                       Cet agent est entrant et a débuté le {formatted}
                     </div>
                   );
@@ -139,9 +174,26 @@ export default function PrintFicheModal({
                 if (hasSortantStatus && sortantDate) {
                   const d = new Date(sortantDate);
                   const formatted = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                  const sortantMotifDetail = agent.absence_details?.find(d => 
+                    ['ABANDON', 'DEMISSION', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT'].includes(d.reason) || 
+                    (d.reason && d.reason.startsWith('SORTANT_'))
+                  );
+                  const sortantLabel = sortantMotifDetail 
+                    ? (sortantMotifDetail.reason.startsWith('SORTANT_') 
+                        ? sortantMotifDetail.reason.substring(8).toUpperCase() 
+                        : sortantMotifDetail.reason.replace('_', ' '))
+                    : null;
+
                   return (
-                    <div style={{ marginTop: '10px', fontSize: '0.85rem', color: '#b91c1c', fontStyle: 'italic', display: 'inline-block', background: '#fee2e2', padding: '4px 10px', borderRadius: '6px', border: '1px solid #fecaca' }}>
-                      Cet agent est sortant et a terminé le {formatted}
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px' }}>
+                      <div style={{ fontSize: '0.85rem', color: '#b91c1c', fontStyle: 'italic', background: '#fee2e2', padding: '4px 10px', borderRadius: '6px', border: '1px solid #fecaca', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                        Cet agent est sortant et a terminé le {formatted}
+                      </div>
+                      {sortantLabel && (
+                        <div style={{ fontSize: '0.85rem', color: '#b45309', fontWeight: 600, background: '#fef3c7', padding: '4px 10px', borderRadius: '6px', border: '1px solid #fde68a', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                          Motif : {sortantLabel}
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -150,7 +202,9 @@ export default function PrintFicheModal({
           </div>
           <div style={{ textAlign: 'right', background: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0', minWidth: '250px' }}>
             <h2 style={{ margin: '0 0 5px 0', fontSize: '1.3rem', color: '#0f172a' }}>{agent.name}</h2>
-            <div style={{ fontSize: '0.9rem', color: '#64748b' }}>Statut : Salarié / Journalier</div>
+            <div style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: profileData.special_service ? 'bold' : 'normal' }}>
+              Statut : {profileData.special_service ? 'Agent à Temps Partiel' : 'Salarié / Journalier'}
+            </div>
             <div style={{ fontSize: '0.9rem', color: '#64748b', marginTop: '4px' }}>Date d'édition : {new Date().toLocaleDateString('fr-FR')}</div>
           </div>
         </div>
@@ -158,7 +212,7 @@ export default function PrintFicheModal({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '20px' }}>
           {/* Colonne Gains */}
           <div>
-            <div style={{ background: '#f0fdf4', color: '#166534', padding: '10px 15px', fontWeight: 'bold', fontSize: '1.1rem', borderRadius: '8px 8px 0 0', borderBottom: '2px solid #22c55e' }}>
+            <div style={{ background: '#f0fdf4', color: '#166534', padding: '10px 15px', fontWeight: 'bold', fontSize: '1.1rem', borderRadius: '8px 8px 0 0', borderBottom: '2px solid #22c55e', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
               GAINS & PRIMES
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '1rem' }}>
@@ -181,7 +235,7 @@ export default function PrintFicheModal({
 
           {/* Colonne Retenues */}
           <div>
-            <div style={{ background: '#fef2f2', color: '#991b1b', padding: '10px 15px', fontWeight: 'bold', fontSize: '1.1rem', borderRadius: '8px 8px 0 0', borderBottom: '2px solid #ef4444' }}>
+            <div style={{ background: '#fef2f2', color: '#991b1b', padding: '10px 15px', fontWeight: 'bold', fontSize: '1.1rem', borderRadius: '8px 8px 0 0', borderBottom: '2px solid #ef4444', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
               RETENUES & DÉDUCTIONS
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '1rem' }}>
@@ -197,7 +251,7 @@ export default function PrintFicheModal({
         </div>
 
         {/* Mega bloc Net à Payer */}
-        <div style={{ background: '#0f172a', color: 'white', borderRadius: '16px', padding: '15px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
+        <div style={{ background: '#0f172a', color: 'white', borderRadius: '16px', padding: '15px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
           <div>
             <div style={{ fontSize: '1.1rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Net à Payer (FCFA)</div>
             <div style={{ fontSize: '0.9rem', color: '#cbd5e1', textTransform: 'capitalize' }}>À régler pour la période de {currentMonthName}</div>
@@ -254,6 +308,19 @@ export default function PrintFicheModal({
             ) : <span style={{ fontSize: '0.9rem', color: '#666' }}>Chargement...</span>}
           </div>
         </div>
+
+        {profileData.multi_site_deployments && profileData.multi_site_deployments.length > 0 && (
+          <div style={{ marginTop: '20px', padding: '15px', border: '1px solid #10b981', background: '#ecfdf5', borderRadius: '8px' }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '1.05rem', color: '#065f46' }}>Affectation Multi-Sites (Temps Partiel)</h3>
+            <ul style={{ paddingLeft: '20px', margin: 0, fontSize: '0.95rem', color: '#047857' }}>
+              {profileData.multi_site_deployments.map((dep, idx) => (
+                <li key={idx} style={{ marginBottom: '6px' }}>
+                  <strong>Site :</strong> {dep.site || '?'} &nbsp;—&nbsp; <strong>Jours travaillés :</strong> {dep.worked_days || 0}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div style={{ marginTop: '20px', padding: '10px 15px', border: '2px dashed #ccc', background: '#f8fafc' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>

@@ -21,6 +21,8 @@ export default function ContextMenu({
     { code: 'M', label: 'Maladie (M)', color: '#ff0000', type: 'cell', active: true, readonlyCode: false, group: 'Absences & Congés', danger: true },
     { code: 'CP', label: 'Congé Payé (CP)', color: '#3b82f6', type: 'cell', active: true, readonlyCode: true, group: 'Absences & Congés' },
     { code: 'P', label: 'Permission (P)', color: '#ff0000', type: 'cell', active: true, readonlyCode: false, group: 'Absences & Congés', danger: true },
+    { code: 'R', label: 'Repos (R)', color: '#6b7280', type: 'cell', active: true, readonlyCode: false, group: 'Absences & Congés' },
+    { code: 'CG', label: 'Non Planifié (Case Grisée)', color: '#9ca3af', type: 'cell', active: true, readonlyCode: false, group: 'Absences & Congés' },
     
     { code: 'MAP', label: 'Mise à pied (MAP) / Sanction', color: '#ff0000', type: 'cell', active: true, readonlyCode: false, group: 'Mesures RH', danger: true },
 

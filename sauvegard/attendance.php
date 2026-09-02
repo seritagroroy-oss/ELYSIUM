@@ -992,7 +992,7 @@ switch ($action) {
         $initialized = 0;
 
         foreach ($subs as $sub) {
-            $stmtAg = $sqlite->prepare("SELECT id, shift_type, profile_data FROM agents WHERE subsite_id = ? AND company_id = ? AND (archived_period IS NULL OR archived_period >= ?)");
+            $stmtAg = $sqlite->prepare("SELECT id, shift_type, profile_data FROM agents WHERE subsite_id = ? AND company_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?)");
             $stmtAg->execute([$sub['id'], $company_id, $period]);
             $agents = $stmtAg->fetchAll();
 

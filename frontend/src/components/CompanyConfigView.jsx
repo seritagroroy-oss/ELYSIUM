@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiCall } from '../api';
 import { useAuth } from '../AuthContext';
 import {
   Building2, Save, Trash2, Plus, Loader2, CheckCircle2,
-  ChevronDown, ChevronRight, X, Shield, Settings, Briefcase, BookOpen, Pencil
+  ChevronDown, ChevronRight, X, Shield, Settings, Briefcase, BookOpen, Pencil, AlertTriangle, Info
 } from 'lucide-react';
 import ConfigurationManualModal from './modals/ConfigurationManualModal';
+import ConfirmDeleteSpecialAgentModal from './modals/ConfirmDeleteSpecialAgentModal';
+import ConfirmDeleteSitePrimeModal from './modals/ConfirmDeleteSitePrimeModal';
+import ConfirmDeleteFunctionModal from './modals/ConfirmDeleteFunctionModal';
 
 export default function CompanyConfigView({ onClose }) {
   const { user, hasWritePermission } = useAuth();
@@ -28,7 +31,18 @@ export default function CompanyConfigView({ onClose }) {
   const [newFuncSalary, setNewFuncSalary] = useState('');
   const [newFuncType, setNewFuncType] = useState('agent');
   const [savedFuncs, setSavedFuncs] = useState(false);
+  const [savingFunc, setSavingFunc] = useState(false);
+  const [funcToDelete, setFuncToDelete] = useState(null);
+  const [isDeletingFunc, setIsDeletingFunc] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 4000);
+  }, []);
+
   const [showFunctions, setShowFunctions] = useState(false);
   const [showContracts, setShowContracts] = useState(false);
   const [showPrimes, setShowPrimes] = useState(false);
@@ -46,6 +60,13 @@ export default function CompanyConfigView({ onClose }) {
   const [newSpecialAgentSalary, setNewSpecialAgentSalary] = useState('');
   const [showAgentSuggestions, setShowAgentSuggestions] = useState(false);
   const [editingSpecialAgentName, setEditingSpecialAgentName] = useState(null);
+  const [specialAgentToDelete, setSpecialAgentToDelete] = useState(null);
+  const [savingSpecialAgent, setSavingSpecialAgent] = useState(false);
+  const [isDeletingSpecialAgent, setIsDeletingSpecialAgent] = useState(false);
+  const [savingSite, setSavingSite] = useState(false);
+  const [sitePrimeToDelete, setSitePrimeToDelete] = useState(null);
+  const [isDeletingSitePrime, setIsDeletingSitePrime] = useState(false);
+  const [searchSpecialAgentText, setSearchSpecialAgentText] = useState('');
   const [showPayrollConfig, setShowPayrollConfig] = useState(false);
   const [payrollSettings, setPayrollSettings] = useState({
     cnps_salarial: 0, cnps_patronal: 0, its: 0, fdfp: 0,
@@ -64,8 +85,10 @@ export default function CompanyConfigView({ onClose }) {
     loadData();
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showSpinner = true) => {
+    if (showSpinner) {
+      setLoading(true);
+    }
     try {
       const [funcsRes, salCfgRes, comptaRes, specialRes, payrollRes] = await Promise.all([
         apiCall('get_functions', {}, 'GET'),
@@ -111,28 +134,39 @@ export default function CompanyConfigView({ onClose }) {
     setNewFuncSalary('');
     setNewFuncType('agent');
 
+    setSavingFunc(true);
     try {
       const [res1, res2] = await Promise.all([
         apiCall('save_functions', { functions: updated }),
         apiCall('save_salary_grid', { grid: updatedSalaryConfig })
       ]);
       if (res1.success && res2.success) {
+        showToast('Fonction/Poste ajouté avec succès !', 'success');
         setSavedFuncs(true);
         setTimeout(() => setSavedFuncs(false), 3000);
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setSavingFunc(false);
     }
   };
 
-  const handleDeleteFunction = async (id) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette fonction ?\n\nATTENTION : Cette action supprimera la fonction de tous les agents actuellement affectés à ce poste dans le planning en cours.")) return;
-    const updated = functions.filter(f => f.id !== id);
+  const handleDeleteFunction = async () => {
+    if (!funcToDelete) return;
+    setIsDeletingFunc(true);
+    const updated = functions.filter(f => f.id !== funcToDelete.id);
     setFunctions(updated);
     try {
-      await apiCall('save_functions', { functions: updated });
+      const res = await apiCall('save_functions', { functions: updated });
+      if (res.success) {
+        showToast('Fonction/Poste supprimé avec succès !', 'error');
+      }
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsDeletingFunc(false);
+      setFuncToDelete(null);
     }
   };
 
@@ -175,7 +209,7 @@ export default function CompanyConfigView({ onClose }) {
         prime_function: prime_func
       });
       if (res.success) {
-        loadData();
+        loadData(false);
       } else {
         alert("Erreur: " + (res.message || 'Erreur inconnue'));
       }
@@ -201,11 +235,17 @@ export default function CompanyConfigView({ onClose }) {
       return;
     }
 
-    const res = await handleSaveContract(newSiteName.trim(), 0, 0, 0, primeValue, newSiteFunc);
-    if (res && res.success) {
-      setNewSiteName('');
-      setNewSitePrime('');
-      setNewSiteFunc('');
+    setSavingSite(true);
+    try {
+      const res = await handleSaveContract(newSiteName.trim(), 0, 0, 0, primeValue, newSiteFunc);
+      if (res && res.success) {
+        setNewSiteName('');
+        setNewSitePrime('');
+        setNewSiteFunc('');
+        showToast('Prime de site ajoutée avec succès !', 'success');
+      }
+    } finally {
+      setSavingSite(false);
     }
   };
 
@@ -223,6 +263,7 @@ export default function CompanyConfigView({ onClose }) {
       alert("Veuillez saisir un salaire valide.");
       return;
     }
+    setSavingSpecialAgent(true);
     try {
       const res = await apiCall('save_special_agent', {
         name: newSpecialAgentName.trim(),
@@ -234,35 +275,72 @@ export default function CompanyConfigView({ onClose }) {
         setNewSpecialAgentFunc('');
         setNewSpecialAgentSalary('');
         setEditingSpecialAgentName(null);
-        loadData();
+        showToast(editingSpecialAgentName ? 'Agent particulier modifié avec succès !' : 'Agent particulier ajouté avec succès !', 'success');
+        loadData(false);
       } else {
         alert("Erreur: " + (res.message || 'Erreur inconnue'));
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setSavingSpecialAgent(false);
     }
   };
 
   const handleRemoveSpecialAgent = async (agent_id) => {
-    if (!window.confirm("Voulez-vous vraiment supprimer ce salaire particulier ? L'agent retrouvera le salaire de base de sa fonction.")) return;
+    if (!agent_id) return;
+    setIsDeletingSpecialAgent(true);
     try {
       const res = await apiCall('remove_special_agent', { agent_id });
       if (res.success) {
-        loadData();
+        setSpecialAgentToDelete(null);
+        showToast('Agent particulier supprimé avec succès !', 'error');
+        loadData(false);
       } else {
         alert("Erreur: " + (res.message || 'Erreur inconnue'));
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsDeletingSpecialAgent(false);
+    }
+  };
+
+  const handleDeleteSitePrime = async () => {
+    if (!sitePrimeToDelete) return;
+    setIsDeletingSitePrime(true);
+    try {
+      // Optimistic UI update
+      setPrimesData(prev => prev.filter(p => p.site_name !== sitePrimeToDelete.site_name || p.prime_function !== sitePrimeToDelete.prime_function));
+      
+      const res = await handleSaveContract(
+        sitePrimeToDelete.site_name, 
+        sitePrimeToDelete.budget_mensuel, 
+        sitePrimeToDelete.charges_percent, 
+        sitePrimeToDelete.frais_fixes, 
+        0, 
+        sitePrimeToDelete.prime_function || ''
+      );
+      
+      if (res && res.success) {
+        console.log("Prime supprimée avec succès.");
+        showToast('Prime de site supprimée avec succès !', 'error');
+      } else {
+        // Revert on failure by reloading data
+        loadData(false);
+      }
+    } finally {
+      setIsDeletingSitePrime(false);
+      setSitePrimeToDelete(null);
     }
   };
 
   if (loading) {
     return (
       <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#0b1220', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#94a3b8' }}>
-          <div className="loader-pulsar" style={{ marginBottom: '16px' }}><div className="loader-pulsar-inner"></div></div>
-          <p style={{ fontSize: '1.1rem' }}>Chargement de la configuration...</p>
+        <div style={{ textAlign: 'center', color: '#94a3b8', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Loader2 size={48} className="animate-spin" style={{ color: '#38bdf8', marginBottom: '16px' }} />
+          <p style={{ fontSize: '1.1rem', margin: 0 }}>Chargement de la configuration...</p>
         </div>
       </div>
     );
@@ -270,6 +348,22 @@ export default function CompanyConfigView({ onClose }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#0b1220', overflowY: 'auto' }}>
+
+      {/* TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed', bottom: '40px', right: '40px', zIndex: 99999,
+          background: toastMessage.type === 'success' ? '#10b981' : (toastMessage.type === 'info' ? '#3b82f6' : '#ef4444'),
+          color: 'white', padding: '16px 24px', borderRadius: '12px',
+          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2)',
+          display: 'flex', alignItems: 'center', gap: '14px',
+          animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+          {toastMessage.type === 'success' ? <CheckCircle2 size={26} /> : (toastMessage.type === 'info' ? <Info size={26} /> : <AlertTriangle size={26} />)}
+          <span style={{ fontWeight: '600', fontSize: '1.05rem', letterSpacing: '0.3px' }}>{toastMessage.message}</span>
+          <button onClick={() => setToastMessage(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'flex', padding: 0, marginLeft: '8px', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color='white'} onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.7)'}><X size={20}/></button>
+        </div>
+      )}
 
       {/* HEADER */}
       <div style={{
@@ -475,17 +569,21 @@ export default function CompanyConfigView({ onClose }) {
                     </div>
                     <button
                       onClick={handleAddFunction}
+                      disabled={savingFunc}
                       style={{
-                        padding: '14px 32px', background: functions.some(f => f.id === newFuncId.toUpperCase().trim()) ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'linear-gradient(135deg, #8b5cf6, #4f46e5)',
+                        padding: '14px 32px', 
+                        background: savingFunc ? 'linear-gradient(135deg, #64748b, #475569)' : (functions.some(f => f.id === newFuncId.toUpperCase().trim()) ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'linear-gradient(135deg, #8b5cf6, #4f46e5)'),
                         color: 'white', border: 'none', borderRadius: '14px',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                        cursor: savingFunc ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                         fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap',
-                        height: '52px', boxShadow: functions.some(f => f.id === newFuncId.toUpperCase().trim()) ? '0 4px 15px rgba(59,130,246,0.3)' : '0 4px 15px rgba(139,92,246,0.3)', fontSize: '1.05rem',
+                        height: '52px', 
+                        boxShadow: savingFunc ? 'none' : (functions.some(f => f.id === newFuncId.toUpperCase().trim()) ? '0 4px 15px rgba(59,130,246,0.3)' : '0 4px 15px rgba(139,92,246,0.3)'), 
+                        fontSize: '1.05rem',
                         width: '100%'
                       }}
                     >
-                      {functions.some(f => f.id === newFuncId.toUpperCase().trim()) ? <Pencil size={20} /> : <Plus size={20} />}
-                      {functions.some(f => f.id === newFuncId.toUpperCase().trim()) ? 'Modifier ce poste' : 'Ajouter ce poste'}
+                      {savingFunc ? <Loader2 size={20} className="animate-spin" /> : (functions.some(f => f.id === newFuncId.toUpperCase().trim()) ? <Pencil size={20} /> : <Plus size={20} />)}
+                      {savingFunc ? 'Enregistrement...' : (functions.some(f => f.id === newFuncId.toUpperCase().trim()) ? 'Modifier ce poste' : 'Ajouter ce poste')}
                     </button>
                   </div>
                   <div style={{ 
@@ -641,13 +739,9 @@ export default function CompanyConfigView({ onClose }) {
                             <Pencil size={18} />
                           </button>
                           <button
-                            onClick={() => handleDeleteFunction(f.id)}
-                            style={{
-                              padding: '10px', borderRadius: '12px', cursor: 'pointer',
-                              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-                              color: '#f87171', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}
-                            title="Supprimer ce poste"
+                            onClick={() => setFuncToDelete(f)}
+                            style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Supprimer la fonction"
                           >
                             <Trash2 size={18} />
                           </button>
@@ -713,7 +807,12 @@ export default function CompanyConfigView({ onClose }) {
                 </p>
               </div>
             </div>
-            {showSpecialAgents ? <ChevronDown size={20} color="#94a3b8" /> : <ChevronRight size={20} color="#94a3b8" />}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
+              <span style={{ fontSize: '0.85rem' }}>
+                {specialAgents.length} agent{specialAgents.length > 1 ? 's' : ''} avec salaire particulier
+              </span>
+              {showSpecialAgents ? <ChevronDown size={20} color="#94a3b8" /> : <ChevronRight size={20} color="#94a3b8" />}
+            </div>
           </div>
 
           {showSpecialAgents && (
@@ -808,25 +907,28 @@ export default function CompanyConfigView({ onClose }) {
                   <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px', gap: '8px' }}>
                     <button 
                       onClick={handleSaveSpecialAgent}
+                      disabled={savingSpecialAgent}
                       style={{
                         padding: '0 24px', 
-                        background: editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #f43f5e, #e11d48)', 
+                        background: savingSpecialAgent ? 'linear-gradient(135deg, #64748b, #475569)' : (editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #f43f5e, #e11d48)'), 
                         color: 'white',
-                        border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 600, display: 'flex',
+                        border: 'none', borderRadius: '10px', cursor: savingSpecialAgent ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'flex',
                         alignItems: 'center', gap: '8px', height: '46px', transition: 'all 0.3s ease', whiteSpace: 'nowrap',
-                        boxShadow: editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? '0 4px 15px rgba(16, 185, 129, 0.3)' : '0 4px 15px rgba(244, 63, 94, 0.3)'
+                        boxShadow: savingSpecialAgent ? 'none' : (editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? '0 4px 15px rgba(16, 185, 129, 0.3)' : '0 4px 15px rgba(244, 63, 94, 0.3)')
                       }}
                       onMouseOver={(e) => {
+                        if (savingSpecialAgent) return;
                         e.currentTarget.style.transform = 'translateY(-2px)';
                         e.currentTarget.style.boxShadow = editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? '0 8px 25px rgba(16, 185, 129, 0.5)' : '0 8px 25px rgba(244, 63, 94, 0.5)';
                       }}
                       onMouseOut={(e) => {
+                        if (savingSpecialAgent) return;
                         e.currentTarget.style.transform = 'translateY(0)';
                         e.currentTarget.style.boxShadow = editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? '0 4px 15px rgba(16, 185, 129, 0.3)' : '0 4px 15px rgba(244, 63, 94, 0.3)';
                       }}
                     >
-                      {editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? <CheckCircle2 size={18} /> : <Plus size={18} />} 
-                      {editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? 'Mettre à jour' : 'Ajouter'}
+                      {savingSpecialAgent ? <Loader2 size={18} className="animate-spin" /> : (editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? <CheckCircle2 size={18} /> : <Plus size={18} />)} 
+                      {savingSpecialAgent ? 'Enregistrement...' : (editingSpecialAgentName === newSpecialAgentName && newSpecialAgentName !== '' ? 'Mettre à jour' : 'Ajouter')}
                     </button>
                     {editingSpecialAgentName && (
                       <button 
@@ -855,6 +957,22 @@ export default function CompanyConfigView({ onClose }) {
                 </div>
               )}
 
+              <div style={{ marginBottom: '16px' }}>
+                <input 
+                  type="text" 
+                  placeholder="Rechercher un agent dans cette liste..." 
+                  value={searchSpecialAgentText}
+                  onChange={(e) => setSearchSpecialAgentText(e.target.value)}
+                  style={{ 
+                    width: '100%', padding: '12px 16px', background: 'rgba(15,23,42,0.4)', 
+                    border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', 
+                    color: '#f8fafc', outline: 'none' 
+                  }}
+                  onFocus={e => e.target.style.border = '1px solid rgba(56,189,248,0.5)'}
+                  onBlur={e => e.target.style.border = '1px solid rgba(255,255,255,0.1)'}
+                />
+              </div>
+
               <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', background: 'rgba(15,23,42,0.4)' }}>
                   <thead>
@@ -866,15 +984,20 @@ export default function CompanyConfigView({ onClose }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {specialAgents.length === 0 ? (
-                      <tr>
-                        <td colSpan={isCompta ? 4 : 3} style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                          Aucun salaire particulier n'a été défini pour un agent.
-                        </td>
-                      </tr>
-                    ) : (
-                      specialAgents.map((agent, idx) => (
-                        <tr key={agent.id || agent.name || `agent-${idx}`} style={{ 
+                    {(() => {
+                      const filtered = specialAgents.filter(a => 
+                        (a.name || '').toLowerCase().includes(searchSpecialAgentText.toLowerCase()) || 
+                        (a.function || '').toLowerCase().includes(searchSpecialAgentText.toLowerCase())
+                      );
+                      return filtered.length === 0 ? (
+                        <tr>
+                          <td colSpan={isCompta ? 4 : 3} style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
+                            Aucun salaire particulier ne correspond à cette recherche.
+                          </td>
+                        </tr>
+                      ) : (
+                        [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' })).map((agent, idx) => (
+                          <tr key={agent.id || agent.name || `agent-${idx}`} style={{ 
                           borderBottom: '1px solid rgba(255,255,255,0.05)', 
                           transition: 'all 0.2s',
                           background: editingSpecialAgentName === agent.name ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
@@ -906,7 +1029,7 @@ export default function CompanyConfigView({ onClose }) {
                                   <Pencil size={16} /> Modifier
                                 </button>
                                 <button 
-                                  onClick={() => handleRemoveSpecialAgent(agent.id)}
+                                  onClick={() => setSpecialAgentToDelete(agent)}
                                   style={{ 
                                     background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'none', 
                                     padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
@@ -924,7 +1047,8 @@ export default function CompanyConfigView({ onClose }) {
                           )}
                         </tr>
                       ))
-                    )}
+                    );
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -1049,13 +1173,19 @@ export default function CompanyConfigView({ onClose }) {
                   </div>
                   <button 
                     onClick={handleAddSitePrime}
+                    disabled={savingSite}
                     style={{
-                      padding: '0 24px', background: 'linear-gradient(135deg, #0ea5e9, #0284c7)', color: 'white',
-                      border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 600, display: 'flex',
+                      padding: '0 24px', 
+                      background: savingSite ? 'linear-gradient(135deg, #64748b, #475569)' : 'linear-gradient(135deg, #0ea5e9, #0284c7)', 
+                      color: 'white',
+                      border: 'none', borderRadius: '10px', 
+                      cursor: savingSite ? 'not-allowed' : 'pointer', 
+                      fontWeight: 600, display: 'flex',
                       alignItems: 'center', gap: '8px', height: '46px', transition: 'all 0.2s', whiteSpace: 'nowrap'
                     }}
                   >
-                    <Plus size={18} /> Ajouter ce site
+                    {savingSite ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />} 
+                    {savingSite ? 'Enregistrement...' : 'Ajouter ce site'}
                   </button>
                 </div>
               )}
@@ -1112,20 +1242,7 @@ export default function CompanyConfigView({ onClose }) {
                                   <Pencil size={16} /> Modifier
                                 </button>
                                 <button 
-                                  onClick={async () => {
-                                    if (window.confirm('Supprimer cette prime de site ?')) {
-                                      // Optimistic UI update
-                                      setPrimesData(prev => prev.filter(p => p.site_name !== contract.site_name || p.prime_function !== contract.prime_function));
-                                      
-                                      const res = await handleSaveContract(contract.site_name, contract.budget_mensuel, contract.charges_percent, contract.frais_fixes, 0, contract.prime_function || '');
-                                      if (res && res.success) {
-                                        console.log("Prime supprimée avec succès.");
-                                      } else {
-                                        // Revert on failure by reloading data
-                                        loadData();
-                                      }
-                                    }
-                                  }}
+                                  onClick={() => setSitePrimeToDelete(contract)}
                                   style={{ 
                                     background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'none', 
                                     padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
@@ -1133,6 +1250,7 @@ export default function CompanyConfigView({ onClose }) {
                                   }}
                                   onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
                                   onMouseOut={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
+                                  title="Supprimer la prime pour ce site"
                                 >
                                   <Trash2 size={16} /> Supprimer
                                 </button>
@@ -1477,6 +1595,30 @@ export default function CompanyConfigView({ onClose }) {
           </div>
         )}
       </div>
+
+      <ConfirmDeleteSpecialAgentModal
+        isOpen={!!specialAgentToDelete}
+        onClose={() => setSpecialAgentToDelete(null)}
+        onConfirm={() => handleRemoveSpecialAgent(specialAgentToDelete?.id)}
+        agentName={specialAgentToDelete?.name || ''}
+        isLoading={isDeletingSpecialAgent}
+      />
+
+      <ConfirmDeleteSitePrimeModal
+        isOpen={!!sitePrimeToDelete}
+        onClose={() => setSitePrimeToDelete(null)}
+        onConfirm={handleDeleteSitePrime}
+        siteName={sitePrimeToDelete?.site_name || ''}
+        isLoading={isDeletingSitePrime}
+      />
+
+      <ConfirmDeleteFunctionModal
+        isOpen={!!funcToDelete}
+        onClose={() => setFuncToDelete(null)}
+        onConfirm={handleDeleteFunction}
+        functionName={funcToDelete?.name || ''}
+        isLoading={isDeletingFunc}
+      />
     </div>
   );
 }

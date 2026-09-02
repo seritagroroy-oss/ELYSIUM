@@ -220,22 +220,32 @@ switch ($action) {
         $db = getDb();
         try {
             $db->beginTransaction();
-            $stmt = $db->prepare(
-                "INSERT INTO payroll_statuses (company_id, period, site_id, zone_name, agent_name, status)
-                 VALUES (?, ?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = CURRENT_TIMESTAMP"
-            );
-            foreach ($updates as $u) {
-                $status = $u['status'] ?? 'brouillon';
-                if (!in_array($status, ['brouillon', 'valide', 'paye'])) continue;
-                $stmt->execute([
-                    $companyId,
-                    $period,
-                    $u['site_id'] ?? '',
-                    $u['zone_name'] ?? '',
-                    $u['agent_name'] ?? '',
-                    $status
-                ]);
+            $chunkSize = 200;
+            $chunks = array_chunk($updates, $chunkSize);
+            
+            foreach ($chunks as $chunk) {
+                $placeholders = [];
+                $params = [];
+                foreach ($chunk as $u) {
+                    $status = $u['status'] ?? 'brouillon';
+                    if (!in_array($status, ['brouillon', 'valide', 'paye'])) continue;
+                    
+                    $placeholders[] = '(?, ?, ?, ?, ?, ?)';
+                    $params[] = $companyId;
+                    $params[] = $period;
+                    $params[] = $u['site_id'] ?? '';
+                    $params[] = $u['zone_name'] ?? '';
+                    $params[] = $u['agent_name'] ?? '';
+                    $params[] = $status;
+                }
+                
+                if (!empty($placeholders)) {
+                    $sql = "INSERT INTO payroll_statuses (company_id, period, site_id, zone_name, agent_name, status) VALUES " 
+                         . implode(', ', $placeholders) 
+                         . " ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = CURRENT_TIMESTAMP";
+                    $stmt = $db->prepare($sql);
+                    $stmt->execute($params);
+                }
             }
             $db->commit();
             echo json_encode(['success' => true]);
@@ -614,6 +624,8 @@ switch ($action) {
         $all_agents = array_column($agents_rows, 'id');
 
         if (empty($all_agents)) {
+            // Sauvegarder le dernier mois initialisÃ© dans la base (utilisÃ© pour le verrou des mois futurs) mÃªme s'il n'y a pas d'agents
+            setServiceDataSql($company_id, 'max_initialized_period', $next_period);
             echo json_encode(['success' => true]);
             break;
         }
@@ -1102,17 +1114,8 @@ switch ($action) {
 
         // Trouver tous les sous-sites de ce site
         // Pour les sites spÃ©ciaux (site_extras, site_extras_sur_site, site_releves, site_administration), on doit inclure les sous-sites gÃ©nÃ©rÃ©s par dÃ©faut
-        if ($site_id === 'site_extras') {
-            $subsite_ids = ['site_extras_1'];
-        } elseif ($site_id === 'site_extras_sur_site') {
-            $stmtSub  = $sqlite->prepare("SELECT id FROM subsites WHERE site_id = ? AND company_id = ?");
-        $stmtSub->execute([$site_id, resolveCurrentCompanyIdSql()]);
-            $sub_rows = $stmtSub->fetchAll();
-            $subsite_ids = array_map(fn($r) => array_values($r)[0], $sub_rows) ?: [];
-        } elseif ($site_id === 'site_releves') {
+        if ($site_id === 'site_releves') {
             $subsite_ids = ['site_releves_1'];
-        } elseif ($site_id === 'site_administration') {
-            $subsite_ids = ['site_admin_1'];
         } else {
             $stmtSub  = $sqlite->prepare("SELECT id FROM subsites WHERE site_id = ? AND company_id = ?");
         $stmtSub->execute([$site_id, resolveCurrentCompanyIdSql()]);
@@ -1138,7 +1141,7 @@ switch ($action) {
             $stmtAgents->execute($subsite_ids);
 
             // Supprimer les sous-sites (zones) si ce n'est pas un site spÃ©cial
-            if (!in_array($site_id, ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration'])) {
+            if (!in_array($site_id, ['site_releves'])) {
                 $stmtSubsites = $sqlite->prepare("DELETE FROM subsites WHERE site_id = ?");
                 $stmtSubsites->execute([$site_id]);
             }
@@ -1234,15 +1237,14 @@ switch ($action) {
         break;
 
     case 'delete_leave':
+        if (($_SESSION['user_role'] ?? '') != 'admin' && strpos(strtolower($_SESSION['user_service'] ?? ''), 'rh') === false && strpos(strtolower($_SESSION['user_service'] ?? ''), 'pc') === false && !hasPermission('dashboard')) {
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+            break;
+        }
         $leave_id = $data['leave_id'] ?? '';
         if ($leave_id) {
-            // Delete from JSON scoped data (legacy)
-            $db = getScopedData($serviceKey);
-            $leaves = $db['leaves'] ?? [];
-            $db['leaves'] = array_filter($leaves, function($l) use ($leave_id) { return $l['id'] !== $leave_id; });
-            saveScopedData($db, $serviceKey);
-            // Also delete from SQLite pointage_leaves (where save_leave actually stores)
             $sqlite = getDb();
+            $serviceKey = resolveCurrentServiceKeySql();
             $sqlite->exec('CREATE TABLE IF NOT EXISTS pointage_leaves (id TEXT PRIMARY KEY, agent_id TEXT, start_date TEXT, end_date TEXT, type TEXT, status TEXT, company_id TEXT, service_id TEXT)');
             $stmt = $sqlite->prepare('DELETE FROM pointage_leaves WHERE id = ?');
             $stmt->execute([$leave_id]);
@@ -1481,8 +1483,12 @@ switch ($action) {
         $archives = [];
         foreach ($results as $row) {
             $data = json_decode($row['data'], true) ?? [];
+            $rowPeriod = $row['period'];
+            if (empty($rowPeriod) && strpos($row['id'], 'payroll_') === 0) {
+                $rowPeriod = str_replace('payroll_', '', $row['id']);
+            }
             $archives[] = [
-                'period' => $row['period'],
+                'period' => $rowPeriod,
                 'archived_at' => $data['archived_at'] ?? '',
                 'archived_by' => $data['archived_by'] ?? ''
             ];
@@ -1768,10 +1774,122 @@ switch ($action) {
             unset($agentData);
         };
 
-        // â”€â”€â”€ FREEZE : Si la pÃ©riode est CLÃ”TURÃ‰E (archivÃ©e), servir le snapshot gelÃ© â”€â”€â”€â”€â”€â”€â”€
+        // ─── FREEZE : Si la période est CLÔTURÉE (archivée), servir le snapshot gelé ───────
         if (isPayrollArchived($sqlite, $companyKey, $period)) {
             $snapshot = getPayrollSnapshot($sqlite, $companyKey, $period);
             if ($snapshot !== null) {
+                // === PATCH AUTOMATIQUE DES SALAIRES PARTICULIERS ===
+                // Pour que les modifications dans "Configuration Entreprise" s'appliquent même
+                // sur une photo figée, on patche le snapshot à la volée avant de le servir.
+                try {
+                    $stmtSp = $sqlite->prepare("SELECT name, salary FROM special_agents WHERE company_id = ?");
+                    $stmtSp->execute([$companyKey]);
+                    $special_salary_map = [];
+                    foreach ($stmtSp->fetchAll(PDO::FETCH_ASSOC) as $sp) {
+                        $special_salary_map[strtolower(trim($sp['name']))] = (int) $sp['salary'];
+                    }
+                    foreach ($snapshot as &$agent_snap) {
+                        $agNameKey = strtolower(trim($agent_snap['name'] ?? ''));
+                        if (isset($special_salary_map[$agNameKey])) {
+                            $fixed_salary = $special_salary_map[$agNameKey];
+                            
+                            $old_base_full = (int)($agent_snap['base_full'] ?? 0);
+                            $old_base = (int)($agent_snap['base'] ?? 0);
+                            if ($old_base_full === 0) {
+                                $old_base_full = $old_base > 0 ? $old_base : $fixed_salary;
+                            }
+                            $ratio = ($old_base_full > 0) ? ($old_base / $old_base_full) : 1;
+                            
+                            $new_base = (int) round($fixed_salary * $ratio);
+
+                            $agent_snap['is_special_salary'] = true;
+                            $agent_snap['base'] = $new_base;
+                            $agent_snap['base_full'] = $fixed_salary;
+                            
+                            // On ajuste le total théorique (bien que le vrai net soit calculé par le frontend)
+                            $agent_snap['total'] = $new_base 
+                                                 - (int)($agent_snap['deductions'] ?? 0) 
+                                                 + (int)($agent_snap['gains'] ?? 0) 
+                                                 + (int)($agent_snap['prime_site'] ?? 0);
+                        }
+                    }
+                    unset($agent_snap);
+                } catch (Exception $e) {}
+                // === FIN PATCH AUTOMATIQUE ===
+
+                // === PATCH EXCLUSION PRIME DE SITE ===
+                // Relire le profile_data live pour chaque agent du snapshot,
+                // et appliquer l'exclusion de prime si configurée.
+                try {
+                    $stmtLiveProf = $sqlite->prepare("SELECT id, profile_data FROM agents WHERE company_id = ?");
+                    $stmtLiveProf->execute([$companyKey]);
+                    $liveProfMap = [];
+                    while ($lp = $stmtLiveProf->fetch()) {
+                        $liveProfMap[$lp['id']] = json_decode($lp['profile_data'] ?? '{}', true) ?: [];
+                    }
+                    $stmtPrimes = $sqlite->prepare("SELECT site_name, prime_site, prime_function FROM site_contracts WHERE company_id = ?");
+                    $stmtPrimes->execute([$companyKey]);
+                    $site_primes_map = [];
+                    while ($pr = $stmtPrimes->fetch()) {
+                        $site_primes_map[$pr['site_name']] = [
+                            'prime' => (int)($pr['prime_site'] ?? 0),
+                            'func'  => $pr['prime_function'] ?? ''
+                        ];
+                    }
+                    file_put_contents(__DIR__ . '/debug_primes.txt', print_r(['company' => $companyKey, 'map' => $site_primes_map], true));
+
+                    foreach ($snapshot as &$agent_snap) {
+                        $agId = $agent_snap['id'] ?? null;
+                        if (!$agId || !isset($liveProfMap[$agId])) continue;
+                        $liveProf = $liveProfMap[$agId];
+                        $is_prime_excluded = false;
+                        if (!empty($liveProf['prime_site_excluded'])) {
+                            $is_prime_excluded = true;
+                        } elseif (!empty($liveProf['prime_site_excluded_period']) && $liveProf['prime_site_excluded_period'] === $period) {
+                            $is_prime_excluded = true;
+                        }
+
+                        $siteName = $agent_snap['site'] ?? '';
+                        $subsiteName = $agent_snap['subsite'] ?? '';
+                        $funcId = $agent_snap['function'] ?? '';
+                        
+                        $fullSiteName = trim($siteName) . ($subsiteName ? ' / ' . trim($subsiteName) : '');
+                        
+                        $key_raw = $fullSiteName;
+                        $key_normalized = trim(preg_replace('/\s+/', ' ', $siteName)) . ($subsiteName ? ' / ' . trim(preg_replace('/\s+/', ' ', $subsiteName)) : '');
+                        $key_parent = trim($siteName);
+                        
+                        $site_prime_data = $site_primes_map[$key_raw] ?? $site_primes_map[$key_normalized] ?? $site_primes_map[$key_parent] ?? ['prime' => 0, 'func' => ''];
+                        
+                        $live_prime = 0;
+                        if ($site_prime_data['prime'] > 0) {
+                            if (empty($site_prime_data['func']) || $site_prime_data['func'] === $funcId) {
+                                $live_prime = $site_prime_data['prime'];
+                            }
+                        }
+
+                        $old_prime = (int)($agent_snap['prime_site'] ?? 0);
+                        
+                        if ($is_prime_excluded) {
+                            $agent_snap['prime_site'] = 0;
+                            $agent_snap['is_prime_excluded'] = true;
+                        } else {
+                            $agent_snap['prime_site'] = $live_prime;
+                            $agent_snap['is_prime_excluded'] = false;
+                        }
+                        
+                        $agent_snap['total'] = ($agent_snap['total'] ?? 0) - $old_prime + $agent_snap['prime_site'];
+                        unset($agent_snap['_original_prime_site']);
+
+                        // Synchroniser le profile_data avec la version live
+                        if (!empty($liveProf)) {
+                            $agent_snap['profile_data'] = $liveProf;
+                        }
+                    }
+                    unset($agent_snap);
+                } catch (Exception $e) {}
+                // === FIN PATCH EXCLUSION PRIME DE SITE ===
+
                 $applyFallback($snapshot, true); // true = isArchive
                 echo json_encode($snapshot);
                 break;
@@ -1816,24 +1934,12 @@ switch ($action) {
         $stmtSites->execute([$target_val]);
         $sites_rows = $stmtSites->fetchAll();
 
-        $has_extras = false;
         $has_releves = false;
-        $has_admin = false;
-        $has_itc = false;
         foreach ($sites_rows as $s) {
-            if ($s['id'] === 'site_extras') $has_extras = true;
             if ($s['id'] === 'site_releves') $has_releves = true;
-            if ($s['id'] === 'site_administration') $has_admin = true;
-            if ($s['id'] === 'site_itc') $has_itc = true;
         }
         
-        if (!$has_extras) $sites_rows[] = ['id' => 'site_extras', 'name' => 'ðŸŒŸ EXTRA BUREAU'];
-        if (!$has_releves) $sites_rows[] = ['id' => 'site_releves', 'name' => 'ðŸ”„ Vivier des relÃ¨ves'];
-        if (!array_filter($sites_rows, fn($s) => $s['id'] === 'site_extras_sur_site')) {
-            $sites_rows[] = ['id' => 'site_extras_sur_site', 'name' => 'ðŸŒŸ EXTRA SUR SITE'];
-        }
-        if (!$has_admin) $sites_rows[] = ['id' => 'site_administration', 'name' => 'ðŸ¢ Administration'];
-        if (!$has_itc) $sites_rows[] = ['id' => 'site_itc', 'name' => 'ITC / IFM'];
+        if (!$has_releves) $sites_rows[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves'];
 
         $lightweightSalaries = [];
 
@@ -1842,28 +1948,8 @@ switch ($action) {
         $stmtSub2->execute([$site['id'], resolveCurrentCompanyIdSql()]);
             $subsites_rows = $stmtSub2->fetchAll();
 
-            if (in_array($site['id'], ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration', 'site_itc']) && empty($subsites_rows)) {
-                if ($site['id'] === 'site_extras') $subsites_rows = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
-                if ($site['id'] === 'site_extras_sur_site') $subsites_rows = [['id' => 'default_site_extras_sur_site', 'name' => 'Zone Principale']];
+            if (in_array($site['id'], ['site_releves']) && empty($subsites_rows)) {
                 if ($site['id'] === 'site_releves') $subsites_rows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-                if ($site['id'] === 'site_administration') $subsites_rows = [['id' => 'site_admin_1', 'name' => 'Bureau']];
-                if ($site['id'] === 'site_itc') {
-                    $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($companyKey ?? '')), 0, 12);
-                    $subsites_rows = [
-                        ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue RÃ©guliÃ¨re'],
-                        ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
-                        ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS'],
-                        ['id' => 'itc_special_' . $comp_suffix, 'name' => 'Agent SpÃ©cial']
-                    ];
-                }
-            }
-            
-            if ($site['id'] === 'site_extras_sur_site') {
-                $has_default = false;
-                foreach ($subsites_rows as $sr) {
-                    if ($sr['id'] === 'default_site_extras_sur_site') { $has_default = true; break; }
-                }
-                if (!$has_default) $subsites_rows[] = ['id' => 'default_site_extras_sur_site', 'name' => 'Zone Principale'];
             }
 
             foreach ($subsites_rows as $sub) {
@@ -1921,48 +2007,56 @@ switch ($action) {
             $published = [];
         }
         
+        $cached_totals = getServiceDataSql($companyKey, 'period_totals', []);
+        
         $results = [];
         foreach ($months as $m) {
             $totalMasse = 0;
-            $found_in_db = false;
             
-            // 1. Check Archives
-            $archive_id = 'payroll_' . $m;
-            $stmt = $sqlite->prepare("SELECT data FROM archives WHERE id = ? AND $target_col = ?");
-            $stmt->execute([$archive_id, $target_val]);
-            $row = $stmt->fetch();
-            if ($row && isset($row['data'])) {
-                $archive = json_decode($row['data'], true);
-                if (isset($archive['salaries']) && is_array($archive['salaries'])) {
-                    foreach ($archive['salaries'] as $s) {
-                        $totalMasse += (float) ($s['total'] ?? $s['base'] ?? 0);
+            // 0. Check Cached Total (computed by Frontend)
+            if (isset($cached_totals[$m])) {
+                $totalMasse = (float) $cached_totals[$m];
+            } else {
+                $found_in_db = false;
+                
+                // 1. Check Archives
+                $archive_id = 'payroll_' . $m;
+                $stmt = $sqlite->prepare("SELECT data FROM archives WHERE id = ? AND $target_col = ?");
+                $stmt->execute([$archive_id, $target_val]);
+                $row = $stmt->fetch();
+                if ($row && isset($row['data'])) {
+                    $archive = json_decode($row['data'], true);
+                    if (isset($archive['salaries']) && is_array($archive['salaries'])) {
+                        foreach ($archive['salaries'] as $s) {
+                            $totalMasse += (float) ($s['total'] ?? $s['base'] ?? 0);
+                        }
+                        $found_in_db = true;
                     }
-                    $found_in_db = true;
                 }
-            }
-            
-            // 2. Check Snapshots (if published but not archived)
-            if (!$found_in_db && in_array($m, $published)) {
-                $snapData = getPayrollSnapshot($sqlite, $companyKey, $m);
-                if (is_array($snapData)) {
-                    foreach ($snapData as $s) {
-                        $totalMasse += (float) ($s['total'] ?? $s['base'] ?? 0);
+                
+                // 2. Check Snapshots (if published but not archived)
+                if (!$found_in_db && in_array($m, $published)) {
+                    $snapData = getPayrollSnapshot($sqlite, $companyKey, $m);
+                    if (is_array($snapData)) {
+                        foreach ($snapData as $s) {
+                            $totalMasse += (float) ($s['total'] ?? $s['base'] ?? 0);
+                        }
+                        $found_in_db = true;
                     }
-                    $found_in_db = true;
                 }
-            }
-            
-            // 3. Fallback to Live Data
-            if (!$found_in_db) {
-                // Si on analyse le mois actuellement sÃ©lectionnÃ© sur l'interface, on simule la paie en direct.
-                // Sinon (mois passÃ©s), on ne simule pas de fausses donnÃ©es : la masse salariale est 0.
-                if ($m === $period) {
-                    $salaries = generateSalariesData($sqlite, $m, $companyKey, $target_col, $target_val, $serviceKey);
-                    foreach ($salaries as $s) {
-                        $totalMasse += (float) ($s['total'] ?? $s['base'] ?? 0);
+                
+                // 3. Fallback to Live Data
+                if (!$found_in_db) {
+                    // Si on analyse le mois actuellement sélectionné sur l'interface, on simule la paie en direct.
+                    // Sinon (mois passés), on ne simule pas de fausses données : la masse salariale est 0.
+                    if ($m === $period) {
+                        $salaries = generateSalariesData($sqlite, $m, $companyKey, $target_col, $target_val, $serviceKey);
+                        foreach ($salaries as $s) {
+                            $totalMasse += (float) ($s['total'] ?? $s['base'] ?? 0);
+                        }
+                    } else {
+                        $totalMasse = 0;
                     }
-                } else {
-                    $totalMasse = 0;
                 }
             }
             
@@ -1975,7 +2069,7 @@ switch ($action) {
         $sqlite = getDb();
         $companyKey = $_SESSION['company_id'] ?? null;
         if (!$companyKey) {
-            echo json_encode(['success' => false, 'message' => 'Session expirÃ©e']);
+            echo json_encode(['success' => false, 'message' => 'Session expirée']);
             break;
         }
         
@@ -2027,26 +2121,62 @@ switch ($action) {
                 $stmt->execute([
                     $id, $companyKey, $agent_name, $agent_id, 
                     $motif, $motif, $jours, $montant, 
-                    $period, 'ClÃ´turÃ©', $desc, $type_erreur_autre
+                    $period, 'Clôturé', $desc, $type_erreur_autre
                 ]);
             }
             
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => 'Erreur base de donnÃ©es: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'Erreur base de données: ' . $e->getMessage()]);
+        }
+        break;
+
+    case 'delete_reclamation':
+        $sqlite = getDb();
+        $companyKey = $_SESSION['company_id'] ?? null;
+        $id = $data['id'] ?? null;
+        if (!$companyKey || !$id) {
+            echo json_encode(['success' => false, 'message' => 'Paramètres manquants']);
+            break;
+        }
+        try {
+            $stmt = $sqlite->prepare("DELETE FROM reclamations WHERE id = ? AND company_id = ?");
+            $stmt->execute([$id, $companyKey]);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => 'Erreur: ' . $e->getMessage()]);
         }
         break;
 
     case 'update_agent_salary':
         if ($_SESSION['user_role'] != 'admin') {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $agent_id = $data['agent_id'] ?? '';
         $salary = (int) ($data['salary'] ?? 0);
 
         $sqlite = getDb();
-        $sqlite->prepare("UPDATE agents SET salary = ? WHERE id = ?")->execute([$salary, $agent_id]);
+        $company_id_sal = $_SESSION['company_id'] ?? 'comp_default_1';
+
+        // On cherche le nom de l'agent dans le registre
+        $stmtAgName = $sqlite->prepare("SELECT name FROM agents WHERE id = ? AND company_id = ? LIMIT 1");
+        $stmtAgName->execute([$agent_id, $company_id_sal]);
+        $agRow = $stmtAgName->fetch(PDO::FETCH_ASSOC);
+
+        if ($agRow) {
+            // Mise à jour dans la table dédiée special_agents (plus dans agents!)
+            $stmtSpCheck = $sqlite->prepare("SELECT id FROM special_agents WHERE name LIKE ? AND company_id = ? LIMIT 1");
+            $stmtSpCheck->execute([$agRow['name'], $company_id_sal]);
+            $spExists = $stmtSpCheck->fetch();
+            if ($spExists) {
+                $sqlite->prepare("UPDATE special_agents SET salary = ? WHERE name LIKE ? AND company_id = ?")
+                       ->execute([$salary, $agRow['name'], $company_id_sal]);
+            } else {
+                $sqlite->prepare("INSERT INTO special_agents (id, company_id, name, salary) VALUES (?, ?, ?, ?)")
+                       ->execute([uniqid('agt_sp_'), $company_id_sal, $agRow['name'], $salary]);
+            }
+        }
 
         $db = getScopedData($serviceKey);
         $found = false;
@@ -2073,6 +2203,7 @@ switch ($action) {
         }
         break;
 
+
     case 'get_payroll_settings':
         $companyKey = $_SESSION['company_id'] ?? null;
         $targetKey = 'company::' . $companyKey;
@@ -2094,7 +2225,7 @@ switch ($action) {
         $user_role = $_SESSION['user_role'] ?? '';
         $user_service = strtolower($_SESSION['user_service'] ?? '');
         if ($user_role !== 'admin' && strpos($user_service, 'compta') === false && strpos($user_service, 'rh') === false) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©. Seuls les RH, Comptables et Admins peuvent modifier ces paramÃ¨tres.']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé. Seuls les RH, Comptables et Admins peuvent modifier ces paramètres.']);
             break;
         }
         $companyKey = $_SESSION['company_id'] ?? null;
@@ -2107,7 +2238,7 @@ switch ($action) {
 
     case 'upload_company_logo':
         if (($_SESSION['user_role'] ?? '') != 'admin') {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $companyKey = $_SESSION['company_id'] ?? null;
@@ -2163,12 +2294,12 @@ switch ($action) {
 
     case 'save_payroll_variables':
         if (($_SESSION['user_role'] ?? '') != 'admin' && strpos(strtolower($_SESSION['user_service'] ?? ''), 'compta') === false && strpos(strtolower($_SESSION['user_service'] ?? ''), 'rh') === false) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $period = $data['period'] ?? '';
         if (!$period) {
-            echo json_encode(['success' => false, 'message' => 'PÃ©riode manquante']);
+            echo json_encode(['success' => false, 'message' => 'Période manquante']);
             break;
         }
         $db = getScopedData($serviceKey);
@@ -2204,7 +2335,7 @@ switch ($action) {
 
     case 'add_payroll_loan':
         if (($_SESSION['user_role'] ?? '') != 'admin' && strpos(strtolower($_SESSION['user_service'] ?? ''), 'compta') === false && strpos(strtolower($_SESSION['user_service'] ?? ''), 'rh') === false) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $company_id = resolveCurrentCompanyIdSql();
@@ -2220,15 +2351,18 @@ switch ($action) {
         $monthly_deduction = intval($data['monthly_deduction'] ?? 0);
         $start_period = $data['start_period'] ?? date('Y-m');
         
-        $stmt = $sqlite->prepare("INSERT INTO agent_loans (id, company_id, agent_name, agent_id, agent_function, total_amount, motif, date_granted, monthly_deduction, start_period, remaining_balance, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')");
-        $stmt->execute([$id, $company_id, $agent_name, $agent_id, $agent_function, $amount, $motif, $date_granted, $monthly_deduction, $start_period, $amount]);
+        $already_paid = intval($data['already_paid'] ?? 0);
+        
+        $stmt = $sqlite->prepare("INSERT INTO agent_loans (id, company_id, agent_name, agent_id, agent_function, total_amount, motif, date_granted, monthly_deduction, start_period, already_paid, remaining_balance, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')");
+        $remaining = max(0, $amount - $already_paid);
+        $stmt->execute([$id, $company_id, $agent_name, $agent_id, $agent_function, $amount, $motif, $date_granted, $monthly_deduction, $start_period, $already_paid, $remaining]);
         
         echo json_encode(['success' => true, 'loan_id' => $id]);
         break;
         
     case 'delete_payroll_loan':
         if (($_SESSION['user_role'] ?? '') != 'admin' && strpos(strtolower($_SESSION['user_service'] ?? ''), 'compta') === false && strpos(strtolower($_SESSION['user_service'] ?? ''), 'rh') === false) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $sqlite = getDb();
@@ -2240,13 +2374,13 @@ switch ($action) {
 
     case 'update_agent_contract':
         if (($_SESSION['user_role'] ?? '') != 'admin' && strpos(strtolower($_SESSION['user_service'] ?? ''), 'rh') === false) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $agent_id = $data['agent_id'] ?? '';
         $contract_data = $data['contract_data'] ?? [];
         if (!$agent_id) {
-            echo json_encode(['success' => false, 'message' => 'Agent non spÃ©cifiÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Agent non spécifié']);
             break;
         }
         $sqlite = getDb();
@@ -2270,7 +2404,7 @@ switch ($action) {
         $sqlite = getDb();
         $company_id_local = $_SESSION['company_id'] ?? '';
         $sqlite->exec('CREATE TABLE IF NOT EXISTS pointage_leaves (id TEXT PRIMARY KEY, agent_id TEXT, start_date TEXT, end_date TEXT, type TEXT, status TEXT, company_id TEXT, service_id TEXT)');
-        $sqlite->exec("DELETE FROM pointage_leaves WHERE start_date = end_date AND start_date LIKE '%-01'"); // Auto-cleanup des congÃ©s buggÃ©s
+        $sqlite->exec("DELETE FROM pointage_leaves WHERE start_date = end_date AND start_date LIKE '%-01'"); // Auto-cleanup des congés buggés
         $stmt = $sqlite->prepare("SELECT * FROM pointage_leaves WHERE company_id = ?");
         $stmt->execute([$company_id_local]);
         $leaves = $stmt->fetchAll() ?: [];
@@ -2285,12 +2419,12 @@ switch ($action) {
 
     case 'save_leave':
         if (($_SESSION['user_role'] ?? '') != 'admin' && strpos(strtolower($_SESSION['user_service'] ?? ''), 'rh') === false && strpos(strtolower($_SESSION['user_service'] ?? ''), 'pc') === false && !hasPermission('dashboard')) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $leave = $data['leave'] ?? null;
         if (!$leave || empty($leave['id'])) {
-            echo json_encode(['success' => false, 'message' => 'DonnÃ©es de congÃ© manquantes']);
+            echo json_encode(['success' => false, 'message' => 'Données de congé manquantes']);
             break;
         }
         $sqlite = getDb();
@@ -2315,26 +2449,14 @@ switch ($action) {
         echo json_encode(['success' => true]);
         break;
 
-    case 'delete_leave':
-        if (($_SESSION['user_role'] ?? '') != 'admin' && strpos(strtolower($_SESSION['user_service'] ?? ''), 'rh') === false && strpos(strtolower($_SESSION['user_service'] ?? ''), 'pc') === false && !hasPermission('dashboard')) {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
-            break;
-        }
-        $leave_id = $data['leave_id'] ?? '';
-        $sqlite = getDb();
-        $serviceKey = resolveCurrentServiceKeySql();
-        $sqlite->exec('CREATE TABLE IF NOT EXISTS pointage_leaves (id TEXT PRIMARY KEY, agent_id TEXT, start_date TEXT, end_date TEXT, type TEXT, status TEXT, company_id TEXT, service_id TEXT)');
-        $stmt = $sqlite->prepare("DELETE FROM pointage_leaves WHERE id = ? AND service_id = ?");
-        $stmt->execute([$leave_id, $serviceKey]);
-        echo json_encode(['success' => true]);
-        break;
+
 
     case 'get_salary_config':
         $db = getScopedData($serviceKey);
         $functions = $db['functions'] ?? [
             ['id' => 'AS', 'name' => 'Agent Simple'],
-            ['id' => 'GA', 'name' => 'Garde ArmÃ©'],
-            ['id' => 'MC', 'name' => 'MaÃ®tre-Chien'],
+            ['id' => 'GA', 'name' => 'Garde Armé'],
+            ['id' => 'MC', 'name' => 'Maître-Chien'],
             ['id' => 'CP', 'name' => 'Chef de Poste'],
             ['id' => 'Costume', 'name' => 'Agent en Costume']
         ];
@@ -2351,7 +2473,7 @@ switch ($action) {
 
     case 'update_salary_config':
         if ($_SESSION['user_role'] != 'admin') {
-            echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
+            echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
         $db = getScopedData($serviceKey);
@@ -2364,12 +2486,12 @@ switch ($action) {
     case 'dev_unpublish_period':
         $period = $data['period'] ?? '';
         if (!$period) {
-            echo json_encode(['success' => false, 'message' => 'PÃ©riode manquante']);
+            echo json_encode(['success' => false, 'message' => 'Période manquante']);
             break;
         }
         $companyKey = $_SESSION['company_id'] ?? null;
         if (!$companyKey) {
-            echo json_encode(['success' => false, 'message' => 'Session expirÃ©e']);
+            echo json_encode(['success' => false, 'message' => 'Session expirée']);
             break;
         }
 
@@ -2380,7 +2502,7 @@ switch ($action) {
 
         setServiceDataSql($companyKey, 'published_periods', $new_published);
 
-        // Si le service est aussi enregistrÃ©, le dÃ©publier localement (optionnel mais recommandÃ©)
+        // Si le service est aussi enregistré, le dépublier localement (optionnel mais recommandé)
         $serviceKey = $_SESSION['service_id'] ?? null;
         if ($serviceKey) {
             $publishedSvc = getServiceDataSql($serviceKey, 'published_periods', []);
@@ -2390,12 +2512,12 @@ switch ($action) {
             setServiceDataSql($serviceKey, 'published_periods', $new_publishedSvc);
         }
 
-        echo json_encode(['success' => true, 'message' => 'PÃ©riode dÃ©publiÃ©e']);
+        echo json_encode(['success' => true, 'message' => 'Période dépubliée']);
         break;
     case 'publish_period':
         $period = $data['period'] ?? '';
         if (!$period) {
-            echo json_encode(['success' => false, 'message' => 'PÃ©riode manquante']);
+            echo json_encode(['success' => false, 'message' => 'Période manquante']);
             break;
         }
         $companyKey = resolveCurrentCompanyIdSql();
@@ -2428,10 +2550,7 @@ switch ($action) {
                     if ($s['id'] === 'site_releves') $has_releves = true;
                     if ($s['id'] === 'site_administration') $has_admin = true;
                 }
-                if (!$has_extras) $sites[] = ['id' => 'site_extras', 'name' => 'ðŸŒŸ EXTRA BUREAU'];
-                if (!$has_extras_sur_site) $sites[] = ['id' => 'site_extras_sur_site', 'name' => 'ðŸŒŸ EXTRA SUR SITE'];
-                if (!$has_releves) $sites[] = ['id' => 'site_releves', 'name' => 'ðŸ”„ Vivier des relÃ¨ves'];
-                if (!$has_admin) $sites[] = ['id' => 'site_administration', 'name' => 'ðŸ¢ Administration'];
+                if (!$has_releves) $sites[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves'];
                 
                 $archive = [
                     'period' => $pub_period,
@@ -2487,14 +2606,35 @@ switch ($action) {
             $history = array_slice($history, 0, 50);
         setServiceDataSql($companyKey, 'feedback_history', $history);
 
-        // â”€â”€â”€ FREEZE : GÃ©nÃ©rer et sauvegarder le snapshot gelÃ© des salaires â”€â”€â”€â”€â”€
-        // Le snapshot est calculÃ© UNE SEULE FOIS au moment de la publication.
         // Toute modification ultÃ©rieure du pointage n'affectera pas ces donnÃ©es.
         $snapshotSalaries = generateSalariesData($sqlite, $period, $companyKey, 'company_id', $companyKey, $serviceKey);
         savePayrollSnapshot($sqlite, $companyKey, $period, $snapshotSalaries, $serviceKey);
         // â”€â”€â”€ FIN FREEZE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-        echo json_encode(['success' => true, 'snapshot_saved' => true]);
+        // ARCHIVE POINTAGE : SQL direct, aucun HTTP interne, aucun deadlock
+        try {
+            if (!function_exists('internal_build_pointage_archive_direct')) {
+                require_once __DIR__ . '/../core/archive_helper.php';
+            }
+            $archData = internal_build_pointage_archive_direct($sqlite, $companyKey, $period);
+            $compressedArch = base64_encode(gzcompress(json_encode($archData), 9));
+            $nowArch = date('Y-m-d H:i:s');
+            $archivedByArch = $_SESSION['user_id'] ?? 'Auto-Publication';
+            $stmtArchExist = $sqlite->prepare('SELECT id FROM archives_pointage WHERE company_id = ? AND period = ?');
+            $stmtArchExist->execute([$companyKey, $period]);
+            $archExistId = $stmtArchExist->fetchColumn();
+            if ($archExistId) {
+                $stmtArchUp = $sqlite->prepare('UPDATE archives_pointage SET data = ?, archived_date = ?, archived_by = ?, created_at = ? WHERE id = ?');
+                $stmtArchUp->execute([$compressedArch, $nowArch, $archivedByArch, $nowArch, $archExistId]);
+            } else {
+                $stmtArchIns = $sqlite->prepare('INSERT INTO archives_pointage (company_id, period, archived_date, archived_by, data, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+                $stmtArchIns->execute([$companyKey, $period, $nowArch, $archivedByArch, $compressedArch, $nowArch]);
+            }
+        } catch (Exception $eArch) {
+            error_log('[archive_pointage_publish] Non-blocking: ' . $eArch->getMessage());
+        }
+
+        echo json_encode(['success' => true, 'snapshot_saved' => true, 'archive_created' => true]);
         break;
 
     case 'unpublish_period':
@@ -2712,6 +2852,8 @@ switch ($action) {
         $cloture_periods = []; // Periodes officiellement cloturees par le comptable
         foreach ($archived_rows as $row) {
             $period_key = substr($row['id'], 8); // Enleve 'payroll_'
+            // Ignorer les entrées corrompues (ne correspondant pas au format YYYY-MM)
+            if (!preg_match('/^\d{4}-\d{2}$/', $period_key)) continue;
             $archived[] = $period_key;
             $archData = json_decode($row['data'] ?? '{}', true);
             $archivedBy = $archData['archived_by'] ?? '';
@@ -2804,6 +2946,90 @@ switch ($action) {
         } catch(Exception $e) {}
 
         echo json_encode(['success' => true, 'details' => $details]);
+        break;
+
+    // ─── Préférences de colonnes du tableau État de Paie ─────────────────────────
+    case 'get_column_prefs':
+        $userId    = (string)($_SESSION['user_id'] ?? '');
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $viewKey   = $data['view_key'] ?? 'payroll_table';
+        $sqlite    = getDb();
+        try {
+            // S'assurer que la table existe avec user_id en VARCHAR (et non INT)
+            $sqlite->exec("CREATE TABLE IF NOT EXISTS user_column_prefs (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                user_id     VARCHAR(255) NOT NULL,
+                company_id  VARCHAR(100) NOT NULL,
+                view_key    VARCHAR(50) NOT NULL DEFAULT 'payroll_table',
+                prefs       TEXT NOT NULL,
+                updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_user_column_prefs (user_id, company_id, view_key)
+            )");
+            // Migration: corriger le type user_id si la table existait déjà avec INT
+            try { $sqlite->exec("ALTER TABLE user_column_prefs MODIFY COLUMN user_id VARCHAR(255) NOT NULL"); } catch (Exception $ex) {}
+            $stmt = $sqlite->prepare("SELECT prefs FROM user_column_prefs WHERE user_id = ? AND company_id = ? AND view_key = ?");
+            $stmt->execute([$userId, $companyId, $viewKey]);
+            $row = $stmt->fetch();
+            if ($row) {
+                echo json_encode(['success' => true, 'prefs' => json_decode($row['prefs'], true)]);
+            } else {
+                echo json_encode(['success' => true, 'prefs' => null]); // null = defaults côté front
+            }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+
+    case 'save_column_prefs':
+        $userId    = (string)($_SESSION['user_id'] ?? '');
+        $companyId = $_SESSION['company_id'] ?? 'comp_default_1';
+        $viewKey   = $data['view_key'] ?? 'payroll_table';
+        $prefs     = $data['prefs'] ?? [];
+        $sqlite    = getDb();
+        try {
+            // S'assurer que la table existe avec user_id en VARCHAR (et non INT)
+            $sqlite->exec("CREATE TABLE IF NOT EXISTS user_column_prefs (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                user_id     VARCHAR(255) NOT NULL,
+                company_id  VARCHAR(100) NOT NULL,
+                view_key    VARCHAR(50) NOT NULL DEFAULT 'payroll_table',
+                prefs       TEXT NOT NULL,
+                updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_user_column_prefs (user_id, company_id, view_key)
+            )");
+            // Migration: corriger le type user_id si la table existait déjà avec INT
+            try { $sqlite->exec("ALTER TABLE user_column_prefs MODIFY COLUMN user_id VARCHAR(255) NOT NULL"); } catch (Exception $ex) {}
+            $stmt = $sqlite->prepare("SELECT id FROM user_column_prefs WHERE user_id = ? AND company_id = ? AND view_key = ?");
+            $stmt->execute([$userId, $companyId, $viewKey]);
+            $row = $stmt->fetch();
+            if ($row) {
+                $upd = $sqlite->prepare("UPDATE user_column_prefs SET prefs = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+                $upd->execute([json_encode($prefs), $row['id']]);
+            } else {
+                $ins = $sqlite->prepare("INSERT INTO user_column_prefs (user_id, company_id, view_key, prefs) VALUES (?, ?, ?, ?)");
+                $ins->execute([$userId, $companyId, $viewKey, json_encode($prefs)]);
+            }
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+
+    case 'save_period_total':
+        $companyKey = resolveCurrentCompanyIdSql();
+        $period = $data['period'] ?? '';
+        $totalNet = $data['totalNet'] ?? 0;
+        
+        file_put_contents('c:/laragon/www/pontage/api_log.txt', "save_period_total called: period=$period, totalNet=$totalNet, company=$companyKey\n", FILE_APPEND);
+        
+        if ($period && $totalNet > 0) {
+            $cached_totals = getServiceDataSql($companyKey, 'period_totals', []);
+            $cached_totals[$period] = (float) $totalNet;
+            setServiceDataSql($companyKey, 'period_totals', $cached_totals);
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Paramètres invalides']);
+        }
         break;
 
 } // end switch salaries

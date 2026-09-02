@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 export default function RenameSubsiteModal({ isOpen, onClose, currentName, onConfirm }) {
   const [name, setName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) setName(currentName || '');
@@ -9,16 +10,18 @@ export default function RenameSubsiteModal({ isOpen, onClose, currentName, onCon
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (name.trim() && name.trim() !== currentName) {
-      onConfirm(name.trim());
+      setIsSaving(true);
+      await onConfirm(name.trim());
+      setIsSaving(false);
     } else {
       onClose();
     }
   };
 
-  const isDisabled = !name.trim() || name.trim() === currentName;
+  const isDisabled = !name.trim() || name.trim() === currentName || isSaving;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={onClose}>
@@ -102,12 +105,19 @@ export default function RenameSubsiteModal({ isOpen, onClose, currentName, onCon
                 fontSize: '0.95rem',
                 fontWeight: 700,
                 transition: 'all 0.2s',
-                boxShadow: isDisabled ? 'none' : '0 4px 20px rgba(99,102,241,0.4)'
+                boxShadow: isDisabled ? 'none' : '0 4px 20px rgba(99,102,241,0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
               }}
               onMouseEnter={e => { if (!isDisabled) e.currentTarget.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
             >
-              Enregistrer
+              {isSaving && (
+                <div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+              )}
+              {isSaving ? 'Enregistrement...' : 'Enregistrer'}
             </button>
           </div>
         </form>

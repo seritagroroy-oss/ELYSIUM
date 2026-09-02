@@ -10,6 +10,8 @@ export function useLeaveManagement({
   period,
   setShowClosedMonthModal
 }) {
+  const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
+
   // --- Modal: Mise À Pied (MAP) ---
   const [showMapModal, setShowMapModal] = useState(false);
   const [mapAgentId, setMapAgentId] = useState('');
@@ -144,25 +146,78 @@ export function useLeaveManagement({
 
     if (existingLeave) {
       let reposDayOfWeek = -1;
+      const stypeLow = agent?.shift_type?.toLowerCase() || '';
+      let cyclePattern = [];
+      if (stypeLow === '24h') cyclePattern = ['1', 'R'];
+      else if (stypeLow === '48h') cyclePattern = ['1', '1', 'R', 'R'];
+      else if (stypeLow === '72h') cyclePattern = ['1', '1', '1', 'R', 'R', 'R'];
+
+      let anchorDate = null;
+      let anchorOffset = 0;
+
       if (agent && agent.attendance) {
-        for (const att of agent.attendance) {
-          if (att.status === 'R' && (att.date < existingLeave.start_date || att.date > existingLeave.end_date)) {
-            reposDayOfWeek = new Date(att.date).getDay();
-            break;
+        if (cyclePattern.length > 0) {
+          const validAtts = agent.attendance.filter(a => {
+            if (a.date >= existingLeave.start_date && a.date <= existingLeave.end_date) return false;
+            return a.status === '1' || a.status === 'R';
+          });
+          
+          const uniqueAttsMap = {};
+          validAtts.forEach(a => { uniqueAttsMap[a.date] = a.status; });
+          const sortedDates = Object.keys(uniqueAttsMap).sort();
+          
+          for (let i = 0; i < sortedDates.length - 1; i++) {
+            const dStr1 = sortedDates[i];
+            const dStr2 = sortedDates[i+1];
+            if (uniqueAttsMap[dStr1] === 'R' && uniqueAttsMap[dStr2] === '1') {
+              const d1 = new Date(dStr1);
+              const d2 = new Date(dStr2);
+              if (Math.round((d2 - d1) / 86400000) === 1) {
+                anchorDate = dStr2;
+                anchorOffset = 0;
+                break;
+              }
+            }
+          }
+          
+          if (!anchorDate) {
+            for (let i = 0; i < sortedDates.length - 1; i++) {
+              const dStr1 = sortedDates[i];
+              const dStr2 = sortedDates[i+1];
+              if (uniqueAttsMap[dStr1] === '1' && uniqueAttsMap[dStr2] === 'R') {
+                const d1 = new Date(dStr1);
+                const d2 = new Date(dStr2);
+                if (Math.round((d2 - d1) / 86400000) === 1) {
+                  anchorDate = dStr2;
+                  anchorOffset = cyclePattern.indexOf('R');
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (!anchorDate && sortedDates.length > 0) {
+            anchorDate = sortedDates[0];
+            anchorOffset = cyclePattern.indexOf(uniqueAttsMap[anchorDate]);
+          }
+        } else {
+          for (const att of agent.attendance) {
+            if (att.status === 'R' && (att.date < existingLeave.start_date || att.date > existingLeave.end_date)) {
+              reposDayOfWeek = new Date(att.date).getDay();
+              break;
+            }
           }
         }
       }
-      let oldCursor = new Date(existingLeave.start_date);
-      const oldEnd = new Date(existingLeave.end_date);
-      while (oldCursor <= oldEnd) {
-        const yyyy = oldCursor.getFullYear();
-        const mm = String(oldCursor.getMonth() + 1).padStart(2, '0');
-        const dd = String(oldCursor.getDate()).padStart(2, '0');
-        const dk = `${yyyy}-${mm}-${dd}`;
 
-        let pMonth = oldCursor.getMonth() + 1;
-        let pYear = yyyy;
-        if (oldCursor.getDate() >= cycleStart) {
+      let cursorStr = existingLeave.start_date;
+      while (cursorStr <= existingLeave.end_date) {
+        const [y, m, d] = cursorStr.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        
+        let pMonth = m;
+        let pYear = y;
+        if (d >= cycleStart) {
           pMonth += 1;
           if (pMonth > 12) {
             pMonth = 1;
@@ -172,16 +227,25 @@ export function useLeaveManagement({
         const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
         shiftCodes.forEach(sc => {
-          const existing = agent?.attendance?.find(a => a.date === dk && a.shift_code === sc);
+          let restoreStatus = '1';
+          if (anchorDate) {
+             const aDate = new Date(anchorDate);
+             const diffDays = Math.round((dateObj - aDate) / 86400000);
+             let newOffset = (anchorOffset + diffDays) % cyclePattern.length;
+             if (newOffset < 0) newOffset += cyclePattern.length;
+             restoreStatus = cyclePattern[newOffset];
+          } else if (reposDayOfWeek !== -1 && dateObj.getDay() === reposDayOfWeek) {
+            restoreStatus = 'R';
+          }
+          
+          const existing = agent?.attendance?.find(a => a.date === cursorStr && a.shift_code === sc);
           if (existing && existing.status === 'MAP') {
-            let restoreStatus = '';
-            if (reposDayOfWeek !== -1 && oldCursor.getDay() === reposDayOfWeek) {
-              restoreStatus = 'R';
-            }
-            updates.push({ agent_id: mapAgentId, date: dk, shift_code: sc, status: restoreStatus, period: properPeriod });
+            updates.push({ agent_id: mapAgentId, date: cursorStr, shift_code: sc, status: restoreStatus, period: properPeriod });
           }
         });
-        oldCursor.setDate(oldCursor.getDate() + 1);
+        
+        dateObj.setDate(dateObj.getDate() + 1);
+        cursorStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       }
     }
 
@@ -204,12 +268,12 @@ export function useLeaveManagement({
       }
       const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
-      const isRotativeAgent = ['24h', '48h', '72h'].includes(agent?.shift_type?.toLowerCase());
+      const isRotativeAgent = ['24h', '48h', '72h', '12h', '12h jour', '12h nuit', 'jour', 'nuit'].includes(agent?.shift_type?.toLowerCase());
       shiftCodes.forEach(sc => {
         if (isRotativeAgent) {
           const existing = agent?.attendance?.find(a => a.date === dk && a.shift_code === sc);
           const currentStatus = existing ? existing.status : '';
-          if (currentStatus === '1' || currentStatus === '') {
+          if (currentStatus !== 'R') {
             updates.push({ agent_id: mapAgentId, date: dk, shift_code: sc, status: 'MAP', period: properPeriod });
           }
         } else {
@@ -342,25 +406,78 @@ export function useLeaveManagement({
 
     if (existingLeave) {
       let reposDayOfWeek = -1;
+      const stypeLow = agent?.shift_type?.toLowerCase() || '';
+      let cyclePattern = [];
+      if (stypeLow === '24h') cyclePattern = ['1', 'R'];
+      else if (stypeLow === '48h') cyclePattern = ['1', '1', 'R', 'R'];
+      else if (stypeLow === '72h') cyclePattern = ['1', '1', '1', 'R', 'R', 'R'];
+
+      let anchorDate = null;
+      let anchorOffset = 0;
+
       if (agent && agent.attendance) {
-        for (const att of agent.attendance) {
-          if (att.status === 'R' && (att.date < existingLeave.start_date || att.date > existingLeave.end_date)) {
-            reposDayOfWeek = new Date(att.date).getDay();
-            break;
+        if (cyclePattern.length > 0) {
+          const validAtts = agent.attendance.filter(a => {
+            if (a.date >= existingLeave.start_date && a.date <= existingLeave.end_date) return false;
+            return a.status === '1' || a.status === 'R';
+          });
+          
+          const uniqueAttsMap = {};
+          validAtts.forEach(a => { uniqueAttsMap[a.date] = a.status; });
+          const sortedDates = Object.keys(uniqueAttsMap).sort();
+          
+          for (let i = 0; i < sortedDates.length - 1; i++) {
+            const dStr1 = sortedDates[i];
+            const dStr2 = sortedDates[i+1];
+            if (uniqueAttsMap[dStr1] === 'R' && uniqueAttsMap[dStr2] === '1') {
+              const d1 = new Date(dStr1);
+              const d2 = new Date(dStr2);
+              if (Math.round((d2 - d1) / 86400000) === 1) {
+                anchorDate = dStr2;
+                anchorOffset = 0;
+                break;
+              }
+            }
+          }
+          
+          if (!anchorDate) {
+            for (let i = 0; i < sortedDates.length - 1; i++) {
+              const dStr1 = sortedDates[i];
+              const dStr2 = sortedDates[i+1];
+              if (uniqueAttsMap[dStr1] === '1' && uniqueAttsMap[dStr2] === 'R') {
+                const d1 = new Date(dStr1);
+                const d2 = new Date(dStr2);
+                if (Math.round((d2 - d1) / 86400000) === 1) {
+                  anchorDate = dStr2;
+                  anchorOffset = cyclePattern.indexOf('R');
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (!anchorDate && sortedDates.length > 0) {
+            anchorDate = sortedDates[0];
+            anchorOffset = cyclePattern.indexOf(uniqueAttsMap[anchorDate]);
+          }
+        } else {
+          for (const att of agent.attendance) {
+            if (att.status === 'R' && (att.date < existingLeave.start_date || att.date > existingLeave.end_date)) {
+              reposDayOfWeek = new Date(att.date).getDay();
+              break;
+            }
           }
         }
       }
-      let oldCursor = new Date(existingLeave.start_date);
-      const oldEnd = new Date(existingLeave.end_date);
-      while (oldCursor <= oldEnd) {
-        const yyyy = oldCursor.getFullYear();
-        const mm = String(oldCursor.getMonth() + 1).padStart(2, '0');
-        const dd = String(oldCursor.getDate()).padStart(2, '0');
-        const dk = `${yyyy}-${mm}-${dd}`;
 
-        let pMonth = oldCursor.getMonth() + 1;
-        let pYear = yyyy;
-        if (oldCursor.getDate() >= cycleStart) {
+      let cursorStr = existingLeave.start_date;
+      while (cursorStr <= existingLeave.end_date) {
+        const [y, m, d] = cursorStr.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        
+        let pMonth = m;
+        let pYear = y;
+        if (d >= cycleStart) {
           pMonth += 1;
           if (pMonth > 12) {
             pMonth = 1;
@@ -370,16 +487,25 @@ export function useLeaveManagement({
         const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
         shiftCodes.forEach(sc => {
-          const existing = agent?.attendance?.find(a => a.date === dk && a.shift_code === sc);
+          let restoreStatus = '1';
+          if (anchorDate) {
+             const aDate = new Date(anchorDate);
+             const diffDays = Math.round((dateObj - aDate) / 86400000);
+             let newOffset = (anchorOffset + diffDays) % cyclePattern.length;
+             if (newOffset < 0) newOffset += cyclePattern.length;
+             restoreStatus = cyclePattern[newOffset];
+          } else if (reposDayOfWeek !== -1 && dateObj.getDay() === reposDayOfWeek) {
+            restoreStatus = 'R';
+          }
+          
+          const existing = agent?.attendance?.find(a => a.date === cursorStr && a.shift_code === sc);
           if (existing && existing.status === 'M') {
-            let restoreStatus = '';
-            if (reposDayOfWeek !== -1 && oldCursor.getDay() === reposDayOfWeek) {
-              restoreStatus = 'R';
-            }
-            updates.push({ agent_id: maladieAgentId, date: dk, shift_code: sc, status: restoreStatus, period: properPeriod });
+            updates.push({ agent_id: maladieAgentId, date: cursorStr, shift_code: sc, status: restoreStatus, period: properPeriod });
           }
         });
-        oldCursor.setDate(oldCursor.getDate() + 1);
+        
+        dateObj.setDate(dateObj.getDate() + 1);
+        cursorStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       }
     }
 
@@ -402,12 +528,12 @@ export function useLeaveManagement({
       }
       const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
-      const isRotativeAgent = ['24h', '48h', '72h'].includes(agent?.shift_type?.toLowerCase());
+      const isRotativeAgent = ['24h', '48h', '72h', '12h', '12h jour', '12h nuit', 'jour', 'nuit'].includes(agent?.shift_type?.toLowerCase());
       shiftCodes.forEach(sc => {
         if (isRotativeAgent) {
           const existing = agent?.attendance?.find(a => a.date === dk && a.shift_code === sc);
           const currentStatus = existing ? existing.status : '';
-          if (currentStatus === '1' || currentStatus === '') {
+          if (currentStatus !== 'R') {
             updates.push({ agent_id: maladieAgentId, date: dk, shift_code: sc, status: 'M', period: properPeriod });
           }
         } else {
@@ -470,17 +596,21 @@ export function useLeaveManagement({
   };
 
   const handleAbsenceSubmit = async (forceOverride = false) => {
+    setIsSubmittingLeave(true);
     if (!absenceStartDate || !absenceEndDate) {
       alert('Veuillez sélectionner la date de début et la date de fin.');
+      setIsSubmittingLeave(false);
       return;
     }
     if (absenceStartDate > absenceEndDate) {
       alert('La date de début doit être avant la date de fin.');
+      setIsSubmittingLeave(false);
       return;
     }
     const absEndPeriod = getCyclePeriodForDate(absenceEndDate);
     if (absEndPeriod < period) {
       setShowClosedMonthModal(true);
+      setIsSubmittingLeave(false);
       return;
     }
 
@@ -510,8 +640,9 @@ export function useLeaveManagement({
       const types = [...new Set(overlaps.map(l => l.type === 'CP' ? 'Congé Payé' : (l.type === 'MAP' ? 'Mise à Pied' : (l.type === 'A' ? 'Absence Injustifiée' : 'Permission'))))].join(', ');
       setOverlapWarning({
         message: `Cette période chevauche déjà un(e) ou plusieurs ${types} pour cet agent.`,
-        onConfirm: () => { setOverlapWarning(null); handleAbsenceSubmit(true); }
+        onConfirm: () => { handleAbsenceSubmit(true); }
       });
+      setIsSubmittingLeave(false);
       return;
     }
 
@@ -540,25 +671,78 @@ export function useLeaveManagement({
 
     if (existingLeave) {
       let reposDayOfWeek = -1;
+      const stypeLow = agent?.shift_type?.toLowerCase() || '';
+      let cyclePattern = [];
+      if (stypeLow === '24h') cyclePattern = ['1', 'R'];
+      else if (stypeLow === '48h') cyclePattern = ['1', '1', 'R', 'R'];
+      else if (stypeLow === '72h') cyclePattern = ['1', '1', '1', 'R', 'R', 'R'];
+
+      let anchorDate = null;
+      let anchorOffset = 0;
+
       if (agent && agent.attendance) {
-        for (const att of agent.attendance) {
-          if (att.status === 'R' && (att.date < existingLeave.start_date || att.date > existingLeave.end_date)) {
-            reposDayOfWeek = new Date(att.date).getDay();
-            break;
+        if (cyclePattern.length > 0) {
+          const validAtts = agent.attendance.filter(a => {
+            if (a.date >= existingLeave.start_date && a.date <= existingLeave.end_date) return false;
+            return a.status === '1' || a.status === 'R';
+          });
+          
+          const uniqueAttsMap = {};
+          validAtts.forEach(a => { uniqueAttsMap[a.date] = a.status; });
+          const sortedDates = Object.keys(uniqueAttsMap).sort();
+          
+          for (let i = 0; i < sortedDates.length - 1; i++) {
+            const dStr1 = sortedDates[i];
+            const dStr2 = sortedDates[i+1];
+            if (uniqueAttsMap[dStr1] === 'R' && uniqueAttsMap[dStr2] === '1') {
+              const d1 = new Date(dStr1);
+              const d2 = new Date(dStr2);
+              if (Math.round((d2 - d1) / 86400000) === 1) {
+                anchorDate = dStr2;
+                anchorOffset = 0;
+                break;
+              }
+            }
+          }
+          
+          if (!anchorDate) {
+            for (let i = 0; i < sortedDates.length - 1; i++) {
+              const dStr1 = sortedDates[i];
+              const dStr2 = sortedDates[i+1];
+              if (uniqueAttsMap[dStr1] === '1' && uniqueAttsMap[dStr2] === 'R') {
+                const d1 = new Date(dStr1);
+                const d2 = new Date(dStr2);
+                if (Math.round((d2 - d1) / 86400000) === 1) {
+                  anchorDate = dStr2;
+                  anchorOffset = cyclePattern.indexOf('R');
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (!anchorDate && sortedDates.length > 0) {
+            anchorDate = sortedDates[0];
+            anchorOffset = cyclePattern.indexOf(uniqueAttsMap[anchorDate]);
+          }
+        } else {
+          for (const att of agent.attendance) {
+            if (att.status === 'R' && (att.date < existingLeave.start_date || att.date > existingLeave.end_date)) {
+              reposDayOfWeek = new Date(att.date).getDay();
+              break;
+            }
           }
         }
       }
-      let oldCursor = new Date(existingLeave.start_date);
-      const oldEnd = new Date(existingLeave.end_date);
-      while (oldCursor <= oldEnd) {
-        const yyyy = oldCursor.getFullYear();
-        const mm = String(oldCursor.getMonth() + 1).padStart(2, '0');
-        const dd = String(oldCursor.getDate()).padStart(2, '0');
-        const dk = `${yyyy}-${mm}-${dd}`;
 
-        let pMonth = oldCursor.getMonth() + 1;
-        let pYear = yyyy;
-        if (oldCursor.getDate() >= cycleStart) {
+      let cursorStr = existingLeave.start_date;
+      while (cursorStr <= existingLeave.end_date) {
+        const [y, m, d] = cursorStr.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        
+        let pMonth = m;
+        let pYear = y;
+        if (d >= cycleStart) {
           pMonth += 1;
           if (pMonth > 12) {
             pMonth = 1;
@@ -568,16 +752,25 @@ export function useLeaveManagement({
         const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
         shiftCodes.forEach(sc => {
-          const existing = agent?.attendance?.find(a => a.date === dk && a.shift_code === sc);
+          let restoreStatus = '1';
+          if (anchorDate) {
+             const aDate = new Date(anchorDate);
+             const diffDays = Math.round((dateObj - aDate) / 86400000);
+             let newOffset = (anchorOffset + diffDays) % cyclePattern.length;
+             if (newOffset < 0) newOffset += cyclePattern.length;
+             restoreStatus = cyclePattern[newOffset];
+          } else if (reposDayOfWeek !== -1 && dateObj.getDay() === reposDayOfWeek) {
+            restoreStatus = 'R';
+          }
+          
+          const existing = agent?.attendance?.find(a => a.date === cursorStr && a.shift_code === sc);
           if (existing && existing.status === 'A') {
-            let restoreStatus = '';
-            if (reposDayOfWeek !== -1 && oldCursor.getDay() === reposDayOfWeek) {
-              restoreStatus = 'R';
-            }
-            updates.push({ agent_id: absenceAgentId, date: dk, shift_code: sc, status: restoreStatus, period: properPeriod });
+            updates.push({ agent_id: absenceAgentId, date: cursorStr, shift_code: sc, status: restoreStatus, period: properPeriod });
           }
         });
-        oldCursor.setDate(oldCursor.getDate() + 1);
+        
+        dateObj.setDate(dateObj.getDate() + 1);
+        cursorStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       }
     }
 
@@ -600,12 +793,12 @@ export function useLeaveManagement({
       }
       const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
-      const isRotativeAgent = ['24h', '48h', '72h'].includes(agent?.shift_type?.toLowerCase());
+      const isAbsRotative = ['24h', '48h', '72h', '12h', '12h jour', '12h nuit', 'jour', 'nuit'].includes(agent?.shift_type?.toLowerCase());
       shiftCodes.forEach(sc => {
-        if (isRotativeAgent) {
+        if (isAbsRotative) {
           const existing = agent?.attendance?.find(a => a.date === dk && a.shift_code === sc);
           const currentStatus = existing ? existing.status : '';
-          if (currentStatus === '1' || currentStatus === '') {
+          if (currentStatus !== 'R') {
             updates.push({ agent_id: absenceAgentId, date: dk, shift_code: sc, status: 'A', period: properPeriod });
           }
         } else {
@@ -662,27 +855,34 @@ export function useLeaveManagement({
       } else {
         alert('❌ Erreur: ' + (res?.message || 'Réponse inattendue'));
       }
-    } catch (err) {
-      alert('❌ Erreur réseau: ' + err.message);
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de l'enregistrement : " + e.message);
+    } finally {
+      setIsSubmittingLeave(false);
+      setOverlapWarning(null);
     }
   };
 
   const handlePermissionSubmit = async (forceOverride = false) => {
+    setIsSubmittingLeave(true);
     if (!permissionStartDate || !permissionEndDate) {
       alert('Veuillez sélectionner la date de début et la date de fin.');
+      setIsSubmittingLeave(false);
       return;
     }
     if (permissionStartDate > permissionEndDate) {
       alert('La date de début doit être avant la date de fin.');
+      setIsSubmittingLeave(false);
       return;
     }
     const permEndPeriod = getCyclePeriodForDate(permissionEndDate);
     if (permEndPeriod < period) {
       setShowClosedMonthModal(true);
+      setIsSubmittingLeave(false);
       return;
     }
     const agent = siteData.flatMap(s => s.agents || []).find(a => a && String(a.id) === String(permissionAgentId));
-    const isPermRotative = ['24h', '48h', '72h'].includes(agent?.shift_type?.toLowerCase());
     const shiftCodes = [];
     if (agent) {
       const stLow = agent.shift_type?.toLowerCase() || '';
@@ -710,6 +910,7 @@ export function useLeaveManagement({
         message: `Cette période chevauche déjà un(e) ou plusieurs ${types} pour cet agent.`,
         onConfirm: () => { setOverlapWarning(null); handlePermissionSubmit(true); }
       });
+      setIsSubmittingLeave(false);
       return;
     }
 
@@ -740,25 +941,78 @@ export function useLeaveManagement({
 
     if (existingLeave) {
       let reposDayOfWeek = -1;
+      const stypeLow = agent?.shift_type?.toLowerCase() || '';
+      let cyclePattern = [];
+      if (stypeLow === '24h') cyclePattern = ['1', 'R'];
+      else if (stypeLow === '48h') cyclePattern = ['1', '1', 'R', 'R'];
+      else if (stypeLow === '72h') cyclePattern = ['1', '1', '1', 'R', 'R', 'R'];
+
+      let anchorDate = null;
+      let anchorOffset = 0;
+
       if (agent && agent.attendance) {
-        for (const att of agent.attendance) {
-          if (att.status === 'R' && (att.date < existingLeave.start_date || att.date > existingLeave.end_date)) {
-            reposDayOfWeek = new Date(att.date).getDay();
-            break;
+        if (cyclePattern.length > 0) {
+          const validAtts = agent.attendance.filter(a => {
+            if (a.date >= existingLeave.start_date && a.date <= existingLeave.end_date) return false;
+            return a.status === '1' || a.status === 'R';
+          });
+          
+          const uniqueAttsMap = {};
+          validAtts.forEach(a => { uniqueAttsMap[a.date] = a.status; });
+          const sortedDates = Object.keys(uniqueAttsMap).sort();
+          
+          for (let i = 0; i < sortedDates.length - 1; i++) {
+            const dStr1 = sortedDates[i];
+            const dStr2 = sortedDates[i+1];
+            if (uniqueAttsMap[dStr1] === 'R' && uniqueAttsMap[dStr2] === '1') {
+              const d1 = new Date(dStr1);
+              const d2 = new Date(dStr2);
+              if (Math.round((d2 - d1) / 86400000) === 1) {
+                anchorDate = dStr2;
+                anchorOffset = 0;
+                break;
+              }
+            }
+          }
+          
+          if (!anchorDate) {
+            for (let i = 0; i < sortedDates.length - 1; i++) {
+              const dStr1 = sortedDates[i];
+              const dStr2 = sortedDates[i+1];
+              if (uniqueAttsMap[dStr1] === '1' && uniqueAttsMap[dStr2] === 'R') {
+                const d1 = new Date(dStr1);
+                const d2 = new Date(dStr2);
+                if (Math.round((d2 - d1) / 86400000) === 1) {
+                  anchorDate = dStr2;
+                  anchorOffset = cyclePattern.indexOf('R');
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (!anchorDate && sortedDates.length > 0) {
+            anchorDate = sortedDates[0];
+            anchorOffset = cyclePattern.indexOf(uniqueAttsMap[anchorDate]);
+          }
+        } else {
+          for (const att of agent.attendance) {
+            if (att.status === 'R' && (att.date < existingLeave.start_date || att.date > existingLeave.end_date)) {
+              reposDayOfWeek = new Date(att.date).getDay();
+              break;
+            }
           }
         }
       }
-      let oldCursor = new Date(existingLeave.start_date);
-      const oldEnd = new Date(existingLeave.end_date);
-      while (oldCursor <= oldEnd) {
-        const yyyy = oldCursor.getFullYear();
-        const mm = String(oldCursor.getMonth() + 1).padStart(2, '0');
-        const dd = String(oldCursor.getDate()).padStart(2, '0');
-        const dk = `${yyyy}-${mm}-${dd}`;
 
-        let pMonth = oldCursor.getMonth() + 1;
-        let pYear = yyyy;
-        if (oldCursor.getDate() >= cycleStart) {
+      let cursorStr = existingLeave.start_date;
+      while (cursorStr <= existingLeave.end_date) {
+        const [y, m, d] = cursorStr.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        
+        let pMonth = m;
+        let pYear = y;
+        if (d >= cycleStart) {
           pMonth += 1;
           if (pMonth > 12) {
             pMonth = 1;
@@ -768,16 +1022,25 @@ export function useLeaveManagement({
         const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
         shiftCodes.forEach(sc => {
-          const existing = agent?.attendance?.find(a => a.date === dk && a.shift_code === sc);
+          let restoreStatus = '1';
+          if (anchorDate) {
+             const aDate = new Date(anchorDate);
+             const diffDays = Math.round((dateObj - aDate) / 86400000);
+             let newOffset = (anchorOffset + diffDays) % cyclePattern.length;
+             if (newOffset < 0) newOffset += cyclePattern.length;
+             restoreStatus = cyclePattern[newOffset];
+          } else if (reposDayOfWeek !== -1 && dateObj.getDay() === reposDayOfWeek) {
+            restoreStatus = 'R';
+          }
+          
+          const existing = agent?.attendance?.find(a => a.date === cursorStr && a.shift_code === sc);
           if (existing && existing.status === 'P') {
-            let restoreStatus = '';
-            if (reposDayOfWeek !== -1 && oldCursor.getDay() === reposDayOfWeek) {
-              restoreStatus = 'R';
-            }
-            updates.push({ agent_id: permissionAgentId, date: dk, shift_code: sc, status: restoreStatus, period: properPeriod });
+            updates.push({ agent_id: permissionAgentId, date: cursorStr, shift_code: sc, status: restoreStatus, period: properPeriod });
           }
         });
-        oldCursor.setDate(oldCursor.getDate() + 1);
+        
+        dateObj.setDate(dateObj.getDate() + 1);
+        cursorStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       }
     }
 
@@ -800,11 +1063,12 @@ export function useLeaveManagement({
       }
       const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
+      const isPermRotative = ['24h', '48h', '72h', '12h', '12h jour', '12h nuit', 'jour', 'nuit'].includes(agent?.shift_type?.toLowerCase());
       shiftCodes.forEach(sc => {
         if (isPermRotative) {
           const existing = agent?.attendance?.find(a => a.date === dk && a.shift_code === sc);
           const currentStatus = existing ? existing.status : '';
-          if (currentStatus === '1' || currentStatus === '') {
+          if (currentStatus !== 'R') {
             updates.push({ agent_id: permissionAgentId, date: dk, shift_code: sc, status: 'P', period: properPeriod });
           }
         } else {
@@ -822,12 +1086,12 @@ export function useLeaveManagement({
 
     if (finalUpdates.length === 0) {
       alert('Erreur: Aucun jour à mettre à jour. (Dates inversées ou bug?)');
+      setIsSubmittingLeave(false);
       return;
     }
     try {
-      const existingLeave2 = leaves.find(l => String(l.agent_id) === String(permissionAgentId) && l.type === 'P');
       const leave = {
-        id: existingLeave2 ? existingLeave2.id : ('leave_' + Date.now()),
+        id: existingLeave ? existingLeave.id : ('leave_' + Date.now()),
         agent_id: permissionAgentId,
         start_date: permissionStartDate,
         end_date: permissionEndDate,
@@ -840,6 +1104,11 @@ export function useLeaveManagement({
       if (res && res.success) {
         setShowPermissionModal(false);
         setEditingPermissionLeaveId(null);
+        setIsSubmittingLeave(false); // On arrête le spinner immédiatement
+        
+        // Yield to browser event loop pour laisser le modal se fermer avant le lourd re-render du tableau
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         setSiteData(prev => prev.map(sub => ({
           ...sub,
           agents: sub.agents?.map(ag => {
@@ -859,15 +1128,19 @@ export function useLeaveManagement({
             return ag;
           })
         })));
-        const leavesRes = await apiCall('get_leaves', {}, 'GET');
-        if (leavesRes && leavesRes.success) {
-          setLeaves(leavesRes.leaves || []);
-        }
+        // Optimisation: Mise à jour locale sans appel réseau
+        setLeaves(prev => {
+          const newLeaves = prev.filter(l => l.id !== leave.id);
+          newLeaves.push(leave);
+          return newLeaves;
+        });
       } else {
         alert('❌ Erreur: ' + (res?.message || 'Réponse inattendue'));
       }
     } catch (e) {
       alert('❌ Erreur réseau ou serveur');
+    } finally {
+      setIsSubmittingLeave(false);
     }
   };
 
@@ -1000,37 +1273,115 @@ export function useLeaveManagement({
         shiftCodes.push('J');
       }
 
-      let reposDayOfWeek = -1; 
+      let reposDayOfWeek = -1;
+      const stypeLow = agent?.shift_type?.toLowerCase() || '';
+      let cyclePattern = [];
+      if (stypeLow === '24h') cyclePattern = ['1', 'R'];
+      else if (stypeLow === '48h') cyclePattern = ['1', '1', 'R', 'R'];
+      else if (stypeLow === '72h') cyclePattern = ['1', '1', '1', 'R', 'R', 'R'];
+
+      let anchorDate = null;
+      let anchorOffset = 0;
+
       if (agent && agent.attendance) {
         const leaveStart = leave.start_date;
         const leaveEnd = leave.end_date;
-        for (const att of agent.attendance) {
-          if (att.status === 'R' && (att.date < leaveStart || att.date > leaveEnd)) {
-            const d = new Date(att.date);
-            reposDayOfWeek = d.getDay(); 
-            break;
+        
+        if (cyclePattern.length > 0) {
+          const validAtts = agent.attendance.filter(a => {
+            if (a.date >= leaveStart && a.date <= leaveEnd) return false;
+            return a.status === '1' || a.status === 'R';
+          });
+          
+          const uniqueAttsMap = {};
+          validAtts.forEach(a => { uniqueAttsMap[a.date] = a.status; });
+          const sortedDates = Object.keys(uniqueAttsMap).sort();
+          
+          for (let i = 0; i < sortedDates.length - 1; i++) {
+            const dStr1 = sortedDates[i];
+            const dStr2 = sortedDates[i+1];
+            if (uniqueAttsMap[dStr1] === 'R' && uniqueAttsMap[dStr2] === '1') {
+              const d1 = new Date(dStr1);
+              const d2 = new Date(dStr2);
+              if (Math.round((d2 - d1) / 86400000) === 1) {
+                anchorDate = dStr2;
+                anchorOffset = 0;
+                break;
+              }
+            }
+          }
+          
+          if (!anchorDate) {
+            for (let i = 0; i < sortedDates.length - 1; i++) {
+              const dStr1 = sortedDates[i];
+              const dStr2 = sortedDates[i+1];
+              if (uniqueAttsMap[dStr1] === '1' && uniqueAttsMap[dStr2] === 'R') {
+                const d1 = new Date(dStr1);
+                const d2 = new Date(dStr2);
+                if (Math.round((d2 - d1) / 86400000) === 1) {
+                  anchorDate = dStr2;
+                  anchorOffset = cyclePattern.indexOf('R');
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (!anchorDate && sortedDates.length > 0) {
+            anchorDate = sortedDates[0];
+            anchorOffset = cyclePattern.indexOf(uniqueAttsMap[anchorDate]);
+          }
+        } else {
+          // Standard weekly rest day logic
+          for (const att of agent.attendance) {
+            if (att.status === 'R' && (att.date < leaveStart || att.date > leaveEnd)) {
+              const d = new Date(att.date);
+              reposDayOfWeek = d.getDay(); 
+              break;
+            }
           }
         }
       }
 
       const updates = [];
-      let cursor = new Date(leave.start_date);
-      const end = new Date(leave.end_date);
-      while (cursor <= end) {
-        const yyyy = cursor.getFullYear(); const mm = String(cursor.getMonth() + 1).padStart(2, '0'); const dd = String(cursor.getDate()).padStart(2, '0');
-        const dk = `${yyyy}-${mm}-${dd}`;
-        let pMonth = cursor.getMonth() + 1; let pYear = yyyy;
-        if (cursor.getDate() >= cycleStart) { pMonth += 1; if (pMonth > 12) { pMonth = 1; pYear += 1; } }
+      let cursorStr = leave.start_date;
+      while (cursorStr <= leave.end_date) {
+        const [y, m, d] = cursorStr.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        
+        let pMonth = m;
+        let pYear = y;
+        if (d >= cycleStart) {
+          pMonth += 1;
+          if (pMonth > 12) {
+            pMonth = 1;
+            pYear += 1;
+          }
+        }
         const properPeriod = `${pYear}-${String(pMonth).padStart(2, '0')}`;
 
         shiftCodes.forEach(sc => {
-          let restoreStatus = '';
-          if (reposDayOfWeek !== -1 && cursor.getDay() === reposDayOfWeek) {
+          let restoreStatus = '1';
+          if (anchorDate) {
+             const aDate = new Date(anchorDate);
+             const diffDays = Math.round((dateObj - aDate) / 86400000);
+             let newOffset = (anchorOffset + diffDays) % cyclePattern.length;
+             if (newOffset < 0) newOffset += cyclePattern.length;
+             restoreStatus = cyclePattern[newOffset];
+          } else if (reposDayOfWeek !== -1 && dateObj.getDay() === reposDayOfWeek) {
             restoreStatus = 'R';
           }
-          updates.push({ agent_id: leave.agent_id, date: dk, shift_code: sc, status: restoreStatus, period: properPeriod });
+          
+          const existing = agent?.attendance?.find(a => a.date === cursorStr && a.shift_code === sc);
+          if (existing && existing.status === 'R') {
+            restoreStatus = 'R';
+          }
+          
+          updates.push({ agent_id: leave.agent_id, date: cursorStr, shift_code: sc, status: restoreStatus, period: properPeriod });
         });
-        cursor.setDate(cursor.getDate() + 1);
+        
+        dateObj.setDate(dateObj.getDate() + 1);
+        cursorStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       }
 
       await apiCall('delete_leave', { leave_id: leave.id });
@@ -1047,12 +1398,39 @@ export function useLeaveManagement({
             updates.forEach(upd => {
               const idx = att.findIndex(a => a.date === upd.date && a.shift_code === upd.shift_code);
               if (idx >= 0) {
-                if (upd.status === '') att.splice(idx, 1);
-                else att[idx].status = upd.status;
-              } else if (upd.status !== '') {
-                att.push(upd);
+                att[idx].status = upd.status;
+              } else {
+                att.push({ ...upd });
               }
             });
+            
+            // Safety net: force clear any lingering statuses for this leave range
+            att.forEach(a => {
+              if (a.date >= leave.start_date && a.date <= leave.end_date && ['P', 'MAP', 'M', 'CP', 'AT'].includes(a.status)) {
+                 const [y, m, d] = a.date.split('-').map(Number);
+                 const dObj = new Date(y, m - 1, d);
+                 
+                 let safeRestore = '1';
+                 if (anchorDate) {
+                    const aDate = new Date(anchorDate);
+                    const diffDays = Math.round((dObj - aDate) / 86400000);
+                    let newOffset = (anchorOffset + diffDays) % cyclePattern.length;
+                    if (newOffset < 0) newOffset += cyclePattern.length;
+                    safeRestore = cyclePattern[newOffset];
+                 } else if (reposDayOfWeek !== -1 && dObj.getDay() === reposDayOfWeek) {
+                    safeRestore = 'R';
+                 }
+                 a.status = safeRestore;
+                 
+                 // Also ensure this makes it to updates so the DB matches the safety net
+                 const [pY, pM] = a.date.split('-');
+                 const period = `${pY}-${pM}`;
+                 if (!updates.some(u => u.date === a.date && u.shift_code === a.shift_code)) {
+                   updates.push({ agent_id: leave.agent_id, date: a.date, shift_code: a.shift_code, status: a.status, period: period });
+                 }
+              }
+            });
+            
             return { ...ag, attendance: att };
           }
           return ag;
@@ -1077,7 +1455,7 @@ export function useLeaveManagement({
       setShowMaladieModal, setMaladieAgentId, setMaladieAgentName, setMaladieStartDate, setMaladieEndDate, setMaladieNavOffset, setMaladieManualDuration, setEditingMaladieLeaveId, handleMaladieSubmit
     },
     absenceState: {
-      showAbsenceModal, absenceAgentId, absenceAgentName, absenceStartDate, absenceEndDate, absenceNavOffset, absenceManualDuration, editingAbsenceLeaveId
+      showAbsenceModal, absenceAgentId, absenceAgentName, absenceStartDate, absenceEndDate, absenceNavOffset, absenceManualDuration, editingAbsenceLeaveId, isSubmittingLeave
     },
     absenceActions: {
       setShowAbsenceModal, setAbsenceAgentId, setAbsenceAgentName, setAbsenceStartDate, setAbsenceEndDate, setAbsenceNavOffset, setAbsenceManualDuration, setEditingAbsenceLeaveId, handleAbsenceSubmit

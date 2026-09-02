@@ -9,6 +9,7 @@ import PaymentAuditModal from './modals/PaymentAuditModal';
 import ReclamationModal from './modals/ReclamationModal';
 import PrintReclamationsView from './PrintReclamationsView';
 import PrintFicheModal from './modals/PrintFicheModal';
+import DeleteLoanModal from './modals/DeleteLoanModal';
 import MasseSalariale from './MasseSalariale';
 import ExcelJS from 'exceljs';
 
@@ -208,6 +209,7 @@ export default function Salaries({ setView }) {
   });
   const [payrollVariables, setPayrollVariables] = useState({});
   const [loans, setLoans] = useState([]);
+  const [loanToDelete, setLoanToDelete] = useState(null);
   const [leaves, setLeaves] = useState([]);
   const [sanctions, setSanctions] = useState([]);
   const [reclamations, setReclamations] = useState([]);
@@ -219,7 +221,7 @@ export default function Salaries({ setView }) {
   const [adminTitleInput, setAdminTitleInput] = useState(localStorage.getItem('pdfAdminTitle') || 'Administrateur');
   const [adminNameInput, setAdminNameInput] = useState(localStorage.getItem('pdfAdminName') || 'KOFFI Konan Jean Yves');
   
-  const [newLoan, setNewLoan] = useState({ agent_name: '', amount: '', motif: '', modality: 'mensualite', monthly_deduction: '', start_period: period, date_granted: new Date().toISOString().slice(0, 10) });
+  const [newLoan, setNewLoan] = useState({ agent_name: '', amount: '', motif: '', modality: 'mensualite', monthly_deduction: '', start_period: period, date_granted: new Date().toISOString().slice(0, 10), already_paid: '' });
   const [showLoanSuggestions, setShowLoanSuggestions] = useState(false);
   const [newLeave, setNewLeave] = useState({ agent_id: '', start_date: '', end_date: '', type: 'conge_paye' });
   const [newSanction, setNewSanction] = useState({ agent_id: '', motif: '', days: 1, date_sanction: new Date().toISOString().slice(0, 10) });
@@ -834,25 +836,29 @@ export default function Salaries({ setView }) {
       motif: newLoan.motif || 'Prêt personnel',
       date_granted: newLoan.date_granted || new Date().toISOString().slice(0, 10),
       monthly_deduction: newLoan.modality === 'mensualite' ? parseInt(newLoan.monthly_deduction || 0) : parseInt(newLoan.amount),
-      start_period: newLoan.start_period
+      start_period: newLoan.start_period,
+      already_paid: parseInt(newLoan.already_paid || 0),
     };
     
     try {
       const res = await apiCall('add_payroll_loan', payload);
       if (res.success) {
-        alert('Prêt ajouté avec succès !');
-        setNewLoan({ agent_name: '', amount: '', motif: '', modality: 'mensualite', monthly_deduction: '', start_period: period, date_granted: new Date().toISOString().slice(0, 10) });
-        loadData(); // Recharger les prêts
-      } else { alert(res.message || 'Erreur'); }
+        showToast('Prêt ajouté avec succès !', 'success');
+        setNewLoan({ agent_name: '', amount: '', motif: '', modality: 'mensualite', monthly_deduction: '', start_period: period, date_granted: new Date().toISOString().slice(0, 10), already_paid: '' });
+        // Recharger uniquement les prêts en arrière-plan au lieu de recharger toute la page
+        apiCall('get_payroll_loans', { period }, 'GET').then(loansRes => {
+          if (loansRes.success && Array.isArray(loansRes.loans)) setLoans(loansRes.loans);
+        });
+      } else { showToast(res.message || 'Erreur', 'error'); }
     } catch (e) { console.error(e); }
   };
 
   const handleDeleteLoan = async (id) => {
-    if (!confirm('Supprimer ce prêt ? L\'historique de ses remboursements sera perdu.')) return;
     try {
       const res = await apiCall('delete_payroll_loan', { loan_id: id });
       if (res.success) {
         setLoans(prev => prev.filter(l => l.id !== id));
+        setLoanToDelete(null);
       }
     } catch (e) { console.error(e); }
   };
@@ -906,6 +912,22 @@ export default function Salaries({ setView }) {
     } catch (e) { 
       console.error(e); 
       showToast("Erreur de connexion au serveur", 'error');
+    }
+  };
+
+  const handleDeleteReclamation = async (id) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette réclamation ?')) return;
+    try {
+      const res = await apiCall('delete_reclamation', { id }, 'POST');
+      if (res.success) {
+        showToast('Réclamation supprimée avec succès', 'success');
+        loadData();
+      } else {
+        showToast(res.message || 'Erreur lors de la suppression', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Erreur de connexion', 'error');
     }
   };
 
@@ -1030,11 +1052,8 @@ export default function Salaries({ setView }) {
     const profile = agent.profile_data || {};
     const salaireBase = Number(agent.base) || 0;
     const salaireBaseFull = Number(agent.base_full) || Number(agent.base) || 75000;
-    const specialBase = (profile.special_service) 
-      ? (profile.special_service_base || 12) 
-      : 30;
-    // Base journalière (utilisée seulement pour les HS et les sanctions discipline)
-    const baseJournaliere = salaireBaseFull / specialBase;
+    // Règle absolue: le taux journalier est toujours calculé sur base 30
+    const baseJournaliere = salaireBaseFull / 30;
 
     // Congés payés (calculé précisément par le backend en tenant compte du diviseur 30)
     const congePayes = agent.cp_count || 0;
@@ -1096,9 +1115,9 @@ export default function Salaries({ setView }) {
 
     const totalRetenuesFiscales = cnpsSalarial + impotsTaxes + cmuEmploye;
     const avances = isActive('enable_avances') ? (vars.avance || 0) : 0;
-    const remboursementsPrets = isActive('enable_avances') ? getLoanDeduction(agent.id) : 0;
+    const remboursementsPrets = agent.remboursement_pret || 0;
     const montantPonctions = reclamations
-      .filter(r => r.mois_concerne === period && (r.agent_matricule ? r.agent_matricule === agent.id : r.agent_nom === agent.name) && ['Clôturé', 'Transmis'].includes(r.statut) && (r.type_erreur || r.motif || r.reclamation_categorie || '').toLowerCase() === 'ponction')
+      .filter(r => r.mois_concerne === period && (r.agent_matricule ? r.agent_matricule === agent.id : r.agent_nom === agent.name) && ['Clôturé', 'ClÃ´turÃ©', 'Validé', 'Transmis'].includes(r.statut) && (r.type_erreur || r.motif || r.reclamation_categorie || '').toLowerCase() === 'ponction')
       .reduce((acc, r) => acc + (parseFloat(r.montant || r.montant_estime) || 0), 0);
 
     const totalDeductionsNettes = avances + remboursementsPrets; // On ne mélange plus avec les ponctions pour l'affichage séparé
@@ -1106,7 +1125,7 @@ export default function Salaries({ setView }) {
     // Calcul des réclamations (ajouts nets au salaire final)
     const motifsRecl = ["justificatif d'absence", "annulation de permission", "mise à pied", "erreur de paie", "erreur de pointage", "omission"];
     const montantReclamations = reclamations
-      .filter(r => r.mois_concerne === period && (r.agent_matricule ? r.agent_matricule === agent.id : r.agent_nom === agent.name) && r.statut === 'Clôturé' && motifsRecl.includes((r.type_erreur || r.motif || r.reclamation_categorie || '').toLowerCase()))
+      .filter(r => r.mois_concerne === period && (r.agent_matricule ? r.agent_matricule === agent.id : r.agent_nom === agent.name) && ['Clôturé', 'ClÃ´turÃ©', 'Validé'].includes(r.statut) && motifsRecl.includes((r.type_erreur || r.motif || r.reclamation_categorie || '').toLowerCase()))
       .reduce((acc, r) => acc + (parseFloat(r.montant || r.montant_estime) || 0), 0);
 
     const netAPayer = Math.max(0, salaireBrut - totalRetenuesFiscales - totalDeductionsNettes - montantPonctions) + montantReclamations;
@@ -1295,6 +1314,20 @@ export default function Salaries({ setView }) {
     return { totalNet, totalBrut, totalCout, totalCNPS, totalImpots, count: agentsCount, adminCount, trueTotal: filteredSalaries.length };
   }, [filteredSalaries, calculatePayslip]);
 
+  const globalTotalNet = useMemo(() => {
+    let total = 0;
+    salaries.forEach(s => {
+      total += calculatePayslip(s).netAPayer;
+    });
+    return total;
+  }, [salaries, calculatePayslip]);
+
+  useEffect(() => {
+    if (period && globalTotalNet > 0 && !salariesLoading) {
+      apiCall('save_period_total', { period, totalNet: globalTotalNet }, 'POST').catch(e => console.error('Erreur save_period_total', e));
+    }
+  }, [period, globalTotalNet, salariesLoading]);
+
   const animatedNet = useCountUp(dashAgg.totalNet, 2500);
   const animatedCount = useCountUp(dashAgg.count, 2000);
   const animatedAdminCount = useCountUp(dashAgg.adminCount, 2000);
@@ -1450,7 +1483,7 @@ export default function Salaries({ setView }) {
                 <div className="glass-panel">
                   <h4 style={{ marginBottom: '16px', color: 'var(--b)' }}>Évolution de la Masse Salariale (6 mois)</h4>
                   {dashboardHistory.length > 0 ? (
-                    <MiniBar data={dashboardHistory.map(d => ({ value: d.total, label: d.label, color: d.period === period ? '#38bdf8' : 'rgba(56,189,248,0.4)' }))} height={180} />
+                    <MiniBar data={dashboardHistory.map(d => ({ value: d.period === period ? globalTotalNet : d.total, label: d.label, color: d.period === period ? '#38bdf8' : 'rgba(56,189,248,0.4)' }))} height={180} />
                   ) : <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '40px' }}>Chargement...</p>}
                 </div>
                 <div className="glass-panel">
@@ -1545,8 +1578,9 @@ export default function Salaries({ setView }) {
                       <th style={{ textAlign: 'center' }}>Présence (Pointage)</th>
                       <th style={{ textAlign: 'right' }}>Montant Prêt</th>
                       <th style={{ textAlign: 'center' }}>Modalité</th>
+                      <th style={{ textAlign: 'center' }}>Mois de début</th>
                       <th style={{ width: '200px' }}>Progression du Remboursement</th>
-                      <th>Actions</th>
+                      <th style={{ width: '80px', textAlign: 'center' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1554,17 +1588,17 @@ export default function Salaries({ setView }) {
                       let filteredLoans = loans.filter(l => {
                         const total = parseInt(l.total_amount);
                         const monthly = parseInt(l.monthly_deduction);
+                        const alreadyPaid = parseInt(l.already_paid || 0);
                         const totalMonths = Math.ceil(total / (monthly > 0 ? monthly : total));
                         const startTs = new Date(l.start_period + '-01').getTime();
                         const currTs = new Date(period + '-01').getTime();
                         let isComplete = false;
                         if (currTs >= startTs) {
                           const mp = getMonthsDiff(l.start_period, period);
-                          if (mp >= totalMonths) isComplete = true;
-                          else {
-                            const deductedSoFar = Math.min(total, (mp + 1) * (monthly > 0 ? monthly : total));
-                            if (deductedSoFar >= total) isComplete = true;
-                          }
+                          const deductedBeforeCurrentMonth = alreadyPaid + (mp * (monthly > 0 ? monthly : total));
+                          if (deductedBeforeCurrentMonth >= total) isComplete = true;
+                        } else {
+                          if (alreadyPaid >= total) isComplete = true;
                         }
                         
                         if (loanTab === 'actuel' && isComplete) return false;
@@ -1585,7 +1619,8 @@ export default function Salaries({ setView }) {
                         const total = parseInt(l.total_amount);
                         const monthly = parseInt(l.monthly_deduction);
                       
-                      let deductedSoFar = 0;
+                      const alreadyPaid = parseInt(l.already_paid || 0);
+                      let deductedSoFar = alreadyPaid;
                       let paidMonthsCount = 0;
                       const totalMonths = Math.ceil(total / (monthly > 0 ? monthly : total));
                       const startTs = new Date(l.start_period + '-01').getTime();
@@ -1596,11 +1631,12 @@ export default function Salaries({ setView }) {
                         if (mp >= totalMonths) {
                           deductedSoFar = total;
                         } else {
-                          deductedSoFar = Math.min(total, (mp + 1) * (monthly > 0 ? monthly : total));
+                          deductedSoFar = Math.min(total, alreadyPaid + (mp + 1) * (monthly > 0 ? monthly : total));
                         }
                       }
                       
                       const progressPct = Math.min(100, Math.round((deductedSoFar / total) * 100));
+                      const alreadyPaidPct = Math.min(100, Math.round((alreadyPaid / total) * 100));
                       const isComplete = progressPct >= 100;
                       const colors = ['#ef4444', '#eab308', '#3b82f6', '#a855f7', '#f97316', '#06b6d4', '#10b981', '#ec4899', '#8b5cf6', '#14b8a6', '#f43f5e', '#84cc16'];
                       const getMonthColor = (i) => i < colors.length ? colors[i] : `hsl(${(i * 137.508) % 360}, 70%, 50%)`;
@@ -1613,13 +1649,13 @@ export default function Salaries({ setView }) {
                           </td>
                           <td>
                             <div>{l.motif}</div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Dès {l.start_period}</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Dès {fmtPeriod(l.start_period)}</div>
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             {l.has_exited ? (
                               <span style={{ display: 'inline-block', padding: '4px 10px', background: 'rgba(249,115,22,0.1)', color: '#f97316', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>⚠️ A QUITTÉ (Déduire du STC)</span>
                             ) : l.is_pointed ? (
-                              <span style={{ display: 'inline-block', padding: '4px 10px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>✅ Pointé au {period}</span>
+                              <span style={{ display: 'inline-block', padding: '4px 10px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>✅ Pointé en {fmtPeriod(period)}</span>
                             ) : (
                               <span style={{ display: 'inline-block', padding: '4px 10px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>❌ Absent du pointage</span>
                             )}
@@ -1628,14 +1664,36 @@ export default function Salaries({ setView }) {
                           <td style={{ textAlign: 'center', color: 'var(--muted)' }}>
                             {monthly > 0 ? `${fmt(monthly)} / mois` : '1 seule fois'}
                           </td>
+                          <td style={{ textAlign: 'center', fontWeight: 'bold' }}>
+                            {`01 ${fmtPeriod(l.start_period)}`}
+                          </td>
                           <td>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '4px' }}>
-                              <span style={{ color: isComplete ? '#22c55e' : 'var(--muted)' }}>{fmt(deductedSoFar)}</span>
-                              <span style={{ color: 'var(--muted)' }}>{fmt(total)}</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', marginBottom: '4px' }}>
+                              <span style={{ color: isComplete ? '#22c55e' : 'var(--muted)', fontWeight: '600' }}>{fmt(deductedSoFar)}</span>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                padding: '1px 9px', borderRadius: '20px',
+                                fontWeight: '800', fontSize: '0.7rem', letterSpacing: '0.04em',
+                                background: isComplete
+                                  ? 'linear-gradient(90deg,rgba(34,197,94,0.2),rgba(16,185,129,0.2))'
+                                  : progressPct >= 75
+                                    ? 'linear-gradient(90deg,rgba(234,179,8,0.2),rgba(249,115,22,0.2))'
+                                    : 'rgba(255,255,255,0.07)',
+                                color: isComplete ? '#22c55e' : progressPct >= 75 ? '#eab308' : '#94a3b8',
+                                border: `1px solid ${isComplete ? 'rgba(34,197,94,0.35)' : progressPct >= 75 ? 'rgba(234,179,8,0.35)' : 'rgba(255,255,255,0.1)'}`,
+                                boxShadow: isComplete ? '0 0 6px rgba(34,197,94,0.2)' : 'none',
+                                transition: 'all 0.3s',
+                              }}>
+                                {isComplete ? '✓ 100%' : `${progressPct}%`}
+                              </span>
+                              <span style={{ color: 'var(--muted)', fontWeight: '600' }}>{fmt(total)}</span>
                             </div>
                             <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden', display: 'flex' }}>
+                              {alreadyPaid > 0 && (
+                                <div title={`Déjà remboursé avant système : ${fmt(alreadyPaid)} XOF`} style={{ width: `${alreadyPaidPct}%`, height: '100%', background: 'linear-gradient(90deg, #fbbf24, #f59e0b)', flexShrink: 0, transition: 'width 0.3s' }}></div>
+                              )}
                               {Array.from({ length: paidMonthsCount }).map((_, i) => {
-                                const amountThisMonth = (i === totalMonths - 1) ? (total - i * (monthly > 0 ? monthly : total)) : (monthly > 0 ? monthly : total);
+                                const amountThisMonth = (i === totalMonths - 1) ? Math.max(0, total - alreadyPaid - i * (monthly > 0 ? monthly : total)) : (monthly > 0 ? monthly : total);
                                 const pct = (amountThisMonth / total) * 100;
                                 return (
                                   <div key={`month-bar-${i}`} style={{ width: `${pct}%`, height: '100%', background: getMonthColor(i), transition: 'width 0.3s' }}></div>
@@ -1643,8 +1701,8 @@ export default function Salaries({ setView }) {
                               })}
                             </div>
                           </td>
-                          <td>
-                            <button onClick={() => handleDeleteLoan(l.id)} style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }} title="Supprimer"><Trash2 size={14} /></button>
+                          <td style={{ textAlign: 'center' }}>
+                            <button onClick={() => setLoanToDelete(l)} style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }} title="Supprimer"><Trash2 size={14} /></button>
                           </td>
                         </tr>
                       );
@@ -1657,12 +1715,12 @@ export default function Salaries({ setView }) {
 
           {/* ═══════════ RÉCLAMATIONS VALIDÉES ═══════════ */}
           {activeTab === 'reclamations' && (() => {
-            const allValidees = reclamations.filter(r => r.statut === 'Clôturé');
+            const allValidees = reclamations.filter(r => r.statut === 'Clôturé' || r.statut === 'ClÃ´turÃ©' || r.statut === 'Validé');
             const latestMonth = period;
             
             return showPrintView ? (
               <PrintReclamationsView 
-                reclamations={recTab === 'archives' && archivedRecMonthView ? reclamations.filter(r => r.statut === 'Clôturé' && r.mois_concerne === archivedRecMonthView) : allValidees.filter(r => r.mois_concerne === latestMonth)} 
+                reclamations={recTab === 'archives' && archivedRecMonthView ? reclamations.filter(r => (r.statut === 'Clôturé' || r.statut === 'ClÃ´turÃ©' || r.statut === 'Validé') && r.mois_concerne === archivedRecMonthView) : allValidees.filter(r => r.mois_concerne === latestMonth)} 
                 period={recTab === 'archives' && archivedRecMonthView ? archivedRecMonthView : latestMonth} 
                 onClose={() => { setShowPrintView(false); if (recTab === 'archives') setArchivedRecMonthView(null); }} 
                 isArchive={recTab === 'archives'}
@@ -1915,6 +1973,15 @@ export default function Salaries({ setView }) {
                                 >
                                   <Edit3 size={16} />
                                 </button>
+                                <button
+                                  onClick={() => handleDeleteReclamation(r.id)}
+                                  style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px', marginLeft: '6px' }}
+                                  title="Supprimer cette réclamation"
+                                  onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--muted)'}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </td>
                             </tr>
                           );
@@ -2069,7 +2136,7 @@ export default function Salaries({ setView }) {
                                   {PaymentIcon}
                                 </td>
                                 <td style={{ textAlign: 'left', padding: '6px 16px', color: 'var(--muted)', lineHeight: '1.2' }}>
-                                  <div style={{ fontWeight: '600', color: '#e2e8f0' }}>{s.archive_site || s.site}</div>
+                                  <div style={{ fontWeight: '600', color: '#e2e8f0' }}>{((s.archive_site && (s.archive_site.includes('_') || /^\d+$/.test(s.archive_site))) ? null : s.archive_site) || s.site}</div>
                                   <div style={{ opacity: 0.8, fontSize: '0.85rem' }}>{s.archive_zone || s.subsite || (s.site_location === 'interieur' ? 'Intérieur' : 'Abidjan')}</div>
                                 </td>
                                 <td style={{ textAlign: 'left', padding: '6px 16px', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{funcLabel(s.function)}</td>
@@ -2157,7 +2224,7 @@ export default function Salaries({ setView }) {
                         {PaymentIcon}
                       </td>
                       <td style={{ textAlign: 'left', padding: '6px 16px', color: 'var(--muted)', lineHeight: '1.2' }}>
-                        <div style={{ fontWeight: '600', color: '#e2e8f0' }}>{s.archive_site || s.site}</div>
+                        <div style={{ fontWeight: '600', color: '#e2e8f0' }}>{((s.archive_site && (s.archive_site.includes('_') || /^\d+$/.test(s.archive_site))) ? null : s.archive_site) || s.site}</div>
                         <div style={{ opacity: 0.8, fontSize: '0.85rem' }}>{s.archive_zone || s.subsite || (s.site_location === 'interieur' ? 'Intérieur' : 'Abidjan')}</div>
                       </td>
                       <td style={{ textAlign: 'left', padding: '6px 16px', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{funcLabel(s.function)}</td>
@@ -2674,7 +2741,7 @@ export default function Salaries({ setView }) {
                 ) : (
                   <MasseSalariale pdfAdminTitle={adminTitleInput} pdfAdminName={adminNameInput} salaries={filteredSalaries.map(s => {
                     const stripEmoji = (str) => (str || '').replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]|[\u{1F300}-\u{1F9FF}]|[\uFE0F\u20E3]/gu, '').trim();
-                    const rawSite = s.archive_site || s.site;
+                    const rawSite = ((s.archive_site && (s.archive_site.includes('_') || /^\d+$/.test(s.archive_site))) ? null : s.archive_site) || s.site;
                     const rawZone = s.archive_zone || s.subsite || (s.site_location === 'interieur' ? 'Intérieur' : 'Abidjan');
                     return {
                       ...s,
@@ -3104,6 +3171,40 @@ export default function Salaries({ setView }) {
               <div><label className="form-label">Mois de début</label>
                 <input type="month" className="form-input" value={newLoan.start_period} onChange={e => setNewLoan({ ...newLoan, start_period: e.target.value })} style={{ width: '100%' }} />
               </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: '10px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚡ Remboursement déjà effectué (optionnel)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1', minWidth: '160px' }}>
+                      <label className="form-label" style={{ color: '#fbbf24', marginBottom: '6px', display: 'block' }}>Montant déjà remboursé (XOF)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={newLoan.already_paid}
+                        onChange={e => setNewLoan({ ...newLoan, already_paid: e.target.value })}
+                        placeholder="Ex: 15000"
+                        style={{ width: '100%', borderColor: 'rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.05)' }}
+                      />
+                    </div>
+                    {newLoan.already_paid > 0 && newLoan.amount > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '20px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Restant :</span>
+                        <span style={{ fontWeight: '800', color: '#22c55e', fontSize: '0.95rem' }}>
+                          {Math.max(0, parseInt(newLoan.amount || 0) - parseInt(newLoan.already_paid || 0)).toLocaleString()} XOF
+                        </span>
+                        <span style={{ fontSize: '0.75rem', background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '20px', padding: '2px 8px', fontWeight: '700' }}>
+                          {Math.round((parseInt(newLoan.already_paid || 0) / parseInt(newLoan.amount || 1)) * 100)}% remboursé
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'rgba(251,191,36,0.7)', lineHeight: '1.4' }}>
+                    Indiquez ici le montant que l'agent a déjà remboursé avant l'enregistrement dans le système. La barre de progression en tiendra compte.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '32px' }}>
@@ -3166,6 +3267,13 @@ export default function Salaries({ setView }) {
           div[style*="background: white"]{position:absolute;left:0;top:0;width:100%;box-shadow:none!important}
         }
       `}</style>
+      {loanToDelete && (
+        <DeleteLoanModal
+          loan={loanToDelete}
+          onClose={() => setLoanToDelete(null)}
+          onConfirm={() => handleDeleteLoan(loanToDelete.id)}
+        />
+      )}
     </div>
   );
 }

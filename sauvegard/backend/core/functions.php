@@ -1,5 +1,5 @@
 <?php
-// Fonctions d'aide pour les réclamations (SQLite — migré depuis pointage_db.json)
+// Fonctions d'aide pour les rÃ©clamations (SQLite â€” migrÃ© depuis pointage_db.json)
 if (!function_exists('getReclamations')) {
     function getReclamations($company_id = null) {
         $db = getDb();
@@ -176,7 +176,7 @@ if (in_array($origin, $allowed_origins)) {
     } catch (Exception $e) {}
     // --- END MIGRATION ---
 }
-// Répondre immédiatement aux requêtes preflight OPTIONS
+// RÃ©pondre immÃ©diatement aux requÃªtes preflight OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
@@ -237,14 +237,14 @@ function hasPermission($permission)
 function requirePermission($permission)
 {
     if (!hasPermission($permission)) {
-        echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+        echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
         exit;
     }
 }
 
 /**
- * Vérifie si l'utilisateur a accès en ÉCRITURE à un module.
- * Les admins ont toujours accès. Les autres doivent avoir la permission = 'write'.
+ * VÃ©rifie si l'utilisateur a accÃ¨s en Ã‰CRITURE Ã  un module.
+ * Les admins ont toujours accÃ¨s. Les autres doivent avoir la permission = 'write'.
  */
 function hasWritePermission($permission)
 {
@@ -259,12 +259,12 @@ function hasWritePermission($permission)
 }
 
 /**
- * Exige un accès en écriture sur un module (admin ou permission write).
+ * Exige un accÃ¨s en Ã©criture sur un module (admin ou permission write).
  */
 function requireWritePermission($permission)
 {
     if (!hasWritePermission($permission)) {
-        echo json_encode(['success' => false, 'message' => 'Accès refusé']);
+        echo json_encode(['success' => false, 'message' => 'AccÃ¨s refusÃ©']);
         exit;
     }
 }
@@ -483,7 +483,7 @@ function resolveCurrentServiceKey($db)
     $user = $db['users'][$email] ?? [];
     $role = $user['role'] ?? '';
 
-    // Super admin and admin (Propriétaire) can switch between services
+    // Super admin and admin (PropriÃ©taire) can switch between services
     if (($role === 'super_admin' || $role === 'admin') && !empty($_SESSION['switched_service_id'])) {
         $switched = $_SESSION['switched_service_id'];
         // If admin, verify the switched service belongs to their company
@@ -529,8 +529,8 @@ function ensureServiceDataBucket(&$db, $serviceKey)
         'published_periods' => [],
         'functions' => [
             ['id' => 'AS', 'name' => 'Agent Simple'],
-            ['id' => 'GA', 'name' => 'Garde Armé'],
-            ['id' => 'MC', 'name' => 'Maître-Chien'],
+            ['id' => 'GA', 'name' => 'Garde ArmÃ©'],
+            ['id' => 'MC', 'name' => 'MaÃ®tre-Chien'],
             ['id' => 'CP', 'name' => 'Chef de Poste'],
             ['id' => 'Costume', 'name' => 'Agent en Costume']
         ],
@@ -564,25 +564,8 @@ function hydrateScopedData(&$db, $serviceKey)
 
     $db['sites'] = $scope['sites'];
 
-    // Inject Vivier des Extras if it doesn't exist
-    $has_extras = false;
-    foreach ($db['sites'] as $s) {
-        if ($s['id'] === 'site_extras') {
-            $has_extras = true;
-            break;
-        }
-    }
-    if (!$has_extras) {
-        $db['sites'][] = [
-            'id' => 'site_extras',
-            'name' => '🌟 EXTRA BUREAU',
-            'subsites' => [
-                ['id' => 'site_extras_1', 'name' => 'Agents Disponibles', 'agents' => []]
-            ]
-        ];
-    }
 
-    // Inject Vivier des relèves if it doesn't exist
+    // Inject Vivier des relÃ¨ves if it doesn't exist
     $has_releves = false;
     foreach ($db['sites'] as $s) {
         if ($s['id'] === 'site_releves') {
@@ -600,39 +583,6 @@ function hydrateScopedData(&$db, $serviceKey)
         ];
     }
 
-    // Inject EXTRA SUR SITE if it doesn't exist
-    $has_extras_sur_site = false;
-    foreach ($db['sites'] as $s) {
-        if ($s['id'] === 'site_extras_sur_site') {
-            $has_extras_sur_site = true;
-            break;
-        }
-    }
-    if (!$has_extras_sur_site) {
-        $db['sites'][] = [
-            'id' => 'site_extras_sur_site',
-            'name' => '🌟 EXTRA SUR SITE',
-            'subsites' => [] // Subsites will be managed dynamically by the user
-        ];
-    }
-
-    // Inject Administration if it doesn't exist
-    $has_admin = false;
-    foreach ($db['sites'] as $s) {
-        if ($s['id'] === 'site_administration') {
-            $has_admin = true;
-            break;
-        }
-    }
-    if (!$has_admin) {
-        $db['sites'][] = [
-            'id' => 'site_administration',
-            'name' => '🏢 Administration',
-            'subsites' => [
-                ['id' => 'site_admin_1', 'name' => 'Personnel Administratif', 'agents' => []]
-            ]
-        ];
-    }
 
     $db['attendance'] = $scope['attendance'];
     $db['messages'] = $scope['messages'];
@@ -694,28 +644,14 @@ function buildSiteDataSnapshot($sqlite, $serviceKey, $period, $siteOrder = [])
     $sites = $stmt->fetchAll();
 
     // Inject virtual sites
-    $has_extras = false;
     $has_releves = false;
-    $has_admin = false;
     foreach ($sites as $s) {
-        if ($s['id'] === 'site_extras')
-            $has_extras = true;
         if ($s['id'] === 'site_releves')
             $has_releves = true;
-        if ($s['id'] === 'site_administration')
-            $has_admin = true;
-    }
-    if (!$has_extras) {
-        $sites[] = ['id' => 'site_extras', 'name' => '🌟 EXTRA BUREAU'];
     }
     if (!$has_releves) {
         $sites[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves'];
     }
-    if (!array_filter($sites, fn($s) => $s['id'] === 'site_extras_sur_site')) {
-        $sites[] = ['id' => 'site_extras_sur_site', 'name' => '🌟 EXTRA SUR SITE'];
-    }
-    if (!$has_admin)
-        $sites[] = ['id' => 'site_administration', 'name' => '🏢 Administration'];
 
     if (!empty($siteOrder)) {
         usort($sites, function($a, $b) use ($siteOrder) {
@@ -728,6 +664,24 @@ function buildSiteDataSnapshot($sqlite, $serviceKey, $period, $siteOrder = [])
         });
     }
 
+    // OPTIMISATION N+1: RÃ©cupÃ©rer toutes les prÃ©sences de la pÃ©riode en une seule requÃªte
+    $stmtAllAtt = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE period = ?");
+    $stmtAllAtt->execute([$period]);
+    $allAttRows = $stmtAllAtt->fetchAll(PDO::FETCH_ASSOC);
+    $attendanceByAgent = [];
+    foreach ($allAttRows as $row) {
+        $attendanceByAgent[$row['agent_id']][] = $row;
+    }
+
+    // OPTIMISATION N+1: CrÃ©er une map subsite_id => orig_site
+    $stmtAllOrig = $sqlite->prepare("SELECT sub.id as sub_id, s.name, s.id as site_id FROM sites s JOIN subsites sub ON sub.site_id = s.id WHERE s.service_id = ?");
+    $stmtAllOrig->execute([$serviceKey]);
+    $allOrigRows = $stmtAllOrig->fetchAll(PDO::FETCH_ASSOC);
+    $subsiteToOrigSite = [];
+    foreach ($allOrigRows as $row) {
+        $subsiteToOrigSite[$row['sub_id']] = ['name' => $row['name'], 'id' => $row['site_id']];
+    }
+
     $snapshot = [];
     foreach ($sites as $site) {
         $site_id = $site['id'];
@@ -738,17 +692,13 @@ function buildSiteDataSnapshot($sqlite, $serviceKey, $period, $siteOrder = [])
         $subsites = $stmtSub->fetchAll();
 
         // Inject default subsites for virtual sites if they are not in DB
-        if (in_array($site_id, ['site_extras', 'site_releves', 'site_administration']) && empty($subsites)) {
-            if ($site_id === 'site_extras')
-                $subsites = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
+        if (in_array($site_id, ['site_releves']) && empty($subsites)) {
             if ($site_id === 'site_releves')
                 $subsites = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-            if ($site_id === 'site_administration')
-                $subsites = [['id' => 'site_admin_1', 'name' => 'Bureau']];
         }
 
         foreach ($subsites as &$sub) {
-            $stmtAg = $sqlite->prepare("SELECT * FROM agents WHERE subsite_id = ? AND service_id = ? AND (archived_period IS NULL OR archived_period >= ?) ORDER BY name");
+            $stmtAg = $sqlite->prepare("SELECT * FROM agents WHERE subsite_id = ? AND service_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?) ORDER BY name");
             $stmtAg->execute([$sub['id'], $serviceKey, $period]);
             $agents = $stmtAg->fetchAll();
 
@@ -759,9 +709,8 @@ function buildSiteDataSnapshot($sqlite, $serviceKey, $period, $siteOrder = [])
                 } else {
                     $agent['shift_history'] = [];
                 }
-                $stmtAtt = $sqlite->prepare("SELECT date, shift_code, status FROM attendance WHERE agent_id = ? AND period = ?");
-                $stmtAtt->execute([$agent['id'], $period]);
-                $agent['attendance'] = $stmtAtt->fetchAll() ?: [];
+                $agent['profile_data'] = json_decode($agent['profile_data'] ?? '{}', true);
+                $agent['attendance'] = $attendanceByAgent[$agent['id']] ?? [];
             }
             $sub['agents'] = $agents;
         }
@@ -787,14 +736,9 @@ function buildSiteDataSnapshot($sqlite, $serviceKey, $period, $siteOrder = [])
         $mutated_rows = $stmt_mut->fetchAll();
 
         foreach ($mutated_rows as $agent) {
-            $stmt_orig = $sqlite->prepare("SELECT s.name, s.id FROM sites s JOIN subsites sub ON sub.site_id = s.id WHERE sub.id = ?");
-            $stmt_orig->execute([$agent['subsite_id']]);
-            $orig_site = $stmt_orig->fetch();
+            $orig_site = $subsiteToOrigSite[$agent['subsite_id']] ?? null;
 
             if ($orig_site && $orig_site['id'] !== $site_id) {
-                $stmtAtt = $sqlite->prepare("SELECT date, shift_code, status FROM attendance WHERE agent_id = ? AND period = ?");
-                $stmtAtt->execute([$agent['id'], $period]);
-
                 $mutated_agent = $agent;
                 $mutated_agent['has_sp'] = (int) $mutated_agent['has_sp'];
                 if (isset($mutated_agent['shift_history']) && is_string($mutated_agent['shift_history'])) {
@@ -802,7 +746,8 @@ function buildSiteDataSnapshot($sqlite, $serviceKey, $period, $siteOrder = [])
                 } else {
                     $mutated_agent['shift_history'] = [];
                 }
-                $mutated_agent['attendance'] = $stmtAtt->fetchAll() ?: [];
+                $mutated_agent['profile_data'] = json_decode($mutated_agent['profile_data'] ?? '{}', true);
+                $mutated_agent['attendance'] = $attendanceByAgent[$agent['id']] ?? [];
                 $mutated_agent['is_mutated'] = true;
                 $mutated_agent['original_site'] = $orig_site['name'];
 
@@ -836,7 +781,7 @@ function buildSiteDataSnapshot($sqlite, $serviceKey, $period, $siteOrder = [])
                 } else {
                     $subsites[] = [
                         'id' => 'default_' . $site_id,
-                        'name' => 'Zone par défaut',
+                        'name' => 'Zone par dÃ©faut',
                         'agents' => [$ma]
                     ];
                 }
@@ -869,7 +814,7 @@ function buildSiteDataSnapshot($sqlite, $serviceKey, $period, $siteOrder = [])
                     } else {
                         $subsites[] = [
                             'id' => 'default_' . $site_id,
-                            'name' => 'Zone par défaut',
+                            'name' => 'Zone par dÃ©faut',
                             'agents' => [$ma]
                         ];
                     }
@@ -918,7 +863,7 @@ function getResolveScope($module = 'traitement_pointage')
 
 
 $publicActions = ['login', 'logout', 'set_lang', 'register', 'cinetpay_notify', 'get_payment_providers', 'get_user_info', 'register_agent_portal', 'login_agent_portal', 'get_leave_types', 'submit_leave_request', 'get_my_leave_balances', 'get_my_leave_requests', 'request_password_reset', 'debug_users', 'debug_get_sites', 'test_dates', 'update_agent_schedules', 'debug_dddd'];
-if (!in_array($action, $publicActions, true) && !isset($_SESSION['user_id']) && $action !== 'SECRET_FIX') {
+if (!in_array($action, $publicActions, true) && !isset($_SESSION['user_id'])) {
     echo json_encode(['success' => false, 'message' => 'Session expirée']);
     exit;
 }
@@ -926,7 +871,7 @@ if (!in_array($action, $publicActions, true) && !isset($_SESSION['user_id']) && 
 $subscriptionExemptActions = ['login', 'logout', 'set_lang', 'register', 'cinetpay_notify', 'get_subscription_status', 'activate_subscription', 'create_checkout_session', 'confirm_stripe_payment', 'confirm_cinetpay_payment', 'get_payment_providers', 'get_user_info'];
 if (!in_array($action, $subscriptionExemptActions, true) && isset($_SESSION['user_id'])) {
     $subscriptionUser = $_SESSION['email'] ?? $_SESSION['user_id'];
-    // MOCK pour les calculs backend détachés (ex. depuis facturation)
+    // MOCK pour les calculs backend dÃ©tachÃ©s (ex. depuis facturation)
     if (!function_exists('getUserSubscriptionState')) {
         function getUserSubscriptionState($user_id) { return ['access_allowed' => true]; }
     }
@@ -942,7 +887,7 @@ if (!in_array($action, $subscriptionExemptActions, true) && isset($_SESSION['use
     }
 }
 
-// Validation CSRF sur les requêtes mutantes
+// Validation CSRF sur les requÃªtes mutantes
 if ($action === 'debug_users') {
     $sqlite = getDb();
     
@@ -969,13 +914,13 @@ if ($action === 'debug_get_sites') {
     exit;
 }
 
-// Le token est fourni par get_user_info et stocké côté client
+// Le token est fourni par get_user_info et stockÃ© cÃ´tÃ© client
 $mutatingActions = ['add_site', 'add_special_site', 'update_site_icon', 'add_subsite', 'rename_site', 'rename_subsite', 'delete_subsite', 'add_agent', 'delete_agent', 'apply_mutation', 'update_attendance', 'bulk_update_attendance', 'mark_agent_sortant', 'delete_agent_sortant', 'mark_agent_entrant', 'delete_agent_entrant', 'mark_agent_debut', 'init_site_period', 'apply_batch_rotation', 'update_agent_info', 'clear_site_mutations', 'clear_agent_site_mutations', 'archive_all_sites', 'reset_year_attendance', 'delete_archive', 'update_agent_salary', 'update_salary_config', 'save_functions', 'publish_period', 'send_message', 'resolve_ticket', 'create_ticket', 'delete_message', 'pin_message', 'rate_ticket', 'assign_ticket', 'add_reclamation', 'update_reclamation_status', 'send_private_message', 'update_user_status', 'toggle_user_maintenance', 'upload_company_logo', 'set_first_visit_period', 'update_agent_admin_schedule'];
 if (in_array($action, $mutatingActions, true)) {
     $providedToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $data['csrf_token'] ?? '';
     $sessionToken = $_SESSION['csrf_token'] ?? '';
-    // On rejette uniquement si les deux tokens sont non-vides ET différents
-    // (évite les faux positifs lors de la première connexion React)
+    // On rejette uniquement si les deux tokens sont non-vides ET diffÃ©rents
+    // (Ã©vite les faux positifs lors de la premiÃ¨re connexion React)
     if ($sessionToken !== '' && $providedToken !== '' && !hash_equals($sessionToken, $providedToken)) {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'Erreur CSRF: Token invalide']);
@@ -986,7 +931,7 @@ if (in_array($action, $mutatingActions, true)) {
 $permissionByAction = [
     'get_dashboard_init' => 'dashboard',
     'get_site_data' => 'dashboard',
-    // add_subsite, rename_subsite, delete_subsite : permission gérée en interne (dashboard OU salaries/compta)
+    // add_subsite, rename_subsite, delete_subsite : permission gÃ©rÃ©e en interne (dashboard OU salaries/compta)
     'add_agent' => 'dashboard',
     'delete_agent' => 'dashboard',
     'apply_mutation' => 'dashboard',
@@ -1167,7 +1112,7 @@ function applyShiftDefaultsForPeriod(&$db, $agent_id, $period, $shift_type, $is_
             $db['attendance'][$period][$agent_id]['J'][$ds] = '1';
             $db['attendance'][$period][$agent_id]['N'][$ds] = '1';
         } else {
-            // Jour de repos pour agent rotatif → enregistrer 'R'
+            // Jour de repos pour agent rotatif â†’ enregistrer 'R'
             $db['attendance'][$period][$agent_id]['J'][$ds] = 'R';
             $db['attendance'][$period][$agent_id]['N'][$ds] = 'R';
         }
@@ -1216,9 +1161,9 @@ function updateUserActivity(&$db, $email)
 }
 
 /**
- * Vérifie si une période est verrouillée (publiée) pour une entreprise.
- * Une période publiée est immuable : ni le pointage ni les mutations ne peuvent
- * être modifiés. Les données de paie sont servies depuis le snapshot gelé.
+ * VÃ©rifie si une pÃ©riode est verrouillÃ©e (publiÃ©e) pour une entreprise.
+ * Une pÃ©riode publiÃ©e est immuable : ni le pointage ni les mutations ne peuvent
+ * Ãªtre modifiÃ©s. Les donnÃ©es de paie sont servies depuis le snapshot gelÃ©.
  */
 function isPayrollPeriodLocked($sqlite, $companyKey, $period) {
     $published = getServiceDataSql($companyKey, 'published_periods', []);
@@ -1226,20 +1171,21 @@ function isPayrollPeriodLocked($sqlite, $companyKey, $period) {
 }
 
 /**
- * Vérifie si une période est complètement clôturée/archivée.
+ * VÃ©rifie si une pÃ©riode est complÃ¨tement clÃ´turÃ©e/archivÃ©e.
  */
 function isPayrollArchived($sqlite, $companyKey, $period) {
     return isPayrollPeriodLocked($sqlite, $companyKey, $period);
 }
 
 function savePayrollSnapshot($sqlite, $companyKey, $period, $salariesData, $serviceKey) {
+    // Purger les potentiels doublons ou l'ancien snapshot existant pour cette pÃ©riode
+    $sqlite->prepare(
+        "DELETE FROM payroll_snapshots WHERE company_id = ? AND period = ?"
+    )->execute([$companyKey, $period]);
+
     $stmt = $sqlite->prepare(
         "INSERT INTO payroll_snapshots (company_id, period, snapshot, published_by, published_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-             snapshot     = VALUES(snapshot),
-             published_by = VALUES(published_by),
-             published_at = VALUES(published_at)"
+         VALUES (?, ?, ?, ?, ?)"
     );
     $stmt->execute([
         $companyKey,
@@ -1251,12 +1197,12 @@ function savePayrollSnapshot($sqlite, $companyKey, $period, $salariesData, $serv
 }
 
 /**
- * Récupère le snapshot gelé des salaires pour une période publiée.
- * Retourne null si aucun snapshot n'existe (première publication ou snapshot supprimé).
+ * RÃ©cupÃ¨re le snapshot gelÃ© des salaires pour une pÃ©riode publiÃ©e.
+ * Retourne null si aucun snapshot n'existe (premiÃ¨re publication ou snapshot supprimÃ©).
  */
 function getPayrollSnapshot($sqlite, $companyKey, $period) {
     $stmt = $sqlite->prepare(
-        "SELECT snapshot FROM payroll_snapshots WHERE company_id = ? AND period = ?"
+        "SELECT snapshot FROM payroll_snapshots WHERE company_id = ? AND period = ? ORDER BY id DESC LIMIT 1"
     );
     $stmt->execute([$companyKey, $period]);
     $row = $stmt->fetch();
@@ -1268,7 +1214,7 @@ function getPayrollSnapshot($sqlite, $companyKey, $period) {
 }
 
 /**
- * Supprime le snapshot gelé lors d'une dépublication.
+ * Supprime le snapshot gelÃ© lors d'une dÃ©publication.
  */
 function deletePayrollSnapshot($sqlite, $companyKey, $period) {
     $sqlite->prepare(
@@ -1329,8 +1275,9 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                 'func'  => $pr['prime_function'] ?? ''
             ];
         }
+        file_put_contents(__DIR__ . '/debug_gen_primes.txt', print_r($site_primes_map, true));
 
-        // Charger les supplémentaires externes (pour calculer le prorata du remplaçant)
+        // Charger les supplÃ©mentaires externes (pour calculer le prorata du remplaÃ§ant)
         $stmtSupp = $sqlite->prepare("SELECT agent_id, date_supp, agent_remplace FROM supplementaires_externes WHERE periode = ?");
         $stmtSupp->execute([$period]);
         $supp_externes_map = [];
@@ -1344,32 +1291,16 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
         $sites_rows = $stmtSites->fetchAll();
 
         // Inject virtual sites
-        $has_extras = false;
         $has_releves = false;
-        $has_admin = false;
-        $has_itc = false;
         foreach ($sites_rows as $s) {
-            if ($s['id'] === 'site_extras') $has_extras = true;
             if ($s['id'] === 'site_releves') $has_releves = true;
-            if ($s['id'] === 'site_administration') $has_admin = true;
-            if ($s['id'] === 'site_itc') $has_itc = true;
         }
         
-        if (!$has_extras) {
-            $sites_rows[] = ['id' => 'site_extras', 'name' => '🌟 EXTRA BUREAU'];
-        }
         if (!$has_releves) {
             $sites_rows[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves'];
         }
-        if (!array_filter($sites_rows, fn($s) => $s['id'] === 'site_extras_sur_site')) {
-            $sites_rows[] = ['id' => 'site_extras_sur_site', 'name' => '🌟 EXTRA SUR SITE'];
-        }
-        if (!$has_admin)
-            $sites_rows[] = ['id' => 'site_administration', 'name' => '🏢 Administration'];
-        if (!$has_itc)
-            $sites_rows[] = ['id' => 'site_itc', 'name' => 'ITC / IFM'];
 
-        // --- PRÉ-CHARGEMENT (Eager Loading) ---
+        // --- PRÃ‰-CHARGEMENT (Eager Loading) ---
         $stmtAllAtt = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE period = ?");
         $stmtAllAtt->execute([$period]);
         $all_attendances = [];
@@ -1384,7 +1315,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
             $all_leaves_cp[$r['agent_id']][] = ['start_date' => $r['start_date'], 'end_date' => $r['end_date']];
         }
 
-        // Pré-charger tous les prêts actifs de l'entreprise (Élimination requête N+1)
+        // PrÃ©-charger tous les prÃªts actifs de l'entreprise (Ã‰limination requÃªte N+1)
         $stmtAllLoans = $sqlite->prepare("SELECT * FROM agent_loans WHERE company_id = ? AND status = 'active'");
         $stmtAllLoans->execute([$companyKey]);
         $all_active_loans = ['by_id' => [], 'by_name' => []];
@@ -1403,9 +1334,9 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
             $all_agents_db[$r['id']] = $r;
             $all_agents_by_name_lower[strtolower(trim($r['name']))] = $r;
         }
-        // --- FIN PRÉ-CHARGEMENT ---
+        // --- FIN PRÃ‰-CHARGEMENT ---
 
-        // --- PRÉ-CHARGEMENT (Eager Loading) ---
+        // --- PRÃ‰-CHARGEMENT (Eager Loading) ---
         // 1. Charger tous les subsites d'un coup
         $site_ids = array_column($sites_rows, 'id');
         $all_subsites_by_site = [];
@@ -1418,60 +1349,61 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
             }
         }
 
-        // 2. Charger tous les agents d'un coup (pour la compagnie/service et la période)
+        // 2. Charger tous les agents d'un coup (pour la compagnie/service et la pÃ©riode)
         $stmtAllAgentsForSalaries = $sqlite->prepare(
-            "SELECT * FROM agents WHERE $target_col = ? AND (archived_period IS NULL OR archived_period >= ?) ORDER BY name"
+            "SELECT * FROM agents WHERE $target_col = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?) ORDER BY name"
         );
         $stmtAllAgentsForSalaries->execute([$target_val, $period]);
         $all_agents_by_subsite = [];
         while ($r = $stmtAllAgentsForSalaries->fetch()) {
             $all_agents_by_subsite[$r['subsite_id']][] = $r;
         }
-        // --- FIN PRÉ-CHARGEMENT ---
+        // --- FIN PRÃ‰-CHARGEMENT ---
+
+        // === CHARGEMENT SALAIRES PARTICULIERS (Configuration Entreprise) ===
+        // On charge la table dÃ©diÃ©e special_agents une seule fois pour toute la boucle.
+        // Ainsi, le calcul base â†’ prorata â†’ brut â†’ net utilisera le bon montant fixe.
+        $special_salary_map = [];
+        try {
+            $stmtSp = $sqlite->prepare("SELECT name, salary FROM special_agents WHERE company_id = ?");
+            $stmtSp->execute([$companyKey]);
+            foreach ($stmtSp->fetchAll(PDO::FETCH_ASSOC) as $sp) {
+                $special_salary_map[strtolower(trim($sp['name']))] = (int) $sp['salary'];
+            }
+        } catch (Exception $e) { /* Table absente (installation neuve), on ignore */ }
+        // === FIN CHARGEMENT SALAIRES PARTICULIERS ===
 
         $salaries = [];
+        $processed_subsites = [];
         foreach ($sites_rows as $site) {
             $subsites_rows = $all_subsites_by_site[$site['id']] ?? [];
 
             // Inject default subsites for virtual sites if they are not in DB
-            if (in_array($site['id'], ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration', 'site_itc']) && empty($subsites_rows)) {
-                if ($site['id'] === 'site_extras')
-                    $subsites_rows = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
-                if ($site['id'] === 'site_extras_sur_site')
-                    $subsites_rows = [['id' => 'default_site_extras_sur_site', 'name' => 'Zone Principale']];
+            if (in_array($site['id'], ['site_releves']) && empty($subsites_rows)) {
                 if ($site['id'] === 'site_releves')
                     $subsites_rows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-                if ($site['id'] === 'site_administration')
-                    $subsites_rows = [['id' => 'site_admin_1', 'name' => 'Bureau']];
-                if ($site['id'] === 'site_itc') {
-                    $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($companyKey)), 0, 12);
-                    $subsites_rows = [
-                        ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Reguliere'],
-                        ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
-                        ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS'],
-                        ['id' => 'itc_special_' . $comp_suffix, 'name' => 'Agent Special']
-                    ];
-                }
-            }
-            
-            // Pour EXTRA SUR SITE : toujours inclure le subsite par défaut même si des sous-sites
-            // réels existent, pour ne pas manquer les agents affectés à "default_site_extras_sur_site"
-            if ($site['id'] === 'site_extras_sur_site') {
-                $has_default = false;
-                foreach ($subsites_rows as $sr) {
-                    if ($sr['id'] === 'default_site_extras_sur_site') { $has_default = true; break; }
-                }
-                if (!$has_default) {
-                    $subsites_rows[] = ['id' => 'default_site_extras_sur_site', 'name' => 'Zone Principale'];
-                }
             }
 
             foreach ($subsites_rows as $sub) {
+                if (isset($processed_subsites[$sub['id']])) {
+                    continue;
+                }
+                $processed_subsites[$sub['id']] = true;
+
                 $agents_rows = $all_agents_by_subsite[$sub['id']] ?? [];
 
                 foreach ($agents_rows as $agent) {
                     $agent_id = $agent['id'];
                     $func_id = $agent['function'] ?? 'AS';
+
+                    // === INJECTION SALAIRE PARTICULIER ===
+                    // Si l'agent figure dans la Configuration Entreprise (special_agents),
+                    // son salaire fixe prime toujours sur sa grille salariale.
+                    $agNameKey = strtolower(trim($agent['name'] ?? ''));
+                    if (!empty($special_salary_map[$agNameKey])) {
+                        $agent['salary'] = $special_salary_map[$agNameKey];
+                    }
+                    // === FIN INJECTION ===
 
                     $is_special_salary_flag = isset($agent['salary']) && (int) $agent['salary'] > 0;
                     $base = $is_special_salary_flag
@@ -1490,7 +1422,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
 
                     $absences = 0;
                     $entrant_sortant_count = 0;
-                    $entrant_count = 0; // Jours ENTRANT uniquement (exclus des déductions)
+                    $entrant_count = 0; // Jours ENTRANT uniquement (exclus des dÃ©ductions)
                     $exit_count = 0; // Jours de sortie (ABANDON, DEMISSION, SORTANT, etc.)
                     $first_entrant_date = null;
                     $first_exit_date = null;
@@ -1510,7 +1442,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     $cost_details = [];
                     $dynamic_funcs_count = [];
                     $dynamic_funcs_details = [];
-                    // Chercher le taux Costume dans la config (clé 'Costume' ou fallback 'AC')
+                    // Chercher le taux Costume dans la config (clÃ© 'Costume' ou fallback 'AC')
                     $ac_base = isset($salary_config_raw['Costume']) ? (int) $salary_config_raw['Costume']
                              : (isset($salary_config_raw['AC']) ? (int) $salary_config_raw['AC'] : 75000);
                     $is_24h = (strtolower($agent['shift_type'] ?? '') === '24h');
@@ -1591,13 +1523,13 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 $permission_details[] = ['date' => $date, 'shift' => 'Nuit'];
                             }
 
-                            // Calcul des heures travaillées (J)
+                            // Calcul des heures travaillÃ©es (J)
                             if ($sJ === '1' || $sJ === 'COST' || strpos($sJ, 'F_') === 0) $heures_travaillees += $j_hours;
                             if ($sJ === 'P' && $include_p) $heures_travaillees += $j_hours;
                             if ($sJ === 'M' && $include_m) $heures_travaillees += $j_hours;
                             if ($sJ === 'R' && $include_r) $heures_travaillees += $j_hours;
 
-                            // Calcul des heures travaillées (N)
+                            // Calcul des heures travaillÃ©es (N)
                             if ($sN === '1' || $sN === 'COST' || strpos($sN, 'F_') === 0) $heures_travaillees += $n_hours;
                             if ($sN === 'P' && $include_p) $heures_travaillees += $n_hours;
                             if ($sN === 'M' && $include_m) $heures_travaillees += $n_hours;
@@ -1624,7 +1556,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 $absence_details[] = ['date' => $date, 'shift' => 'Jour', 'reason' => $reason];
                             } elseif ($sJ === 'ENTRANT' || $sJ === 'REINTEGRATION') {
                                 $entrant_sortant_count++;
-                                $entrant_count++; // ENTRANT ne génère PAS de retenue
+                                $entrant_count++; // ENTRANT ne gÃ©nÃ¨re PAS de retenue
                                 if (!$first_entrant_date) $first_entrant_date = $date;
                             } elseif (is_string($sJ) && (strpos($sJ, 'M|') === 0 || strpos($sJ, 'PM|') === 0)) {
                                 $sp_details[] = ['date' => $date, 'shift' => 'Jour', 'reason' => $sJ];
@@ -1651,7 +1583,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 $absence_details[] = ['date' => $date, 'shift' => 'Nuit', 'reason' => $reason];
                             } elseif ($sN === 'ENTRANT' || $sN === 'REINTEGRATION') {
                                 $entrant_sortant_count++;
-                                $entrant_count++; // ENTRANT ne génère PAS de retenue
+                                $entrant_count++; // ENTRANT ne gÃ©nÃ¨re PAS de retenue
                                 if (!$first_entrant_date) $first_entrant_date = $date;
                             } elseif (is_string($sN) && (strpos($sN, 'M|') === 0 || strpos($sN, 'PM|') === 0)) {
                                 $sp_details[] = ['date' => $date, 'shift' => 'Nuit', 'reason' => $sN];
@@ -1674,13 +1606,13 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 $permission_details[] = ['date' => $date, 'shift' => 'Nuit'];
                             }
                             
-                            // Calcul des heures travaillées (J)
+                            // Calcul des heures travaillÃ©es (J)
                             if ($sJ === '1' || $sJ === 'COST' || strpos($sJ, 'F_') === 0) $heures_travaillees += $j_hours;
                             if ($sJ === 'P' && $include_p) $heures_travaillees += $j_hours;
                             if ($sJ === 'M' && $include_m) $heures_travaillees += $j_hours;
                             if ($sJ === 'R' && $include_r) $heures_travaillees += $j_hours;
                             
-                            // Calcul des heures travaillées (N)
+                            // Calcul des heures travaillÃ©es (N)
                             if ($sN === '1' || $sN === 'COST' || strpos($sN, 'F_') === 0) $heures_travaillees += $n_hours;
                             if ($sN === 'P' && $include_p) $heures_travaillees += $n_hours;
                             if ($sN === 'M' && $include_m) $heures_travaillees += $n_hours;
@@ -1709,8 +1641,8 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
 
 
                     // Ajustement calendaire pour les mois de 31 jours et les agents sortants :
-                    // Le jour en trop du cycle (count($dates) - 30) est absorbé par la période
-                    // d'inactivité post-départ, afin de restituer les jours de présence réels.
+                    // Le jour en trop du cycle (count($dates) - 30) est absorbÃ© par la pÃ©riode
+                    // d'inactivitÃ© post-dÃ©part, afin de restituer les jours de prÃ©sence rÃ©els.
                     if (count($dates) > 30) {
                         $month_surplus = count($dates) - 30;
                         $exit_days_count = 0;
@@ -1726,9 +1658,9 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             $absences = max(0, $absences - $exit_adjust);
                         }
 
-                        // Ajustement ENTRANT : même logique que SORTANT
-                        // Le jour excédentaire est absorbé par les jours de pré-présence (ENTRANT),
-                        // pas déduit des jours de présence réels de l'agent.
+                        // Ajustement ENTRANT : mÃªme logique que SORTANT
+                        // Le jour excÃ©dentaire est absorbÃ© par les jours de prÃ©-prÃ©sence (ENTRANT),
+                        // pas dÃ©duit des jours de prÃ©sence rÃ©els de l'agent.
                         $entrant_days_count = 0;
                         foreach ($dates as $d_check) {
                             $sJ_c = $att_map['J'][$d_check] ?? '';
@@ -1737,8 +1669,8 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         }
                         if ($entrant_days_count > 0) {
                             $entrant_adjust = min($entrant_days_count, $month_surplus);
-                            // Réduire les deux compteurs pour corriger le calcul du frontend
-                            // (compteur ✓ = 30 - absences - entrant_sortant_count)
+                            // RÃ©duire les deux compteurs pour corriger le calcul du frontend
+                            // (compteur âœ“ = 30 - absences - entrant_sortant_count)
                             $entrant_count = max(0, $entrant_count - $entrant_adjust);
                             $entrant_sortant_count = max(0, $entrant_sortant_count - $entrant_adjust);
                         }
@@ -1749,9 +1681,9 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     foreach ($dates as $d_check) {
                         $sJ_c = $att_map['J'][$d_check] ?? '';
                         $sN_c = $att_map['N'][$d_check] ?? '';
-                        $isRupJ = in_array($sJ_c, ['ENTRANT', 'REINTEGRATION']) || in_array($sJ_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sJ_c) && strpos($sJ_c, 'SORTANT_') === 0) || (is_string($sJ_c) && strpos($sJ_c, 'M|') === 0);
-                        $isRupN = in_array($sN_c, ['ENTRANT', 'REINTEGRATION']) || in_array($sN_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sN_c) && strpos($sN_c, 'SORTANT_') === 0) || (is_string($sN_c) && strpos($sN_c, 'M|') === 0);
-                        if ($isRupJ || $isRupN) {
+                        $isRupTrueExitJ = in_array($sJ_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sJ_c) && strpos($sJ_c, 'SORTANT_') === 0);
+                        $isRupTrueExitN = in_array($sN_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sN_c) && strpos($sN_c, 'SORTANT_') === 0);
+                        if ($isRupTrueExitJ || $isRupTrueExitN) {
                             $totalRuptureBackend++;
                         }
                     }
@@ -1767,6 +1699,26 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         // On remet les compteurs de rupture à 0 pour éviter la double retenue
                         $entrant_sortant_count = 0;
                         $entrant_count = 0;
+                    }
+
+                    $is_both_entrant_and_exit = ($entrant_count > 0 && $totalRuptureBackend > 0);
+                    if ($is_both_entrant_and_exit) {
+                        $real_worked_days = 0;
+                        foreach ($dates as $d_check) {
+                            $sJ_c = $att_map['J'][$d_check] ?? '';
+                            $sN_c = $att_map['N'][$d_check] ?? '';
+                            if ($sJ_c === '1' || $sJ_c === 'COST' || strpos($sJ_c, 'F_') === 0) $real_worked_days++;
+                            if ($sN_c === '1' || $sN_c === 'COST' || strpos($sN_c, 'F_') === 0) $real_worked_days++;
+                        }
+
+                        $real_absences_during_contract = 0;
+                        foreach ($dates as $d_check) {
+                            $sJ_c = $att_map['J'][$d_check] ?? '';
+                            $sN_c = $att_map['N'][$d_check] ?? '';
+                            if ($sJ_c === 'A' || ($sJ_c === 'M' && !$include_m)) $real_absences_during_contract++;
+                            if ($sN_c === 'A' || ($sN_c === 'M' && !$include_m)) $real_absences_during_contract++;
+                        }
+                        $absences = $real_absences_during_contract;
                     }
 
                     // Initialise divisor
@@ -1900,40 +1852,70 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     $is_special = !empty($profile['special_service']);
                     $special_days = $profile['special_service_days'] ?? [];
                     $is_admin = !empty($profile['admin_schedule']);
-
-                    foreach ($dates as $date) {
-                        $sJ = $att_map['J'][$date] ?? '';
-                        $sN = $att_map['N'][$date] ?? '';
-                        
-                        $is_scheduled_day = true;
-                        if ($is_special) {
-                            $date_obj = new DateTime($date);
-                            $w = (int) $date_obj->format('N');
-                            $is_scheduled_day = in_array($w, $special_days) || in_array((string)$w, $special_days);
-                        }
-
-                        if ($is_scheduled_day) {
-                            $is_entrant_or_np = (in_array($sJ, ['ENTRANT', 'REINTEGRATION']) || in_array($sN, ['ENTRANT', 'REINTEGRATION']) || $sJ === 'NON_PRESENT' || $sN === 'NON_PRESENT');
-                            if (!$is_entrant_or_np) {
-                                $assigned_days++;
-                                if (strpos($sJ, 'M|') === 0 || strpos($sJ, 'PM|') === 0 || strpos($sN, 'M|') === 0 || strpos($sN, 'PM|') === 0) {
-                                    $mutated_away_days++;
-                                } else {
+                    if ($is_special) {
+                        $real_active = 0;
+                        $real_active_old = 0;
+                        $real_active_new = 0;
+                        foreach ($dates as $date) {
+                            $sJ = $att_map['J'][$date] ?? '';
+                            $sN = $att_map['N'][$date] ?? '';
+                            
+                            foreach ([$sJ, $sN] as $st) {
+                                if ($st === '1' || $st === 'COST' || strpos($st, 'COST|') === 0 || strpos($st, 'F_') === 0) {
+                                    $real_active++;
                                     if ($scObj) {
-                                        if ($date < $scObj['date']) {
-                                            $assigned_days_old++;
-                                        } else {
-                                            $assigned_days_new++;
+                                        if ($date < $scObj['date']) $real_active_old++;
+                                        else $real_active_new++;
+                                    }
+                                }
+                            }
+                        }
+                        $assigned_days = $real_active;
+                        $assigned_days_old = $real_active_old;
+                        $assigned_days_new = $real_active_new;
+                        $mutated_away_days = 0;
+                    } else {
+                        foreach ($dates as $date) {
+                            $sJ = $att_map['J'][$date] ?? '';
+                            $sN = $att_map['N'][$date] ?? '';
+                            
+                            $is_scheduled_day = true;
+                            if ($is_admin) {
+                                $date_obj = new DateTime($date);
+                                $w = (int) $date_obj->format('N');
+                                if ($w === 7 || $w === 6) {
+                                    $is_scheduled_day = false;
+                                }
+                            }
+
+                            if ($is_scheduled_day) {
+                                $is_entrant_or_np = (in_array($sJ, ['ENTRANT', 'REINTEGRATION']) || in_array($sN, ['ENTRANT', 'REINTEGRATION']) || $sJ === 'NON_PRESENT' || $sN === 'NON_PRESENT');
+                                if (!$is_entrant_or_np) {
+                                    $assigned_days++;
+                                    if (strpos($sJ, 'M|') === 0 || strpos($sJ, 'PM|') === 0 || strpos($sN, 'M|') === 0 || strpos($sN, 'PM|') === 0) {
+                                        $mutated_away_days++;
+                                    } else {
+                                        if ($scObj) {
+                                            if ($date < $scObj['date']) {
+                                                $assigned_days_old++;
+                                            } else {
+                                                $assigned_days_new++;
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    if (isset($entrant_adjust) && $entrant_adjust > 0) {
-                        $assigned_days += $entrant_adjust;
+                    if ($is_both_entrant_and_exit) {
+                        $assigned_days = $real_worked_days;
+                        $real_active = $real_worked_days;
+                    } else {
+                        if (isset($entrant_adjust) && $entrant_adjust > 0) {
+                            $assigned_days += $entrant_adjust;
+                        }
+                        $real_active = $assigned_days - $mutated_away_days;
                     }
-                    $real_active = $assigned_days - $mutated_away_days;
                     
                     $full_month_assigned_days = 0;
                     if ($is_special) {
@@ -1958,7 +1940,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     if ($full_month_assigned_days <= 0) $full_month_assigned_days = count($dates);
 
                     if ($scObj) {
-                        $divToUse = $is_special ? ($full_month_assigned_days > 0 ? $full_month_assigned_days : 30) : $divisor;
+                        $divToUse = $divisor; // Règle absolue : le taux journalier est toujours calculé sur la base de 30
                         $total_assigned = $assigned_days_old + $assigned_days_new;
                         if ($total_assigned > 0) {
                             if ($is_special) {
@@ -2055,10 +2037,21 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         
                         $base_used_for_deductions = $base; // Utilisé pour les éventuels calculs annexes, mais deductions et gains sont déjà fixés
                     } else {
-                        if ($is_special) {
-                            $active_days = $real_active + $tp_extra_dates_count;
+                        if ($is_both_entrant_and_exit) {
+                            $active_days = $real_worked_days;
+                            $prorata_base = (int) round($base * ($real_worked_days / $divisor));
+                            $deductions = 0;
+                        } elseif ($is_special && !$is_special_salary_flag) {
+                            // Temps partiel SANS salaire particulier : prorata sur les jours travaillés
+                            $active_days = $real_active;
                             $divToUse = 30; // Toujours diviser par 30 pour le prorata de salaire temps partiel
                             $prorata_base = (int) round($base * ($active_days / $divToUse));
+                        } elseif ($is_special_salary_flag) {
+                            // === RÈGLE ABSOLUE : salaire particulier (Configuration Entreprise) ===
+                            // Le salaire fixe prime TOUJOURS, qu'il soit temps partiel ou non.
+                            // On n'applique AUCUN prorata.
+                            $prorata_base = $base;
+                            $active_days = $real_active;
                         } else {
                             // Si l'agent n'a pas de jours ENTRANT et a travaillé tous ses jours prévus, sa base = base complète
                             if ($entrant_count === 0 && $real_active >= $full_month_assigned_days) {
@@ -2074,28 +2067,27 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         
                         $base_used_for_deductions = $base;
                         // ENTRANT exclus des déductions : l'agent n'était pas encore en poste, ce n'est pas une absence
-                        if ($is_special) {
-                            $divToUse = $full_month_assigned_days > 0 ? $full_month_assigned_days : 30;
-                            $deductions = (int) round(($absences + $map_count + $permission_count) * ($base_used_for_deductions / $divToUse));
+                        if ($is_both_entrant_and_exit || $is_special) {
+                            $deductions = 0;
                         } else {
                             $deductions = (int) round(($absences + ($entrant_sortant_count - $entrant_count) + $map_count + $permission_count) * ($base_used_for_deductions / $divisor));
                         }
                         
                         $gains = 0;
                         foreach ($sp_details as &$spd) {
-                            $divToUse = $is_special ? ($full_month_assigned_days > 0 ? $full_month_assigned_days : 30) : $divisor;
+                            $divToUse = $divisor; // Règle absolue : le taux journalier est toujours calculé sur la base de 30
                             $spd_gain = 0;
                             if (isset($spd['replacedAgentBase']) && $spd['replacedAgentBase'] !== null) {
                                 $replaced_base = $spd['replacedAgentBase'];
                                 if ($replaced_base > $base_used_for_deductions) {
-                                    // Scénario A : Poste supérieur -> Gagne la différence (bonus)
+                                    // ScÃ©nario A : Poste supÃ©rieur -> Gagne la diffÃ©rence (bonus)
                                     $spd_gain = (int) round(($replaced_base - $base_used_for_deductions) / $divToUse);
                                 } else {
-                                    // Scénario B : Poste inférieur -> S'adapte au taux remplacé
+                                    // ScÃ©nario B : Poste infÃ©rieur -> S'adapte au taux remplacÃ©
                                     $spd_gain = (int) round($replaced_base / $divToUse);
                                 }
                             } else {
-                                // Scénario C : Aucun remplacement
+                                // ScÃ©nario C : Aucun remplacement
                                 $spd_gain = (int) round($base_used_for_deductions / $divToUse);
                             }
                             $spd['gain'] = $spd_gain;
@@ -2103,13 +2095,13 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         }
                         unset($spd);
 
-                        // Les jours supplémentaires sont déjà inclus dans la base proratisée (pas sous forme de supplément)
+                        // Les jours supplÃ©mentaires sont dÃ©jÃ  inclus dans la base proratisÃ©e (pas sous forme de supplÃ©ment)
                         // if ($is_special && $tp_extra_days > 0) {
                         //     $gains += (int) round($tp_extra_days * ($base_used_for_deductions / $divisor));
                         // }
                     }
 
-                    // Ajouter le bonus costume (différence avec la base)
+                    // Ajouter le bonus costume (diffÃ©rence avec la base)
                     if ($cost_count > 0) {
                         $cost_bonus = (int) round($cost_count * (max(0, $ac_base - $base_used_for_deductions) / $divisor));
                         $gains += $cost_bonus;
@@ -2118,7 +2110,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         }
                     }
                     
-                    // Ajouter le bonus pour les fonctions dynamiques (différence avec la base)
+                    // Ajouter le bonus pour les fonctions dynamiques (diffÃ©rence avec la base)
                     foreach ($dynamic_funcs_count as $f_code => $count) {
                         if ($count > 0) {
                             $f_base = isset($salary_config_raw[$f_code]) ? (int) $salary_config_raw[$f_code] : 75000;
@@ -2133,9 +2125,9 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     }
 
                     // Calcul de la prime de site
-                    // 1. Clé brute combinée : "NomSite / NomZone"
+                    // 1. ClÃ© brute combinÃ©e : "NomSite / NomZone"
                     $key_raw = $site['name'] . ' / ' . $sub['name'];
-                    // 2. Clé normalisée (sans espaces superflus)
+                    // 2. ClÃ© normalisÃ©e (sans espaces superflus)
                     $key_normalized = trim(preg_replace('/\s+/', ' ', $site['name'])) . ' / ' . trim(preg_replace('/\s+/', ' ', $sub['name']));
                     // 3. Fallback : Nom du site parent uniquement
                     $key_parent = $site['name'];
@@ -2151,7 +2143,22 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             $prime_site = $site_prime_data['prime'];
                         }
                     }
-                    // Calcul des Prêts (Remboursement dynamique)
+
+                    // Exclusion manuelle de la prime de site
+                    $is_prime_excluded = false;
+                    $pDataPrime = [];
+                    if (!empty($agent['profile_data'])) {
+                        $pDataPrime = is_array($agent['profile_data']) ? $agent['profile_data'] : json_decode($agent['profile_data'], true);
+                    }
+                    if (!empty($pDataPrime['prime_site_excluded'])) {
+                        $is_prime_excluded = true;
+                    } elseif (!empty($pDataPrime['prime_site_excluded_period']) && $pDataPrime['prime_site_excluded_period'] === $period) {
+                        $is_prime_excluded = true;
+                    }
+                    if ($is_prime_excluded) {
+                        $prime_site = 0;
+                    }
+                    // Calcul des PrÃªts (Remboursement dynamique)
                     $remboursement_pret = 0;
                     $agent_loans = $all_active_loans['by_id'][$agent['id']] ?? [];
                     if (!empty($all_active_loans['by_name'])) {
@@ -2167,18 +2174,19 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         $start_ts = strtotime($loan['start_period'] . '-01');
                         $curr_ts = strtotime($period . '-01');
                         if ($curr_ts >= $start_ts) {
-                            $months_diff = (int)(($curr_ts - $start_ts) / (30 * 24 * 60 * 60)); // Approx 30 days
                             $d1 = new DateTime($loan['start_period'] . '-01');
                             $d2 = new DateTime($period . '-01');
                             $diff = $d1->diff($d2);
                             $mp = (($diff->y) * 12) + ($diff->m);
                             
                             $monthly = $loan['monthly_deduction'] > 0 ? $loan['monthly_deduction'] : $loan['total_amount'];
-                            $total_months = ceil($loan['total_amount'] / $monthly);
+                            $already_paid = isset($loan['already_paid']) ? (int)$loan['already_paid'] : 0;
                             
-                            if ($mp >= 0 && $mp < $total_months) {
-                                $is_last_month = ($mp == $total_months - 1);
-                                $deduct = $is_last_month ? ($loan['total_amount'] - ($monthly * $mp)) : $monthly;
+                            $deducted_before_this_month = $already_paid + ($mp * $monthly);
+                            
+                            if ($deducted_before_this_month < $loan['total_amount']) {
+                                $remaining = $loan['total_amount'] - $deducted_before_this_month;
+                                $deduct = min($remaining, $monthly);
                                 $remboursement_pret += $deduct;
                             }
                         }
@@ -2212,8 +2220,8 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         'sc_abs_old' => $deduction_days_old ?? 0,
                         'sc_abs_new' => $deduction_days_new ?? 0,
                         'real_active' => $real_active,
-                        'active_days' => $is_special ? ($real_active + $tp_extra_dates_count) : $active_days,
-                        'days_worked' => $is_special ? max(0, ($real_active + $tp_extra_dates_count) - ($absences + $map_count + $permission_count)) : max(0, $active_days - ($absences + $map_count + $permission_count)),
+                        'active_days' => $is_special ? $real_active : $active_days,
+                        'days_worked' => $is_both_entrant_and_exit ? $real_worked_days : ($is_special ? $real_active : max(0, $active_days - ($absences + $map_count + $permission_count))),
                         'is_entrant' => ($entrant_count > 0 || (isset($entrant_adjust) && $entrant_adjust > 0)),
                         'hire_date' => $agent['hire_date'] ?? $first_entrant_date ?? null,
                         'is_sortant' => ($exit_count > 0 || (isset($exit_adjust) && $exit_adjust > 0)),
@@ -2233,6 +2241,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         'deductions' => $deductions,
                         'gains' => $gains,
                         'prime_site' => $prime_site,
+                        'is_prime_excluded' => $is_prime_excluded,
                         'remboursement_pret' => $remboursement_pret,
                         'total' => $prorata_base - $deductions + $gains + $prime_site - $remboursement_pret,
                     ];
@@ -2287,6 +2296,11 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     $matched_key = $key;
                     break;
                 }
+
+                if (!empty($sal['profile_data']['special_service']) && !empty($existing['profile_data']['special_service'])) {
+                    $matched_key = $key;
+                    break;
+                }
             }
 
             if ($matched_key === null) {
@@ -2312,61 +2326,97 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                 $adjusted_old_base = $oldest['base'] ?? 0;
                 $adjusted_new_base = $newest['base'] ?? 0;
 
-                if ($total_active_days > $divisor_merge) {
-                    // Règle du site d'origine prioritaire :
-                    // L'ancien site conserve tous ses jours réels
-                    // Le nouveau site ne prend que ce qu'il reste
-                    $adjusted_old_active = min($adjusted_old_active, $divisor_merge);
-                    $adjusted_new_active = $divisor_merge - $adjusted_old_active;
-                    
-                    $old_base_full = $oldest['base_full'] ?? $oldest['base'] ?? 0;
-                    $new_base_full = $newest['base_full'] ?? $newest['base'] ?? 0;
-                    
-                    $adjusted_old_base = (int) round($old_base_full * ($adjusted_old_active / $divisor_merge));
-                    $adjusted_new_base = (int) round($new_base_full * ($adjusted_new_active / $divisor_merge));
-                }
-                
-                $merged_base = $adjusted_old_base + $adjusted_new_base;
-                $merged_active_days = min($divisor_merge, $total_active_days);
+                $is_multi_site_special = !empty($sal['profile_data']['special_service']) && !empty($existing['profile_data']['special_service']);
 
-                // Track the function change for display in Poste column
-                $merged_profile = $newest['profile_data'] ?? [];
-                if (!is_array($merged_profile)) $merged_profile = [];
-                if ($oldest['function'] !== $newest['function']) {
-                    $merged_profile['mutated_from_function'] = $oldest['function'];
+                if ($is_multi_site_special) {
+                    $merged_active_days = $total_active_days;
+                    
+                    $old_base_full = $oldest['base_full'] ?? 75000;
+                    $merged_base = (int) round($old_base_full * ($merged_active_days / 30));
+                    $adjusted_old_base = $merged_base;
+                    $adjusted_new_base = 0;
+                    
+                    $merged_profile = $newest['profile_data'] ?? [];
+                    if (!is_array($merged_profile)) $merged_profile = [];
+                    
+                    if (empty($merged_profile['payment_method']) && !empty($existing['profile_data']['payment_method'])) {
+                        $merged_profile['payment_method'] = $existing['profile_data']['payment_method'];
+                        $merged_profile['payment_operator'] = $existing['profile_data']['payment_operator'] ?? null;
+                        $merged_profile['payment_bank_name'] = $existing['profile_data']['payment_bank_name'] ?? null;
+                        $merged_profile['payment_number'] = $existing['profile_data']['payment_number'] ?? null;
+                    }
+                    
+                    $deployments = $existing['profile_data']['multi_site_deployments'] ?? [];
+                    if (empty($deployments)) {
+                        $deployments[] = ['site' => $oldest['site'], 'worked_days' => $oldest['real_active']];
+                    }
+                    $deployments[] = ['site' => $newest['site'], 'worked_days' => $newest['real_active']];
+                    $merged_profile['multi_site_deployments'] = $deployments;
+                } else {
+                    if ($total_active_days > $divisor_merge) {
+                        // RÃ¨gle du site d'origine prioritaire :
+                        // L'ancien site conserve tous ses jours rÃ©els
+                        // Le nouveau site ne prend que ce qu'il reste
+                        $adjusted_old_active = min($adjusted_old_active, $divisor_merge);
+                        $adjusted_new_active = $divisor_merge - $adjusted_old_active;
+                        
+                        $old_base_full = $oldest['base_full'] ?? $oldest['base'] ?? 0;
+                        $new_base_full = $newest['base_full'] ?? $newest['base'] ?? 0;
+                        
+                        $adjusted_old_base = (int) round($old_base_full * ($adjusted_old_active / $divisor_merge));
+                        $adjusted_new_base = (int) round($new_base_full * ($adjusted_new_active / $divisor_merge));
+                    }
+                    
+                    $merged_base = $adjusted_old_base + $adjusted_new_base;
+                    $merged_active_days = min($divisor_merge, $total_active_days);
+
+                    // Track the function change for display in Poste column
+                    $merged_profile = $newest['profile_data'] ?? [];
+                    if (!is_array($merged_profile)) $merged_profile = [];
+
+                    if (empty($merged_profile['payment_method']) && !empty($existing['profile_data']['payment_method'])) {
+                        $merged_profile['payment_method'] = $existing['profile_data']['payment_method'];
+                        $merged_profile['payment_operator'] = $existing['profile_data']['payment_operator'] ?? null;
+                        $merged_profile['payment_bank_name'] = $existing['profile_data']['payment_bank_name'] ?? null;
+                        $merged_profile['payment_number'] = $existing['profile_data']['payment_number'] ?? null;
+                    }
+
+                    if ($oldest['function'] !== $newest['function']) {
+                        $merged_profile['mutated_from_function'] = $oldest['function'];
+                    }
+                    
+                    // Add mutation breakdown
+                    $merged_profile['mutation_breakdown'] = [
+                        'original' => [
+                            'site' => $oldest['site'],
+                            'subsite' => $oldest['subsite'],
+                            'function' => $oldest['function_label'] ?? $oldest['function'],
+                            'active_days' => $adjusted_old_active,
+                            'calendar_active_days' => $oldest['real_active'] ?? 0,
+                            'absences' => $oldest['absences'] ?? 0,
+                            'map_count' => $oldest['map_count'] ?? 0,
+                            'permission_count' => $oldest['permission_count'] ?? 0,
+                            'entrant_sortant_count' => $oldest['entrant_sortant_count'] ?? 0,
+                            'worked_days' => $adjusted_old_active - (($oldest['absences'] ?? 0) + ($oldest['map_count'] ?? 0) + ($oldest['permission_count'] ?? 0) + ($oldest['entrant_sortant_count'] ?? 0)),
+                            'base_prorata' => $adjusted_old_base,
+                            'base_full' => $oldest['base_full'] ?? 0,
+                        ],
+                        'mutated' => [
+                            'site' => $newest['site'],
+                            'subsite' => $newest['subsite'],
+                            'function' => $newest['function_label'] ?? $newest['function'],
+                            'active_days' => $adjusted_new_active,
+                            'calendar_active_days' => $newest['real_active'] ?? 0,
+                            'absences' => $newest['absences'] ?? 0,
+                            'map_count' => $newest['map_count'] ?? 0,
+                            'permission_count' => $newest['permission_count'] ?? 0,
+                            'entrant_sortant_count' => $newest['entrant_sortant_count'] ?? 0,
+                            'worked_days' => $adjusted_new_active - (($newest['absences'] ?? 0) + ($newest['map_count'] ?? 0) + ($newest['permission_count'] ?? 0) + ($newest['entrant_sortant_count'] ?? 0)),
+                            'base_prorata' => $adjusted_new_base,
+                            'base_full' => $newest['base_full'] ?? 0,
+                        ]
+                    ];
                 }
-                
-                // Add mutation breakdown
-                $merged_profile['mutation_breakdown'] = [
-                    'original' => [
-                        'site' => $oldest['site'],
-                        'subsite' => $oldest['subsite'],
-                        'function' => $oldest['function_label'] ?? $oldest['function'],
-                        'active_days' => $adjusted_old_active,
-                        'calendar_active_days' => $oldest['real_active'] ?? 0,
-                        'absences' => $oldest['absences'] ?? 0,
-                        'map_count' => $oldest['map_count'] ?? 0,
-                        'permission_count' => $oldest['permission_count'] ?? 0,
-                        'entrant_sortant_count' => $oldest['entrant_sortant_count'] ?? 0,
-                        'worked_days' => $adjusted_old_active - (($oldest['absences'] ?? 0) + ($oldest['map_count'] ?? 0) + ($oldest['permission_count'] ?? 0) + ($oldest['entrant_sortant_count'] ?? 0)),
-                        'base_prorata' => $adjusted_old_base,
-                        'base_full' => $oldest['base_full'] ?? 0,
-                    ],
-                    'mutated' => [
-                        'site' => $newest['site'],
-                        'subsite' => $newest['subsite'],
-                        'function' => $newest['function_label'] ?? $newest['function'],
-                        'active_days' => $adjusted_new_active,
-                        'calendar_active_days' => $newest['real_active'] ?? 0,
-                        'absences' => $newest['absences'] ?? 0,
-                        'map_count' => $newest['map_count'] ?? 0,
-                        'permission_count' => $newest['permission_count'] ?? 0,
-                        'entrant_sortant_count' => $newest['entrant_sortant_count'] ?? 0,
-                        'worked_days' => $adjusted_new_active - (($newest['absences'] ?? 0) + ($newest['map_count'] ?? 0) + ($newest['permission_count'] ?? 0) + ($newest['entrant_sortant_count'] ?? 0)),
-                        'base_prorata' => $adjusted_new_base,
-                        'base_full' => $newest['base_full'] ?? 0,
-                    ]
-                ];
 
                 $merged_map[$matched_key] = [
                     'id' => $newest['id'],
@@ -2402,6 +2452,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     'deductions' => $existing['deductions'] + $sal['deductions'],
                     'gains' => $existing['gains'] + $sal['gains'],
                     'prime_site' => $existing['prime_site'] + $sal['prime_site'],
+                    'is_prime_excluded' => (!empty($existing['is_prime_excluded']) || !empty($sal['is_prime_excluded'])),
                     'profile_data' => $merged_profile
                 ];
                 
@@ -2420,14 +2471,14 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
 function closeFluctuationForPeriod($companyId, $period, $closed_by = 'Auto-Archivage (PC)') {
     $sqlite = getDb();
     
-    // 1. Vérifier si cette période existe déjà dans fluctuation_history. Si oui, ne pas l'écraser (on préserve les saisies manuelles du comptable)
+    // 1. VÃ©rifier si cette pÃ©riode existe dÃ©jÃ  dans fluctuation_history. Si oui, ne pas l'Ã©craser (on prÃ©serve les saisies manuelles du comptable)
     $stmtCheck = $sqlite->prepare("SELECT 1 FROM fluctuation_history WHERE company_id = ? AND period = ?");
     $stmtCheck->execute([$companyId, $period]);
     if ($stmtCheck->fetch()) {
-        return; // Déjà archivée / clôturée par le comptable
+        return; // DÃ©jÃ  archivÃ©e / clÃ´turÃ©e par le comptable
     }
     
-    // 2. Récupérer le Chiffre d'Affaires estimé
+    // 2. RÃ©cupÃ©rer le Chiffre d'Affaires estimÃ©
     $contractsRaw = $sqlite->prepare("SELECT site_name, budget_mensuel, charges_percent, frais_fixes FROM site_contracts WHERE company_id=?");
     $contractsRaw->execute([$companyId]);
     $site_contracts = [];
@@ -2459,7 +2510,7 @@ function closeFluctuationForPeriod($companyId, $period, $closed_by = 'Auto-Archi
     $varsRaw->execute([$companyId, $period]);
     $monthly_vars = $varsRaw->fetch(PDO::FETCH_ASSOC) ?: ['primes_globales' => 0, 'charges_globales_percent' => 0];
 
-    // 4. Charger les salaires réels calculés et faire les comptes
+    // 4. Charger les salaires rÃ©els calculÃ©s et faire les comptes
     $stmtSal = $sqlite->prepare("SELECT * FROM salaries WHERE company_id = ? AND period = ?");
     $stmtSal->execute([$companyId, $period]);
     $allSalaries = $stmtSal->fetchAll(PDO::FETCH_ASSOC);
@@ -2471,7 +2522,7 @@ function closeFluctuationForPeriod($companyId, $period, $closed_by = 'Auto-Archi
     $agents_count = 0;
 
     foreach ($allSalaries as $sal) {
-        $site_name = $sal['site'] ?? 'Non affecté';
+        $site_name = $sal['site'] ?? 'Non affectÃ©';
         
         if (!isset($sites_rentability[$site_name])) {
             $sites_rentability[$site_name] = [
@@ -2495,7 +2546,7 @@ function closeFluctuationForPeriod($companyId, $period, $closed_by = 'Auto-Archi
         }
     }
 
-    // 5. Insérer dans fluctuation_history et fluctuation_history_sites
+    // 5. InsÃ©rer dans fluctuation_history et fluctuation_history_sites
     $sqlite->exec('CREATE TABLE IF NOT EXISTS fluctuation_history (company_id VARCHAR(100), period VARCHAR(20), chiffre_affaire REAL, ms_admin REAL, ms_agents REAL, admin_count INTEGER DEFAULT 0, agents_count INTEGER DEFAULT 0, closed_at DATETIME, closed_by VARCHAR(255), PRIMARY KEY(company_id, period))');
     $sqlite->exec('CREATE TABLE IF NOT EXISTS fluctuation_history_sites (company_id VARCHAR(100), period VARCHAR(20), site_name VARCHAR(255), contract_revenue REAL, total_cost REAL, net_margin REAL, is_alert INTEGER, PRIMARY KEY(company_id, period, site_name))');
     
@@ -2512,5 +2563,6 @@ function closeFluctuationForPeriod($companyId, $period, $closed_by = 'Auto-Archi
         $stmtSitesInsert->execute([$companyId, $period, $site['name'], $site['contract_revenue'], $total_cost, $net_margin, $is_alert]);
     }
 }
+
 
 

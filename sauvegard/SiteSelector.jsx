@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { apiCall } from '../../api';
-import { Archive, Settings, Search, CheckCircle2, ChevronRight, LayoutGrid, Clock, Info, MoreVertical, X, Check, CalendarDays, Edit, Loader2, HelpCircle, ChevronDown, ChevronLeft, TrendingUp, ShieldAlert, Plus, Trash2, Users, Trash } from 'lucide-react';
+import { Archive, Settings, Search, CheckCircle2, ChevronRight, LayoutGrid, Clock, Info, MoreVertical, X, Check, CalendarDays, Edit, Loader2, HelpCircle, ChevronDown, ChevronLeft, ArrowLeft, TrendingUp, ShieldAlert, Plus, Trash2, Users, Trash, RefreshCw } from 'lucide-react';
 import RenameSiteModal from '../modals/RenameSiteModal';
 import PointageCalendarModal from '../modals/PointageCalendarModal';
 import VerificationModal from '../modals/VerificationModal';
@@ -21,7 +21,7 @@ export default function SiteSelector({ state, actions }) {
     showNextMonthModal, initializing, initProgress, sitesToKeepHS, showKeepHSModal,
     siteContextMenu, loading, showStats, showBlacklist, showDeleteSiteModal, deleteSiteData,
     lockedZones, getPeriodLabel, isEditMode, isEmptyMonth, isEmptyFutureMonth,
-    publishedPeriods, datesList, showVerificationSites, showVerificationModal, showCalendar,
+    publishedPeriods, maxInitializedPeriod, datesList, showVerificationSites, showVerificationModal, showCalendar,
     showPublishReport, showPublishSuccess, leaves, cycleStart,
     expandedFaq, siteSearchTerm, enableAnimations, editModeBehavior, agentTableMode, showRenameSiteModal,
     isVerifying, publishing, draggedSite, iconPickerSiteId, highlightedAgentId, showAgentCountHover,
@@ -31,10 +31,10 @@ export default function SiteSelector({ state, actions }) {
 
   const {
     setViewMode, setShowSiteSettings, setSiteSortOrder, setCardDesign, setSearchTerm, setActiveSiteId, setActiveSiteName,
-    setRenameModalData, executeRenameSite, handleFirstVisitNon, handleFirstVisitOui,
+    setRenameModalData, executeRenameSite, handleFirstVisitNon, handleFirstVisitOui, handleFirstVisitIgnore,
     setShowAddSite, setNewSiteName, setNewSiteLocation, setIsSpecialSite, setSpecialSiteType, setCustomBehavior, handleCreateSite,
     setShowPublishModal, setShowFaqModal, setShowStats, setShowBlacklist, setShowDeleteSiteModal, setDeleteSiteData, setSites,
-    setShowNextMonthModal, setShowKeepHSModal, handleNextMonth, setIsEditMode, changePeriod,
+    setShowNextMonthModal, setShowKeepHSModal, handleNextMonth, handleCancelNextMonth, setIsEditMode, changePeriod,
     setShowVerificationSites, setShowVerificationModal, setShowCalendar, setShowPublishReport, setShowPublishSuccess,
     setExpandedFaq, setSiteSearchTerm, setEnableAnimations, setEditModeBehavior, setRobustBehavior,
     setAndSaveAgentTableMode, setSiteContextMenu, setShowRenameSiteModal,
@@ -83,7 +83,7 @@ export default function SiteSelector({ state, actions }) {
 
       const agentMatch = (globalAgents || []).some(agent => {
         const agentSiteClean = (agent.site || '').replace(/^[\p{Emoji}\s]+/u, '').trim();
-        const belongsToSite = agentSiteClean === cleanSiteName || agent.site_id === site.id;
+        const belongsToSite = (agentSiteClean && cleanSiteName && agentSiteClean === cleanSiteName) || (agent.site_id && site.id && agent.site_id === site.id) || (agent.site_id && site.id && String(agent.site_id) === String(site.id));
         if (!belongsToSite) return false;
 
         const agentNameMatch = normalizeText(agent.name || agent.nom || '').includes(q);
@@ -91,22 +91,24 @@ export default function SiteSelector({ state, actions }) {
         return agentNameMatch || agentFuncMatch;
       });
 
-      return siteNameMatch || subsiteMatch || agentMatch;
+      const embeddedAgentMatch = (site.subsites || []).some(sub => 
+        (sub.agents || []).some(agent => {
+          const agentNameMatch = normalizeText(agent.name || agent.nom || '').includes(q);
+          const agentFuncMatch = normalizeText(agent.function || agent.poste || '').includes(q);
+          return agentNameMatch || agentFuncMatch;
+        })
+      );
+
+      return siteNameMatch || subsiteMatch || agentMatch || embeddedAgentMatch;
     });
   }, [sites, siteSearchTerm, globalAgents]);
 
     return (
       <>
-        {!isArchiveMode && (
+        <>
           <div
             className="sites-header"
-            style={isPastMonth ? {
-              background: 'linear-gradient(90deg, rgba(245,158,11,0.15) 0%, rgba(245,158,11,0.05) 100%)',
-              padding: '16px 20px',
-              borderRadius: '12px',
-              border: '1px solid rgba(245,158,11,0.3)',
-              margin: '0 0 24px 0'
-            } : {
+            style={{
               position: 'sticky',
               top: '-24px',
               zIndex: 100,
@@ -119,11 +121,25 @@ export default function SiteSelector({ state, actions }) {
           >
             <div className="sites-header-left">
               <div className="sites-title-row">
-                <h2 style={{ fontSize: '1.6rem', fontWeight: 800, margin: 0 }}>
-                  {isVerificationMode ? '✅ Traitement du pointage' : '📍 Mes Sites'}
-                  {!isVerificationMode && <span style={{ fontSize: '1rem', color: '#ef4444', marginLeft: '12px', fontWeight: 900 }}>({sites.length})</span>}
+                {isArchiveMode && (
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => window.dispatchEvent(new CustomEvent('closeArchiveMode'))}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', marginRight: '12px' }}
+                  >
+                    <ArrowLeft size={14} /> Retour à la liste
+                  </button>
+                )}
+                <h2 style={{ fontSize: '1.6rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {isArchiveMode ? (
+                    <>
+                      🗂️ Archive de Pointage — {getPeriodLabel()}
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', padding: '2px 8px', borderRadius: '12px', marginLeft: '8px' }}>Mode Lecture Seule</span>
+                    </>
+                  ) : isVerificationMode ? '✅ Traitement du pointage' : '📍 Mes Sites'}
+                  {!isVerificationMode && !isArchiveMode && <span style={{ fontSize: '1rem', color: '#ef4444', marginLeft: '12px', fontWeight: 900 }}>({sites.length})</span>}
                 </h2>
-                {isPastMonth && (
+                {isPastMonth && !isArchiveMode && (
                   <span style={{ background: 'rgba(245,158,11,0.2)', color: '#f59e0b', padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
                     Historique
                   </span>
@@ -317,35 +333,37 @@ export default function SiteSelector({ state, actions }) {
               </div>
               <p style={{ color: 'var(--muted)', marginTop: '4px', marginBottom: '12px', fontSize: '0.9rem' }}>Sélectionnez un site pour accéder au tableau de pointage.</p>
 
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowFaqModal(true);
-                }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'rgba(168,85,247,0.15)',
-                  border: '1px solid rgba(168,85,247,0.3)',
-                  color: '#c084fc',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  transition: 'all 0.2s',
-                  marginTop: '8px',
-                  width: 'fit-content'
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.25)'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(168,85,247,0.2)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.15)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-              >
-                <HelpCircle size={15} />
-                Foire aux questions (FAQ)
-              </button>
+              {!isVerificationMode && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowFaqModal(true);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'rgba(168,85,247,0.15)',
+                    border: '1px solid rgba(168,85,247,0.3)',
+                    color: '#c084fc',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    transition: 'all 0.2s',
+                    marginTop: '8px',
+                    width: 'fit-content'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.25)'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(168,85,247,0.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.15)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <HelpCircle size={15} />
+                  Foire aux questions (FAQ)
+                </button>
+              )}
 
               {/* ============ MODAL FAQ (INLINED) ============ */}
               {showFaqModal && createPortal(
@@ -543,7 +561,7 @@ export default function SiteSelector({ state, actions }) {
             <div className="sites-actions-bar">
 
               {/* Navigateur de mois et Toggle d'édition */}
-              {viewMode === 'current' && (
+              {viewMode === 'current' && !isArchiveMode && (
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                   <div className="month-navigator" style={{ background: isPastMonth ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.05)', border: isPastMonth ? '1px solid rgba(245,158,11,0.3)' : '1px solid var(--border)' }}>
                     <button
@@ -570,26 +588,33 @@ export default function SiteSelector({ state, actions }) {
                   </div>
 
                   <button
-                    onClick={() => setIsEditMode(!isEditMode)}
+                    onClick={(isVerificationMode || publishedPeriods.includes(period)) ? null : () => setIsEditMode(!isEditMode)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 16px', borderRadius: '8px',
-                      background: isEditMode ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                      border: isEditMode ? '1px solid rgba(52, 211, 153, 0.4)' : '1px solid var(--border)',
-                      color: isEditMode ? '#34d399' : 'var(--text-muted)',
-                      cursor: 'pointer',
+                      background: publishedPeriods.includes(period)
+                        ? 'rgba(255, 255, 255, 0.03)'
+                        : (isEditMode && !isVerificationMode) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                      border: publishedPeriods.includes(period)
+                        ? '1px solid rgba(255, 255, 255, 0.08)'
+                        : (isEditMode && !isVerificationMode) ? '1px solid rgba(52, 211, 153, 0.4)' : '1px solid var(--border)',
+                      color: publishedPeriods.includes(period)
+                        ? 'rgba(255, 255, 255, 0.3)'
+                        : (isEditMode && !isVerificationMode) ? '#34d399' : 'var(--text-muted)',
+                      cursor: (isVerificationMode || publishedPeriods.includes(period)) ? 'not-allowed' : 'pointer',
                       fontWeight: 'bold',
                       fontSize: '0.9rem',
+                      opacity: publishedPeriods.includes(period) ? 0.6 : 1,
                       transition: 'all 0.2s'
                     }}
-                    title={isEditMode ? "Le pointage est modifiable (Clic pour verrouiller)" : "Sécurité activée. Clic-gauche et modifications désactivés (Clic pour déverrouiller)"}
+                    title={publishedPeriods.includes(period) ? "Pointage publié — Lecture seule. Dépubliez pour modifier." : isVerificationMode ? "Sécurité activée. Mode lecture seule uniquement." : (isEditMode ? "Le pointage est modifiable (Clic pour verrouiller)" : "Sécurité activée. Clic-gauche et modifications désactivés (Clic pour déverrouiller)")}
                   >
-                    <span style={{ fontSize: '1.2rem' }}>{isEditMode ? '🔓' : '🔒'}</span>
-                    {isEditMode ? 'Mode Édition' : 'Mode Lecture'}
+                    <span style={{ fontSize: '1.2rem' }}>{publishedPeriods.includes(period) ? '🔒' : (isEditMode && !isVerificationMode) ? '🔓' : '🔒'}</span>
+                    {publishedPeriods.includes(period) ? 'Lecture seule' : isVerificationMode ? 'Mode Lecture' : (isEditMode ? 'Mode Édition' : 'Mode Lecture')}
                   </button>
                 </div>
               )}
 
-              {!isVerificationMode && viewMode === 'current' && !isEmptyMonth && (
+              {!isVerificationMode && !isArchiveMode && viewMode === 'current' && !isEmptyMonth && (
                 <div className="sites-action-buttons" style={{ position: 'relative' }}>
                   <button
                     className={`btn ${publishedPeriods.includes(period) ? 'btn-secondary' : ''}`}
@@ -638,9 +663,7 @@ export default function SiteSelector({ state, actions }) {
                   )}
                   {!publishedPeriods.includes(period) ? (
                     <>
-                      <button className="btn btn-primary" onClick={() => setShowStats(true)} style={{ background: '#6366f1', padding: '8px 16px', fontSize: '0.9rem' }}>
-                        <TrendingUp size={16} /> Stats
-                      </button>
+
                       <button className="btn btn-primary" onClick={() => setShowBlacklist(true)} style={{ background: '#ef4444', padding: '8px 16px', fontSize: '0.9rem' }}>
                         <ShieldAlert size={16} /> Liste Noire
                       </button>
@@ -685,42 +708,12 @@ export default function SiteSelector({ state, actions }) {
                         >
                           📅 Suivi Pointage
                         </button>
-                        <button 
-                          className="btn hover-scale" 
-                          onClick={(e) => { 
-                            e.preventDefault(); 
-                            e.stopPropagation(); 
-                            runVerification(); 
-                          }} 
-                          style={{ 
-                            padding: '8px 16px', fontSize: '0.85rem', width: 'max-content', 
-                            background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', 
-                            border: '1px solid #8b5cf6', color: 'white', borderRadius: '8px',
-                            display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center',
-                            boxShadow: '0 8px 20px rgba(124, 58, 237, 0.4)',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                            opacity: isVerifying ? 0.7 : 1
-                          }}
-                          onMouseEnter={(e) => {
-                            if (isVerifying) return;
-                            e.currentTarget.style.background = 'linear-gradient(135deg, #8b5cf6, #7c3aed)';
-                            e.currentTarget.style.boxShadow = '0 12px 28px rgba(124, 58, 237, 0.7)';
-                            e.currentTarget.style.transform = 'translateY(-3px) scale(1.03)';
-                          }}
-                          onMouseLeave={(e) => {
-                            if (isVerifying) return;
-                            e.currentTarget.style.background = 'linear-gradient(135deg, #7c3aed, #6d28d9)';
-                            e.currentTarget.style.boxShadow = '0 8px 20px rgba(124, 58, 237, 0.4)';
-                            e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                          }}
-                        >
-                          {isVerifying ? '🛡️ Analyse en cours...' : '🛡️ Vérification'}
-                        </button>
+
                       </div>
                     </>
                   ) : (
+                    // Masquer le bouton "Mois Suivant" si l'utilisateur a déjà avancé au-delà de ce mois
+                    maxInitializedPeriod && maxInitializedPeriod > period ? null : (
                     <button
                       className="btn btn-primary"
                       onClick={() => setShowNextMonthModal(true)}
@@ -738,6 +731,7 @@ export default function SiteSelector({ state, actions }) {
                     >
                       <CalendarDays size={14} /> Mois Suivant ➔
                     </button>
+                    )
                   )}
                 </div>
               )}
@@ -800,7 +794,7 @@ export default function SiteSelector({ state, actions }) {
               </div>
             )}
           </div>
-        )}
+        </>
 
         {isVerificationMode && !publishedPeriods.includes(period) && (
           <div className="glass-panel" style={{ textAlign: 'center', padding: '60px 20px', marginTop: '40px' }}>
@@ -810,7 +804,7 @@ export default function SiteSelector({ state, actions }) {
           </div>
         )}
 
-        {isVerificationMode && publishedPeriods.includes(period) && datesList.length > 0 && (
+        {isVerificationMode && publishedPeriods.includes(period) && datesList.length > 0 && !showVerificationSites && (
           <div className="glass-panel"
             onClick={() => setShowVerificationSites(true)}
             style={{
@@ -859,6 +853,26 @@ export default function SiteSelector({ state, actions }) {
 
         {((!isVerificationMode && !isArchiveMode) || isArchiveMode || (isVerificationMode && publishedPeriods.includes(period) && showVerificationSites)) && (
           <>
+            {isVerificationMode && publishedPeriods.includes(period) && datesList.length > 0 && showVerificationSites && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(56,189,248,0.08) 0%, rgba(34,197,94,0.05) 100%)',
+                border: '1px solid rgba(56,189,248,0.25)',
+                padding: '12px 20px',
+                marginBottom: '24px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                color: 'white',
+                fontSize: '0.95rem',
+                width: '100%'
+              }}>
+                <span style={{ color: '#38bdf8', fontSize: '1.2rem', display: 'flex', alignItems: 'center' }}>📅</span>
+                <span>
+                  <strong>Période à traiter :</strong> du <strong style={{ color: '#38bdf8' }}>{datesList[0].toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</strong> au <strong style={{ color: '#38bdf8' }}>{datesList[datesList.length - 1].toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</strong>
+                </span>
+              </div>
+            )}
             {(isEmptyMonth && !loading) ? (
               /* ── Mois sans données (passé vide ou futur) ── */
               <div style={{
@@ -932,7 +946,34 @@ export default function SiteSelector({ state, actions }) {
                 }).map((site, idx) => {
                   const glowColors = ['var(--b)', 'var(--a)', 'var(--c)', '#a78bfa', '#f472b6'];
                   const glow = glowColors[idx % glowColors.length];
-                  const matchedAgents = siteSearchTerm ? globalAgents.filter(a => a.site_id === site.id && a.name.toLowerCase().includes(siteSearchTerm.toLowerCase())) : [];
+                  
+                  let matchedAgents = [];
+                  if (siteSearchTerm) {
+                    const q = normalizeText(siteSearchTerm);
+                    const globalMatches = (globalAgents || []).filter(a => {
+                      const siteIdMatches = a.site_id && site.id && String(a.site_id) === String(site.id);
+                      const siteNameMatches = (a.site && site.name && a.site === site.name) || (a.site && site.nom && a.site === site.nom);
+                      return (siteIdMatches || siteNameMatches) && normalizeText(a.name || a.nom || '').includes(q);
+                    });
+                    
+                    if (globalMatches.length > 0) {
+                      matchedAgents = globalMatches;
+                    } else if (site.subsites) {
+                      site.subsites.forEach(sub => {
+                        (sub.agents || []).forEach(agent => {
+                          if (normalizeText(agent.name || agent.nom || '').includes(q)) {
+                            // Avoid duplicates safely if id is undefined
+                            const agentIdentifier = agent.id || agent.name || agent.nom;
+                            if (!matchedAgents.some(m => (m.id || m.name || m.nom) === agentIdentifier)) {
+                              matchedAgents.push({ ...agent, name: agent.name || agent.nom, id: agent.id || agentIdentifier });
+                            }
+                          }
+                        });
+                      });
+                    }
+                  }
+                  
+
                   const siteIcon = site.icon || '🏢';
                   return (
                     <div
@@ -1025,39 +1066,43 @@ export default function SiteSelector({ state, actions }) {
                             {site.name} {site.location === 'interieur' && <img src="https://flagcdn.com/w20/ci.png" srcSet="https://flagcdn.com/w40/ci.png 2x" width="16" alt="Côte d'Ivoire" title="Site de l'Intérieur" style={{ marginLeft: '6px', verticalAlign: 'middle', borderRadius: '2px' }} />}
                           </span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <button
-                              title="Renommer le site"
-                              onClick={(e) => handleRenameSiteInline(e, site.id, site.name)}
-                              style={{
-                                background: 'transparent', border: 'none', color: 'var(--muted)',
-                                cursor: 'pointer', padding: '4px', borderRadius: '4px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                transition: 'color 0.2s, background 0.2s'
-                              }}
-                              onMouseEnter={e => { e.currentTarget.style.color = 'var(--b)'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
-                            >
-                              <span style={{ fontSize: '14px' }}>✏️</span>
-                            </button>
-                            {!['site_extras', 'site_releves', 'site_administration'].includes(site.id) && (
-                              <button
-                                title="Supprimer le site"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteSiteData(site);
-                                  setShowDeleteSiteModal(true);
-                                }}
-                                style={{
-                                  background: 'transparent', border: 'none', color: 'var(--muted)',
-                                  cursor: 'pointer', padding: '4px', borderRadius: '4px',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  transition: 'color 0.2s, background 0.2s'
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                            {!isVerificationMode && !isArchiveMode && (!publishedPeriods || !publishedPeriods.includes(getSafePeriod())) && (
+                              <>
+                                <button
+                                  title="Renommer le site"
+                                  onClick={(e) => handleRenameSiteInline(e, site.id, site.name)}
+                                  style={{
+                                    background: 'transparent', border: 'none', color: 'var(--muted)',
+                                    cursor: 'pointer', padding: '4px', borderRadius: '4px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    transition: 'color 0.2s, background 0.2s'
+                                  }}
+                                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--b)'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+                                >
+                                  <span style={{ fontSize: '14px' }}>✏️</span>
+                                </button>
+                                {!['site_extras', 'site_releves', 'site_administration'].includes(site.id) && (
+                                  <button
+                                    title="Supprimer le site"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteSiteData(site);
+                                      setShowDeleteSiteModal(true);
+                                    }}
+                                    style={{
+                                      background: 'transparent', border: 'none', color: 'var(--muted)',
+                                      cursor: 'pointer', padding: '4px', borderRadius: '4px',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      transition: 'color 0.2s, background 0.2s'
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </h3>
@@ -1103,7 +1148,12 @@ export default function SiteSelector({ state, actions }) {
                               <span>📍</span> {site.subsites ? site.subsites.length : 0} zone{site.subsites && site.subsites.length > 1 ? 's' : ''}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b' }}>
-                              <Users size={14} color="#f59e0b" /> {site.agents_count || 0} agent{site.agents_count > 1 ? 's' : ''}
+                              <Users size={14} color="#f59e0b" /> {(() => {
+                                return (site.subsites || []).reduce((acc, sub) => acc + (sub.agents ? sub.agents.length : 0), 0);
+                              })()} agent{(() => {
+                                const total = (site.subsites || []).reduce((acc, sub) => acc + (sub.agents ? sub.agents.length : 0), 0);
+                                return total > 1 ? 's' : '';
+                              })()}
                             </div>
                           </div>
                         )}
@@ -1158,6 +1208,11 @@ export default function SiteSelector({ state, actions }) {
                   </button>
                   <button onClick={handleFirstVisitOui} className="btn btn-primary" style={{ flex: 1, padding: '12px', fontSize: '0.95rem' }}>
                     ✅ Oui, passer à {nextMonthName}
+                  </button>
+                </div>
+                <div style={{ marginTop: '12px' }}>
+                  <button onClick={handleFirstVisitIgnore} className="btn" style={{ width: '100%', padding: '10px', fontSize: '0.9rem', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }}>
+                    Ignorer ce message
                   </button>
                 </div>
               </div>
@@ -1254,67 +1309,58 @@ export default function SiteSelector({ state, actions }) {
                   backdropFilter: 'blur(16px)'
                 }}>
                   <style>{`
-                    @keyframes pulseGlow {
-                      0%, 100% { opacity: 0.6; filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.4)); }
-                      50% { opacity: 1; filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.8)); }
+                    @keyframes folderReceive {
+                      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.2)); }
+                      50% { transform: scale(1.05); filter: drop-shadow(0 0 25px rgba(56, 189, 248, 0.8)); }
                     }
-                    @keyframes dashFlow {
-                      to {
-                        stroke-dashoffset: -40;
-                      }
+                    @keyframes slideFile {
+                      0% { left: 0%; transform: scale(0.5) translateY(-50%); opacity: 0; }
+                      15% { left: 15%; transform: scale(1) translateY(-50%); opacity: 1; }
+                      85% { left: 85%; transform: scale(1) translateY(-50%); opacity: 1; }
+                      100% { left: 100%; transform: scale(0.3) translateY(-50%); opacity: 0; }
                     }
-                    @keyframes floatParticle {
-                      0% { transform: translateY(0) scale(1); opacity: 0.2; }
-                      50% { opacity: 0.8; }
-                      100% { transform: translateY(-40px) scale(0.8); opacity: 0; }
+                    .file-particle {
+                      position: absolute;
+                      top: 50%;
+                      color: #38bdf8;
+                      animation: slideFile 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
                     }
-                    .quantum-db-pulse {
-                      animation: pulseGlow 2s infinite ease-in-out;
-                    }
-                    .quantum-cloud-pulse {
-                      animation: pulseGlow 2s infinite ease-in-out 1s;
-                    }
+                    .file-1 { animation-delay: 0s; }
+                    .file-2 { animation-delay: 0.5s; }
+                    .file-3 { animation-delay: 1s; }
                   `}</style>
 
                   {/* Flow Visualization */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', marginBottom: '32px', position: 'relative' }}>
-                    {/* Database Server Icon */}
-                    <div className="quantum-db-pulse" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '16px', padding: '16px', width: '72px', height: '72px', justifyContent: 'center' }}>
-                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                        <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
-                      </svg>
-                      <span style={{ fontSize: '0.6rem', color: '#38bdf8', fontWeight: 800, marginTop: '4px', letterSpacing: '0.05em' }}>LOCAL</span>
-                    </div>
-
-                    {/* Animated SVG Pipeline */}
-                    <div style={{ flex: 1, position: 'relative', height: '40px', display: 'flex', alignItems: 'center' }}>
-                      {/* Floating background particles */}
-                      <div style={{ position: 'absolute', top: '-10px', left: '20%', width: '4px', height: '4px', borderRadius: '50%', background: '#38bdf8', animation: 'floatParticle 2s infinite ease-in-out' }}></div>
-                      <div style={{ position: 'absolute', top: '15px', left: '50%', width: '3px', height: '3px', borderRadius: '50%', background: '#818cf8', animation: 'floatParticle 1.6s infinite ease-in-out 0.5s' }}></div>
-                      <div style={{ position: 'absolute', top: '-5px', left: '70%', width: '5px', height: '5px', borderRadius: '50%', background: '#38bdf8', animation: 'floatParticle 2.4s infinite ease-in-out 0.8s' }}></div>
-
-                      <svg width="100%" height="24" fill="none" style={{ overflow: 'visible' }}>
-                        {/* Background guide line */}
-                        <line x1="0%" y1="12" x2="100%" y2="12" stroke="rgba(255,255,255,0.06)" strokeWidth="4" strokeLinecap="round" />
-                        {/* Glowing particle pipeline */}
-                        <line x1="0%" y1="12" x2="100%" y2="12" stroke="url(#quantumGradient)" strokeWidth="4" strokeDasharray="10 15" strokeLinecap="round" style={{ animation: 'dashFlow 1.2s linear infinite' }} />
-                        <defs>
-                          <linearGradient id="quantumGradient" x1="0%" y1="0" x2="100%" y2="0">
-                            <stop offset="0%" stopColor="#38bdf8" />
-                            <stop offset="100%" stopColor="#818cf8" />
-                          </linearGradient>
-                        </defs>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '32px', position: 'relative', width: '100%' }}>
+                    {/* Source Icon (Stack of files) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', width: '72px', height: '72px', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/>
+                        <path d="M14 3v5h5M16 13H8M16 17H8M10 9H8"/>
                       </svg>
                     </div>
 
-                    {/* Cloud Server Icon */}
-                    <div className="quantum-cloud-pulse" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(129, 140, 248, 0.08)', border: '1px solid rgba(129, 140, 248, 0.3)', borderRadius: '16px', padding: '16px', width: '72px', height: '72px', justifyContent: 'center' }}>
-                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.47-.47-1.15-1-2-1h-1a5 5 0 0 0-8.9 2.5c0 1 .5 2 1 2.5A3.5 3.5 0 0 0 8.5 19H17.5z"/>
+                    {/* Animated Files Pipeline */}
+                    <div style={{ flex: 1, position: 'relative', height: '40px' }}>
+                      {/* Guide line */}
+                      <div style={{ position: 'absolute', top: '50%', left: '0', right: '0', height: '2px', background: 'rgba(56, 189, 248, 0.1)', transform: 'translateY(-50%)', borderTop: '1px dashed rgba(56,189,248,0.3)' }} />
+                      
+                      {/* Particles */}
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className={`file-particle file-${i}`}>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="rgba(56,189,248,0.1)" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 8px rgba(56,189,248,0.6))' }}>
+                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                            <polyline points="13 2 13 9 20 9"></polyline>
+                          </svg>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Destination Folder */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '16px', padding: '16px', width: '80px', height: '80px', justifyContent: 'center', flexShrink: 0, animation: 'folderReceive 2s infinite ease-in-out' }}>
+                      <svg width="38" height="38" viewBox="0 0 24 24" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                       </svg>
-                      <span style={{ fontSize: '0.6rem', color: '#818cf8', fontWeight: 800, marginTop: '4px', letterSpacing: '0.05em' }}>CLOUD</span>
                     </div>
                   </div>
 
@@ -1345,52 +1391,52 @@ export default function SiteSelector({ state, actions }) {
                 <div style={{
                   position: 'relative', zIndex: 1,
                   background: 'linear-gradient(145deg, #0a1628 0%, #111827 50%, #0f1a2e 100%)',
-                  border: '1px solid rgba(34,197,94,0.3)', borderRadius: '24px', padding: '28px 32px',
+                  border: '1px solid rgba(34,197,94,0.3)', borderRadius: '24px', padding: '20px 24px',
                   maxWidth: '500px', width: '100%',
                   maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
                   boxShadow: '0 25px 60px rgba(0,0,0,0.7), 0 0 60px rgba(34,197,94,0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
                 }}>
                   {/* Header */}
-                  <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                    <div style={{ width: '72px', height: '72px', margin: '0 auto 16px', background: 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(56,189,248,0.15))', border: '2px solid rgba(34,197,94,0.4)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', boxShadow: '0 8px 25px rgba(34,197,94,0.2)' }}>🚀</div>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', margin: 0 }}>Publier le pointage</h2>
-                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', marginTop: '6px' }}>
+                  <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                    <div style={{ width: '56px', height: '56px', margin: '0 auto 12px', background: 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(56,189,248,0.15))', border: '2px solid rgba(34,197,94,0.4)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', boxShadow: '0 8px 25px rgba(34,197,94,0.2)' }}>🚀</div>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', margin: 0 }}>Publier le pointage</h2>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', marginTop: '4px' }}>
                       Mois de <span style={{ color: '#22c55e', fontWeight: 700 }}>{monthName} {yr}</span>
                     </p>
                   </div>
 
                   {/* Période card */}
-                  <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '14px', padding: '16px 20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <CalendarDays size={28} style={{ color: '#22c55e', flexShrink: 0 }} />
-                    <div>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Période concernée</div>
-                      <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>{fmtD(startD)} → {fmtD(endD)}</div>
+                  <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '12px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                    <CalendarDays size={24} style={{ color: '#22c55e', flexShrink: 0 }} />
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>Période concernée</div>
+                      <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff' }}>{fmtD(startD)} → {fmtD(endD)}</div>
                     </div>
                   </div>
 
                   {/* Stats */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.15)', borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#38bdf8' }}>{sites.length}</div>
-                      <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>Site(s)</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                    <div style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.15)', borderRadius: '12px', padding: '10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#38bdf8' }}>{sites.length}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>Site(s)</div>
                     </div>
-                    <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#22c55e' }}>{stats.totalAgents}</div>
-                      <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>Agent(s)</div>
+                    <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: '12px', padding: '10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#22c55e' }}>{stats.totalAgents}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>Agent(s)</div>
                     </div>
                   </div>
 
                   {/* Checklist */}
-                  <div style={{ marginBottom: '24px' }}>
-                    <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>En publiant :</p>
+                  <div style={{ marginBottom: '20px' }}>
+                    <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>En publiant :</p>
                     {[
                       { icon: '📤', text: 'Le pointage sera visible pour le service de traitement' },
                       { icon: '📦', text: 'Une archive automatique sera créée' },
                       { icon: '🔒', text: 'Le bouton "Mois Suivant" sera débloqué' },
                     ].map((item, i) => (
-                      <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '9px 0', borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                        <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
-                        <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.72)' }}>{item.text}</span>
+                      <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 0', borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                        <span style={{ fontSize: '1rem' }}>{item.icon}</span>
+                        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.72)' }}>{item.text}</span>
                       </div>
                     ))}
                   </div>
@@ -1398,12 +1444,12 @@ export default function SiteSelector({ state, actions }) {
                   {/* Buttons */}
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <button onClick={() => setShowPublishModal(false)} disabled={publishing}
-                      style={{ flex: 1, padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, transition: 'all 0.2s' }}
+                      style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, transition: 'all 0.2s' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                     >Annuler</button>
                     <button onClick={handlePublishPeriod} disabled={publishing}
-                      style={{ flex: 2, padding: '14px', borderRadius: '12px', background: publishing ? 'rgba(34,197,94,0.3)' : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: '#fff', border: 'none', cursor: publishing ? 'wait' : 'pointer', fontSize: '0.95rem', fontWeight: 700, transition: 'all 0.2s', boxShadow: '0 4px 20px rgba(34,197,94,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      style={{ flex: 2, padding: '12px', borderRadius: '12px', background: publishing ? 'rgba(34,197,94,0.3)' : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: '#fff', border: 'none', cursor: publishing ? 'wait' : 'pointer', fontSize: '0.95rem', fontWeight: 700, transition: 'all 0.2s', boxShadow: '0 4px 20px rgba(34,197,94,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                       onMouseEnter={e => { if (!publishing) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(34,197,94,0.5)'; } }}
                       onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(34,197,94,0.4)'; }}
                     >
@@ -1436,22 +1482,22 @@ export default function SiteSelector({ state, actions }) {
             <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <div onClick={() => setShowNextMonthModal(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} />
               <div className="next-month-modal-container">
-                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                  <div style={{ width: '72px', height: '72px', margin: '0 auto 16px', background: 'linear-gradient(135deg, rgba(245,158,11,0.2), rgba(239,68,68,0.15))', border: '2px solid rgba(245,158,11,0.4)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', boxShadow: '0 8px 25px rgba(245,158,11,0.2)' }}>📅</div>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', margin: 0 }}>Passage au mois suivant</h2>
-                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', marginTop: '6px' }}>{currentMonthName} → <span style={{ color: '#f59e0b', fontWeight: 700 }}>{nextMonthName} {y}</span></p>
+                <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                  <div style={{ width: '56px', height: '56px', margin: '0 auto 12px', background: 'linear-gradient(135deg, rgba(245,158,11,0.2), rgba(239,68,68,0.15))', border: '2px solid rgba(245,158,11,0.4)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', boxShadow: '0 8px 25px rgba(245,158,11,0.2)' }}>📅</div>
+                  <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', margin: 0 }}>Passage au mois suivant</h2>
+                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', marginTop: '4px' }}>{currentMonthName} → <span style={{ color: '#f59e0b', fontWeight: 700 }}>{nextMonthName} {y}</span></p>
                 </div>
 
-                <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '14px', padding: '16px 20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <CalendarDays size={28} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '12px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <CalendarDays size={24} style={{ color: '#f59e0b', flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Nouvelle période de pointage</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>{fmtDate(start)} → {fmtDate(end)}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>Nouvelle période de pointage</div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff' }}>{fmtDate(start)} → {fmtDate(end)}</div>
                   </div>
                 </div>
 
-                <div style={{ marginBottom: '28px' }}>
-                  <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>Ce qui va se passer :</p>
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>Ce qui va se passer :</p>
                   {[
                     { icon: '✅', color: '#22c55e', text: 'La structure de vos sites et agents est conservée' },
                     { icon: '✅', color: '#22c55e', text: 'Les vacations et fonctions sont maintenues' },
@@ -1459,7 +1505,7 @@ export default function SiteSelector({ state, actions }) {
                     { icon: '🗑️', color: '#ef4444', text: 'Les heures supplémentaires sont effacées', hasEdit: true },
                     { icon: '🔄', color: '#38bdf8', text: 'Le calendrier est recalculé pour la nouvelle période' }
                   ].map((item, i) => (
-                    <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                    <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
                       <span style={{ fontSize: '1rem' }}>{item.icon}</span>
                       <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)', flex: 1 }}>{item.text}</span>
                       {item.hasEdit && (
@@ -1473,7 +1519,7 @@ export default function SiteSelector({ state, actions }) {
                 </div>
 
                 <div className="next-month-buttons" style={{ display: 'flex', gap: '12px' }}>
-                  <button onClick={() => setShowNextMonthModal(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}>Annuler</button>
+                  <button onClick={handleCancelNextMonth} style={{ flex: 1, padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}>Annuler</button>
                   <button onClick={handleNextMonth} disabled={initializing} style={{ flex: 2, padding: initializing ? '10px 14px' : '14px', borderRadius: '12px', background: initializing ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)', color: initializing ? 'rgba(255,255,255,0.8)' : '#fff', border: 'none', cursor: initializing ? 'not-allowed' : 'pointer', fontSize: '0.95rem', fontWeight: 700, transition: 'all 0.2s', boxShadow: initializing ? 'none' : '0 4px 20px rgba(245,158,11,0.4)', display: 'flex', flexDirection: initializing ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onMouseEnter={e => { if (!initializing) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(245,158,11,0.5)'; } }} onMouseLeave={e => { if (!initializing) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(245,158,11,0.4)'; } }}>
                     {initializing ? (
                       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1545,6 +1591,27 @@ export default function SiteSelector({ state, actions }) {
               }}
             >
               <Trash size={14} /> Supprimer
+            </button>
+            <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+            <button
+              className="btn"
+              style={{ textAlign: 'left', padding: '8px 12px', width: '100%', background: 'transparent', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.1)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              onClick={() => {
+                if (window.confirm('Voulez-vous réinitialiser l\'ordre et l\'interface par défaut ? Cela rechargera la page.')) {
+                  localStorage.removeItem('elysium_sites_order');
+                  Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('elysium_subsites_order_') || key.startsWith('elysium_dashboard_')) {
+                      localStorage.removeItem(key);
+                    }
+                  });
+                  window.location.reload();
+                }
+                setSiteContextMenu({ ...siteContextMenu, visible: false });
+              }}
+            >
+              <RefreshCw size={14} /> Réinitialiser Interface
             </button>
           </div>
         )}

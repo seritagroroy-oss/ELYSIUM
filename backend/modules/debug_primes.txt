@@ -1,0 +1,98 @@
+Array
+(
+    [company] => comp_cf66d02f
+    [map] => Array
+        (
+            [LDF / LDF COSMOS] => Array
+                (
+                    [prime] => 5000
+                    [func] => 
+                )
+
+            [LDF / PLAYCE FAYA] => Array
+                (
+                    [prime] => 5000
+                    [func] => 
+                )
+
+            [LDF / ANGRE NOUVEAU CHU] => Array
+                (
+                    [prime] => 5000
+                    [func] => 
+                )
+
+            [LDF / CASINO GOLF] => Array
+                (
+                    [prime] => 5000
+                    [func] => 
+                )
+
+            [EXTRA SUR SITE ABIDJAN / LDF PLAYCE  FAYA] => Array
+                (
+                    [prime] => 5000
+                    [func] => 
+                )
+
+            [EXTRA SUR SITE ABIDJAN / LDF ANGRE NOUVEAU CHU] => Array
+                (
+                    [prime] => 5000
+                    [func] => 
+                )
+
+            [EXTRA SUR SITE ABIDJAN / LDF CASINO GOLF] => Array
+                (
+                    [prime] => 5000
+                    [func] => 
+                )
+
+            [RESIDENCE / RESIDENCE TOURE] => Array
+                (
+                    [prime] => 5000
+                    [func] => AS
+                )
+
+            [SODCO GRANITE-CI] => Array
+                (
+                    [prime] => 5000
+                    [func] => AS
+                )
+
+            [RESIDENCE / RESIDENCE CISSOKO] => Array
+                (
+                    [prime] => 10000
+                    [func] => AS
+                )
+
+            [LDF / ABIDJAN MALL] => Array
+                (
+                    [prime] => 5000
+                    [func] => AS
+                )
+
+            [RESIDENCE / RESIDENCE GRAND BASSAM] => Array
+                (
+                    [prime] => 10000
+                    [func] => AS
+                )
+
+            [LDF / LDF KOKO MALL NOUVEAU CHU ANGRE] => Array
+                (
+                    [prime] => 5000
+                    [func] => AS
+                )
+
+            [EXTRAS SUR SITES ABIDJAN / EXTRA SUR SITE  LDF COSMOS] => Array
+                (
+                    [prime] => 5000
+                    [func] => AS
+                )
+
+            [EXTRAS SUR SITES ABIDJAN / EXTRA SUR SITE LDF PLAYCE  FAYA] => Array
+                (
+                    [prime] => 5000
+                    [func] => AS
+                )
+
+        )
+
+)

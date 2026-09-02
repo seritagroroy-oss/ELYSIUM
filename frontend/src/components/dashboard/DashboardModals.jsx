@@ -71,19 +71,28 @@ export default function DashboardModals({ state, actions }) {
                   sites={sites}
                   currentSiteId={activeSiteId}
                   onClose={() => setExternalSuppModal(null)}
-                  onSubmit={async (data) => {
+                  onSubmit={(data) => {
                     const payload = {
                       ...data,
                       period,
                       site_origine_id: activeSiteId
                     };
-                    const res = await apiCall('add_external_supp', payload);
-                    if (res.success) {
-                      setExternalSuppModal(null);
-                      loadSiteData();
-                    } else {
-                      alert(res.message || "Erreur lors de l'ajout du supplémentaire externe.");
-                    }
+                    // 1. Injection IMMÉDIATE dans la mémoire pour un affichage instantané (0ms)
+                    actions.injectOptimisticExternalSupp(payload);
+                    
+                    // 2. Fermeture immédiate de la modale
+                    setExternalSuppModal(null);
+                    
+                    // 3. Envoi au serveur en arrière-plan
+                    apiCall('add_external_supp', payload).then(res => {
+                      if (res.success) {
+                        loadDashboardData(true); // Rafraîchissement silencieux
+                      } else {
+                        alert(res.message || "Erreur lors de l'ajout du supplémentaire externe.");
+                      }
+                    }).catch(err => {
+                      alert("Erreur réseau: " + err.message);
+                    });
                   }}
                 />
               )}
@@ -130,7 +139,7 @@ export default function DashboardModals({ state, actions }) {
                   subsites={siteData}
                   onSuccess={() => {
                     setMoveZoneAgent(null);
-                    loadSiteData(true);
+                    loadDashboardData(true);
                   }}
                   onZoneCreated={loadDashboardData}
                 />
@@ -225,19 +234,22 @@ export default function DashboardModals({ state, actions }) {
                   sites={sites}
                   currentSiteId={activeSiteId}
                   onClose={() => setExternalSuppModal(null)}
-                  onSubmit={async (data) => {
+                  onSubmit={(data) => {
                     const payload = {
                       ...data,
                       period,
                       site_origine_id: activeSiteId
                     };
-                    const res = await apiCall('add_external_supp', payload);
-                    if (res.success) {
-                      setExternalSuppModal(null);
-                      loadSiteData();
-                    } else {
-                      alert(res.message || "Erreur lors de l'ajout du supplémentaire externe.");
-                    }
+                    setExternalSuppModal(null);
+                    apiCall('add_external_supp', payload).then(res => {
+                      if (res.success) {
+                        loadDashboardData(true); // silent=true
+                      } else {
+                        alert(res.message || "Erreur lors de l'ajout du supplémentaire externe.");
+                      }
+                    }).catch(err => {
+                      alert("Erreur réseau: " + err.message);
+                    });
                   }}
                 />
               )}
@@ -284,7 +296,7 @@ export default function DashboardModals({ state, actions }) {
                   subsites={siteData}
                   onSuccess={() => {
                     setMoveZoneAgent(null);
-                    loadSiteData(true);
+                    loadDashboardData(true);
                   }}
                   onZoneCreated={loadDashboardData}
                 />

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const OverlapWarningModal = ({ overlapWarning, setOverlapWarning }) => {
+const OverlapWarningModal = ({ overlapWarning, setOverlapWarning, isSubmittingLeave }) => {
   if (!overlapWarning) return null;
 
   return (
@@ -20,13 +20,31 @@ const OverlapWarningModal = ({ overlapWarning, setOverlapWarning }) => {
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
           <button
             onClick={() => setOverlapWarning(null)}
-            style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.15)', padding: '9px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}
+            disabled={isSubmittingLeave}
+            style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.15)', padding: '9px 20px', borderRadius: '8px', cursor: isSubmittingLeave ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.9rem', opacity: isSubmittingLeave ? 0.5 : 1 }}
           >Annuler</button>
           <button
             onClick={overlapWarning.onConfirm}
-            style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#000', border: 'none', padding: '9px 22px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', boxShadow: '0 4px 15px rgba(245,158,11,0.4)' }}
-          >✅ Continuer quand même</button>
+            disabled={isSubmittingLeave}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#000', border: 'none', padding: '9px 22px', borderRadius: '8px', cursor: isSubmittingLeave ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.9rem', boxShadow: isSubmittingLeave ? 'none' : '0 4px 15px rgba(245,158,11,0.4)', opacity: isSubmittingLeave ? 0.7 : 1 }}
+          >
+            {isSubmittingLeave ? (
+               <>
+                 <svg style={{ animation: 'spin 1s linear infinite', height: '1rem', width: '1rem', color: '#000' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                   <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                   <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                 </svg>
+                 En cours...
+               </>
+            ) : '✅ Continuer quand même'}
+          </button>
         </div>
+        <style dangerouslySetInnerHTML={{__html: `
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}} />
       </div>
     </div>
   );

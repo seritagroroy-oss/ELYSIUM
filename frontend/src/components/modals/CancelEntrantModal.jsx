@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { apiCall } from '../../api';
-
-const CancelEntrantModal = ({ cancelEntrantModalData, setCancelEntrantModalData, period, loadSiteData }) => {
+const CancelEntrantModal = ({ cancelEntrantModalData, setCancelEntrantModalData, period, setSiteData, loadSiteData }) => {
   const [loading, setLoading] = useState(false);
 
   if (!cancelEntrantModalData) return null;
@@ -36,8 +35,20 @@ const CancelEntrantModal = ({ cancelEntrantModalData, setCancelEntrantModalData,
               try {
                 const res = await apiCall('delete_agent_entrant', { agent_id: cancelEntrantModalData.id, period });
                 if (res.success) {
+                  if (setSiteData) {
+                    setSiteData(prevData => prevData.map(subsite => ({
+                      ...subsite,
+                      agents: subsite.agents.map(agent => {
+                        if (String(agent.id) === String(cancelEntrantModalData.id)) {
+                          return { ...agent, hire_date: null, attendance: res.attendance || [] };
+                        }
+                        return agent;
+                      })
+                    })));
+                  } else {
+                    await loadSiteData();
+                  }
                   setCancelEntrantModalData(null);
-                  await loadSiteData();
                 } else {
                   alert(res.message || "Erreur lors de l'annulation du statut entrant");
                 }

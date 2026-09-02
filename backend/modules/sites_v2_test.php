@@ -59,17 +59,9 @@ switch ($action) {
             if ($s['id'] === 'site_itc')
                 $has_itc = true;
         }
-        if (($is_billed === null || $is_billed != '0') && $module !== 'FACTURATION') {
-            if (!$has_extras)
-                $sites_rows[] = ['id' => 'site_extras', 'name' => '🌟 EXTRA BUREAU', 'is_billed' => 1];
+        if ($is_billed === null || $is_billed != '0') {
             if (!$has_releves)
                 $sites_rows[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves', 'is_billed' => 1];
-            if (!array_filter($sites_rows, fn($s) => $s['id'] === 'site_extras_sur_site'))
-                $sites_rows[] = ['id' => 'site_extras_sur_site', 'name' => '🌟 EXTRA SUR SITE', 'is_billed' => 1];
-            if (!$has_admin)
-                $sites_rows[] = ['id' => 'site_administration', 'name' => '🏢 Administration', 'is_billed' => 1];
-            if (!$has_itc)
-                $sites_rows[] = ['id' => 'site_itc', 'name' => 'ITC / IFM', 'is_billed' => 1];
         }
 
         $sites = $sites_rows;
@@ -78,19 +70,8 @@ switch ($action) {
             $stmtSub->execute([$site['id'], $serviceKey]);
             $subs = $stmtSub->fetchAll();
             
-            if (empty($subs) && in_array($site['id'], ['site_extras', 'site_releves', 'site_administration', 'site_itc'])) {
-                if ($site['id'] === 'site_extras') $subs = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
+            if (empty($subs) && in_array($site['id'], ['site_releves'])) {
                 if ($site['id'] === 'site_releves') $subs = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-                if ($site['id'] === 'site_administration') $subs = [['id' => 'site_admin_1', 'name' => 'Bureau']];
-                if ($site['id'] === 'site_itc') {
-                    $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($companyKey ?? '')), 0, 12);
-                    $subs = [
-                        ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Régulière'],
-                        ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
-                        ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS'],
-                        ['id' => 'itc_special_' . $comp_suffix, 'name' => 'Agent Spécial']
-                    ];
-                }
             }
             $site['subsites'] = $subs ?: [];
             
@@ -553,59 +534,21 @@ switch ($action) {
         $site_data = [];
 
         if ($site_id !== null && $site_id !== '' && $serviceKey) {
-            $is_hardcoded = in_array($site_id, ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration', 'site_itc']);
+            $is_hardcoded = in_array($site_id, ['site_releves']);
 
             if ($is_hardcoded) {
                 $site = ['id' => $site_id, 'name' => ''];
-                if ($site_id === 'site_extras')
-                    $site['name'] = '🌟 EXTRA BUREAU';
-                if ($site_id === 'site_extras_sur_site')
-                    $site['name'] = '⭐ EXTRA SUR SITE';
                 if ($site_id === 'site_releves')
                     $site['name'] = '🔄 Vivier des relèves';
-                if ($site_id === 'site_administration')
-                    $site['name'] = '🏢 Administration';
-                if ($site_id === 'site_itc')
-                    $site['name'] = 'ITC / IFM';
 
-                // Fetch subsites avec isolation complète par company_id
-                if ($site_id === 'site_itc') {
-                    // ITC/IFM : chaque entreprise a ses propres zones, filtrées par company_id
-                    $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($company_id)), 0, 12);
-                    $stmtItcComp = $sqlite->prepare("SELECT * FROM subsites WHERE site_id = 'site_itc' AND company_id = ? ORDER BY created_at ASC");
-                    $stmtItcComp->execute([$company_id]);
-                    $itc_comp = $stmtItcComp->fetchAll();
-                    if (!empty($itc_comp)) {
-                        $subsites_rows = $itc_comp;
+                $stmt = $sqlite->prepare("SELECT * FROM subsites WHERE site_id = ? AND (service_id = ? OR company_id = ? OR service_id IS NULL OR service_id = '')");
+                $stmt->execute([$site_id, $serviceKey, $company_id]);
+                $subsites_rows = $stmt->fetchAll();
+
+                if (empty($subsites_rows)) {
+                    if ($site_id === 'site_releves') {
+                        $subsites_rows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
                     } else {
-                        // Première ouverture pour cette entreprise → créer les 3 zones par défaut
-                        $default_zones = [
-                            ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Reguliere'],
-                            ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
-                            ['id' => 'itc_as_' . $comp_suffix, 'name' => 'Agent Special'],
-                            ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS']
-                        ];
-                        try {
-                            $stmtIns = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, ?, 'site_itc', '', ?)");
-                            foreach ($default_zones as $dz) {
-                                $stmtIns->execute([$dz['id'], $dz['name'], $company_id]);
-                            }
-                        } catch (Exception $e) { /* Ignore */ }
-                        $subsites_rows = $default_zones;
-                    }
-                } else {
-                    $stmt = $sqlite->prepare("SELECT * FROM subsites WHERE site_id = ? AND (service_id = ? OR company_id = ? OR service_id IS NULL OR service_id = '')");
-                    $stmt->execute([$site_id, $serviceKey, $company_id]);
-                    $subsites_rows = $stmt->fetchAll();
-
-                    if (empty($subsites_rows)) {
-                        if ($site_id === 'site_extras') {
-                            $subsites_rows = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
-                        } elseif ($site_id === 'site_releves') {
-                            $subsites_rows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-                        } elseif ($site_id === 'site_administration') {
-                            $subsites_rows = [['id' => 'site_admin_1', 'name' => 'Bureau']];
-                        } else {
                             $subsites_rows = [['id' => 'default_' . $site_id, 'name' => 'Zone Principale']];
                         }
                     } else {

@@ -7,7 +7,8 @@ export default function PermissionModal({
   onStartDateChange,
   onEndDateChange,
   onClose,
-  onSubmit
+  onSubmit,
+  isSubmittingLeave = false
 }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -58,16 +59,19 @@ export default function PermissionModal({
           </div>
 
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button type="button" onClick={onClose} 
-              style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-              onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+            <button type="button" onClick={onClose} disabled={isSubmittingLeave}
+              style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontWeight: 600, cursor: isSubmittingLeave ? 'not-allowed' : 'pointer', opacity: isSubmittingLeave ? 0.5 : 1, transition: 'all 0.2s' }}
+              onMouseOver={e => { if(!isSubmittingLeave) e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+              onMouseOut={e => { if(!isSubmittingLeave) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
             >Annuler</button>
-            <button type="submit" 
-              style={{ flex: 2, padding: '12px', background: '#ef4444', border: 'none', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontWeight: 800, cursor: 'pointer', boxShadow: '0 6px 15px rgba(239,68,68,0.3)', transition: 'all 0.2s' }}
-              onMouseOver={e => { e.currentTarget.style.background = '#dc2626'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-              onMouseOut={e => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.transform = 'translateY(0)'; }}
-            >Valider la Permission</button>
+            <button type="submit" disabled={isSubmittingLeave}
+              style={{ flex: 2, padding: '12px', background: '#ef4444', border: 'none', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontWeight: 800, cursor: isSubmittingLeave ? 'not-allowed' : 'pointer', boxShadow: isSubmittingLeave ? 'none' : '0 6px 15px rgba(239,68,68,0.3)', opacity: isSubmittingLeave ? 0.7 : 1, transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              onMouseOver={e => { if(!isSubmittingLeave) { e.currentTarget.style.background = '#dc2626'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+              onMouseOut={e => { if(!isSubmittingLeave) { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.transform = 'translateY(0)'; } }}
+            >
+              {isSubmittingLeave && <div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
+              {isSubmittingLeave ? 'Validation...' : 'Valider la Permission'}
+            </button>
           </div>
         </form>
       </div>

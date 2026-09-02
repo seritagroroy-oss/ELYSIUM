@@ -113,6 +113,7 @@ export default function AddAgentModal({
   const [showSpecialServiceModal, setShowSpecialServiceModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [disableDefaultRepos, setDisableDefaultRepos] = useState(false);
+  const [isReleve, setIsReleve] = useState(false);
 
   const [showEntrantConfigModal, setShowEntrantConfigModal] = useState(false);
   const [entrantMotif, setEntrantMotif] = useState('ENTRANT');
@@ -202,11 +203,7 @@ export default function AddAgentModal({
         setShowSpecialServiceModal(true);
         return;
       }
-      if (specialServiceBase !== cycleTotalDays) {
-        alert(`Incohérence détectée : vous avez configuré une base de ${specialServiceBase} jours alors que cet agent travaillera réellement ${cycleTotalDays} jours sur ce mois. Veuillez corriger ou utiliser l'ajustement automatique.`);
-        setShowSpecialServiceModal(true);
-        return;
-      }
+      // On n'alerte plus sur la différence de base car elle s'ajuste automatiquement
     }
     
     setIsLoading(true);
@@ -231,7 +228,8 @@ export default function AddAgentModal({
         disableDefaultRepos: disableDefaultRepos,
         reposDay: shiftPattern ? null : reposDay,
         shiftPattern,
-        schedule: activeSiteId === 'site_releves' ? schedule : null
+        schedule: isReleve ? schedule : null,
+        isReleve: isReleve,
       });
     } finally {
       setIsLoading(false);
@@ -373,11 +371,27 @@ export default function AddAgentModal({
           loc = zName;
         }
 
+        let isPartTime = false;
+        console.log("DEBUG HOMONYM - Agent:", a.name, "Raw profile_data:", a.profile_data);
+        if (a.profile_data) {
+            try {
+                const profile = typeof a.profile_data === 'string' ? JSON.parse(a.profile_data) : a.profile_data;
+                console.log("DEBUG HOMONYM - Parsed profile:", profile);
+                if (profile && typeof profile === 'object' && !Array.isArray(profile)) {
+                    isPartTime = !!profile.special_service;
+                }
+            } catch (e) {
+                console.error("DEBUG HOMONYM - Error parsing profile_data:", e);
+            }
+        }
+        console.log("DEBUG HOMONYM - isPartTime evaluated to:", isPartTime);
+
         results.push({
           id: agentId,
           name: a.name,
           fullLocation: loc || 'Site non spécifié',
-          function: a.function_label || a.function_name || a.function || 'AS'
+          function: a.function_label || a.function_name || a.function || 'AS',
+          isPartTime: isPartTime
         });
       }
     };
@@ -459,7 +473,10 @@ export default function AddAgentModal({
                   }}
                 >
                   <span>
-                    ⚠️ <strong>{existingHomonyms.length} Homonyme{existingHomonyms.length > 1 ? 's' : ''} détecté{existingHomonyms.length > 1 ? 's' : ''}</strong> ({existingHomonyms.map(h => h.fullLocation).join(' ; ')})
+                    {existingHomonyms.some(h => h.isPartTime)
+                      ? <>⚠️ <strong>Agent à temps partiel détecté</strong> ({existingHomonyms.map(h => h.fullLocation).join(' ; ')})</>
+                      : <>⚠️ <strong>{existingHomonyms.length} Homonyme{existingHomonyms.length > 1 ? 's' : ''} détecté{existingHomonyms.length > 1 ? 's' : ''}</strong> ({existingHomonyms.map(h => h.fullLocation).join(' ; ')})</>
+                    }
                   </span>
                   <button
                     type="button"
@@ -533,6 +550,52 @@ export default function AddAgentModal({
             </div>
             
             {renderPatternOptions()}
+          </div>
+
+          {/* Bouton Agent Relève — checkbox style Temps Partiel */}
+          <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              background: isReleve ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.05)',
+              padding: '4px 10px',
+              borderRadius: '8px',
+              border: `1px solid ${isReleve ? 'rgba(16,185,129,0.5)' : 'rgba(16,185,129,0.2)'}`,
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              height: '41px',
+              gap: '10px',
+              minWidth: '180px',
+              transition: 'all 0.2s'
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#10b981', margin: 0, fontSize: '0.85rem', fontWeight: 600, flex: 1 }}>
+                <input
+                  type="checkbox"
+                  checked={isReleve}
+                  onChange={e => {
+                    setIsReleve(e.target.checked);
+                    if (e.target.checked) setShowScheduleModal(true);
+                  }}
+                  style={{ width: '16px', height: '16px', flexShrink: 0 }}
+                />
+                🔄 Agent Relève
+              </label>
+              {isReleve && (
+                <button
+                  type="button"
+                  onClick={() => setShowScheduleModal(true)}
+                  style={{ background: 'transparent', border: 'none', color: '#10b981', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  title="Configurer le programme de la semaine"
+                >
+                  <Settings size={15} />
+                  {Object.values(schedule).some(d => d.site_id) && (
+                    <span style={{ marginLeft: '4px', background: '#10b981', color: 'white', borderRadius: '10px', padding: '0 6px', fontSize: '0.7rem', fontWeight: 700 }}>
+                      {Object.values(schedule).filter(d => d.site_id).length}j
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 15px', marginTop: '15px', marginBottom: '15px', alignItems: 'end' }}>
@@ -708,21 +771,6 @@ export default function AddAgentModal({
             </div>
           )}
 
-          {activeSiteId === 'site_releves' && (
-            <div className="form-group" style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)', marginTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <h4 style={{ color: '#10b981', margin: '0 0 4px 0', fontSize: '1.1rem' }}>Programme de la semaine</h4>
-                <div style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Configuration des sites d'intervention</div>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setShowScheduleModal(true)} 
-                style={{ background: '#10b981', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.95rem' }}
-              >
-                Configurer le programme
-              </button>
-            </div>
-          )}
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '30px' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose} style={{ padding: '14px 40px', fontSize: '1.15rem', fontWeight: 600, minWidth: '180px', borderRadius: '10px' }}>Annuler</button>
@@ -883,3 +931,4 @@ export default function AddAgentModal({
     </div>
   );
 }
+

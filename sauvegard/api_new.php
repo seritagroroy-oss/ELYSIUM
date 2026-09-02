@@ -2,19 +2,72 @@
 if (function_exists('opcache_reset')) {
     opcache_reset();
 }
+// Désactiver l'affichage direct des erreurs (pour ne pas corrompre le JSON)
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
+error_reporting(E_ALL);
+
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/php_errors_custom.log');
+
 // Configuration des cookies de session (avant session_start)
 ini_set('session.cookie_samesite', 'Lax');
 ini_set('session.cookie_httponly', '1');
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 ini_set('session.cookie_secure', $isHttps ? '1' : '0');
 ini_set('session.use_strict_mode', '1');
+// Durée de vie de la session étendue à 30 jours (en secondes)
+$sessionLifetime = 30 * 24 * 60 * 60; // 30 jours
+ini_set('session.gc_maxlifetime', $sessionLifetime);
+ini_set('session.cookie_lifetime', $sessionLifetime);
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+if (isset($_GET['action']) && $_GET['action'] === 'my_mysql_check') {
+    require_once __DIR__ . '/backend/database.php';
+    $db = getDb();
+    try {
+        $res = $db->query("SHOW CREATE TABLE service_data");
+        echo json_encode($res);
+    } catch (Exception $e) {
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+    exit;
+}
+
 session_start();
+file_put_contents('debug_session.txt', print_r($_SESSION, true));
+$action = $_GET['action'] ?? ($_POST['action'] ?? '');
+
+
+if ($action === 'debug_dddd') {
+    require_once __DIR__ . '/backend/database.php';
+    $sqlite = getDb();
+    $agents = $sqlite->query("SELECT id, name, created_at FROM agents WHERE name LIKE '%dddd%'");
+    
+    $stmt2 = $sqlite->prepare("SELECT * FROM attendance WHERE agent_id = ?");
+    $stmt2->execute([$agents[0]['id'] ?? 0]);
+    
+    echo json_encode(['agents' => $agents, 'att' => $stmt2->fetchAll(PDO::FETCH_ASSOC)]);
+    exit;
+}
+
+
 require_once __DIR__ . '/backend/database.php';
 require_once __DIR__ . '/utils.php';
 $action = $_GET['action'] ?? '';
 require_once __DIR__ . '/backend/core/functions.php';
+
+if (isset($_GET['action']) && $_GET['action'] === 'SECRET_FIX') {
+    $db = getDb();
+    $stmt = $db->query("SELECT id, name, subsite_id FROM agents WHERE subsite_id IN (SELECT id FROM subsites WHERE site_id = 'site_extras_sur_site')");
+    $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    file_put_contents(__DIR__ . '/agents_dump_v4.txt', print_r($agents, true));
+    echo json_encode(["status" => "SUCCESS_SECRET_FIX_V4"]);
+    exit;
+}
 
 if (isset($_GET['action']) && $_GET['action'] === 'test_dates') {
     if (file_exists(__DIR__ . '/backend/modules/debug_schedule.txt')) {
@@ -28,6 +81,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'test_dates') {
 // ─── Génération du token CSRF ─────────────────────────────────────────────────
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// ─── Libération immédiate du verrou de session ────────────────────────────────
+// PHP verrouille le fichier de session exclusivement → toutes les requêtes
+// parallèles attendent en file. Pour les routes qui ne modifient PAS la session,
+// on libère le verrou dès maintenant pour permettre la concurrence.
+$_session_write_routes = ['login', 'logout', 'register', 'get_user_info', 'save_user_settings',
+                          'update_profile', 'change_password', 'impersonate', 'stop_impersonation',
+                          'set_nav_state', 'get_nav_state', 'clear_nav_state'];
+if (!in_array($action, $_session_write_routes)) {
+    session_write_close();
 }
 
 // ─── En-têtes de sécurité ────────────────────────────────────────────────────
@@ -46,7 +110,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'whereami') {
     exit;
 }
 
-$action = $_GET['action'] ?? '';
+$action = $_GET['action'] ?? ($_POST['action'] ?? '');
+
+if ($action === 'debug_dddd') {
+    $sqlite = getDb();
+    $stmt = $sqlite->prepare("SELECT id, name, created_at FROM agents WHERE name LIKE '%dddd%'");
+    $stmt->execute();
+    $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    $stmt2 = $sqlite->prepare("SELECT * FROM attendance WHERE agent_id = ?");
+    $stmt2->execute([$agents[0]['id'] ?? 0]);
+    
+    echo json_encode(['agents' => $agents, 'att' => $stmt2->fetchAll(PDO::FETCH_ASSOC)]);
+    exit;
+}
+
 $data   = json_decode(file_get_contents('php://input'), true);
 $data   = is_array($data) ? $data : [];
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -55,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 // ─── Middleware d'authentification global ────────────────────────────────────
 // Routes accessibles sans session (connexion, inscription, réinitialisation mot de passe)
-$public_actions = ['login', 'logout', 'register', 'request_password_reset', 'login_agent_portal', 'register_agent_portal', 'cinetpay_notify'];
+$public_actions = ['login', 'logout', 'register', 'request_password_reset', 'login_agent_portal', 'register_agent_portal', 'cinetpay_notify', 'get_user_info', 'debug_dddd'];
 if (!in_array($action, $public_actions) && !isset($_SESSION['user_id'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Non authentifié', 'code' => 401]);
@@ -80,13 +158,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($action, $public_actions)
 if (in_array($action, [
     'get_sites','add_site','add_special_site','update_site_icon','delete_site',
     'rename_site','add_subsite','rename_subsite','delete_subsite','get_site_data',
-    'add_agent','delete_agent','get_archived_agents','update_agent_profile','update_agent_special_service',
+    'add_agent','delete_agent','get_archived_agents','update_agent_profile','update_agent_special_service','update_agent_admin_schedule',
     'update_agent_info','update_agent_salary','get_functions','save_functions',
     'archive_all_sites','get_archives','get_archive_detail','delete_archive',
     'clear_site_mutations','clear_agent_site_mutations','delete_agent_mutations','get_agent_schedules','update_agent_schedules','update_subsite_config',
-    'get_lost_sites', 'toggle_blacklist', 'get_closure_alerts', 'ack_closure_alert', 'get_site_agents', 'move_agent_zone'
+    'get_lost_sites', 'toggle_blacklist', 'get_closure_alerts', 'ack_closure_alert', 'get_site_agents', 'move_agent_zone', 'toggle_permanent_supplement', 'check_agent_multisite'
 ])) {
-    require_once __DIR__ . '/backend/modules/sites.php';
+    require_once __DIR__ . '/backend/modules/sites_v2.php';
 
 } elseif (in_array($action, [
     'update_attendance','bulk_update_attendance',
@@ -105,12 +183,14 @@ if (in_array($action, [
     'update_user_status','toggle_user_maintenance','impersonate_user',
     'stop_impersonation','update_profile','switch_service','get_all_companies',
     'get_all_users','get_schema','jarvisse_chat','register','request_password_reset',
-    'set_lang','get_payment_providers','get_subscription_status'
+    'set_lang','get_payment_providers','get_subscription_status','set_nav_state','get_nav_state','clear_nav_state'
 ])) {
     require_once __DIR__ . '/backend/modules/auth.php';
 
 } elseif (in_array($action, [
-    'get_dashboard_init','get_analytics','get_pointage_agents_for_reclamation'
+    'get_dashboard_init','get_analytics','get_pointage_agents_for_reclamation',
+    'archive_pointage','get_archives_pointage_list','get_archive_pointage_detail',
+    'get_pointage_for_archive'
 ])) {
     require_once __DIR__ . '/backend/modules/pointage.php';
 
@@ -126,8 +206,8 @@ if (in_array($action, [
     'save_payroll_variables','get_payroll_loans','add_payroll_loan','delete_payroll_loan',
     'update_agent_contract','get_leaves','dump_leaves','save_leave','delete_leave',
     'dev_unpublish_period','publish_period','unpublish_period','get_published_periods',
-    'get_latest_publication','get_messages','set_first_visit_period','save_reclamation',
-    'update_payment_status'
+    'get_latest_publication','get_messages','set_first_visit_period','save_reclamation','delete_reclamation',
+    'update_payment_status','save_payroll_status','get_payroll_statuses','bulk_save_payroll_status'
 ])) {
     require_once __DIR__ . '/backend/modules/salaries.php';
 
@@ -163,7 +243,7 @@ if (in_array($action, [
     'set_global_security_alert','send_reclamation_feedback','add_reclamation',
     'get_radio_signatures','save_radio_signature','get_reclamations',
     'update_reclamation_status','send_pub_feedback','get_feedback_history',
-    'get_latest_feedback','get_fluctuation_archives','get_fluctuation_analytics'
+    'get_latest_feedback','get_fluctuation_archives','get_fluctuation_analytics','get_fluctuation_trends'
 ])) {
     require_once __DIR__ . '/backend/modules/facturation.php';
 

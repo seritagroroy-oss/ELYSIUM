@@ -276,7 +276,6 @@ switch ($action) {
         $period = $data['period'] ?? '';
         $progress = $data['progress'] ?? [];
         $db = getDb();
-        $db->exec("CREATE TABLE IF NOT EXISTS calendar_progress (email VARCHAR(255), period VARCHAR(50), data TEXT, PRIMARY KEY(email, period))");
         $stmt = $db->prepare("REPLACE INTO calendar_progress (email, period, data) VALUES (?, ?, ?)");
         $stmt->execute([$email, $period, json_encode($progress)]);
         echo json_encode(['success' => true]);
@@ -290,7 +289,6 @@ switch ($action) {
         $email = $_SESSION['user_id'];
         $period = $data['period'] ?? '';
         $db = getDb();
-        $db->exec("CREATE TABLE IF NOT EXISTS calendar_progress (email VARCHAR(255), period VARCHAR(50), data TEXT, PRIMARY KEY(email, period))");
         $stmt = $db->prepare("SELECT data FROM calendar_progress WHERE email = ? AND period = ?");
         $stmt->execute([$email, $period]);
         $row = $stmt->fetch();

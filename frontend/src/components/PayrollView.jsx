@@ -11,6 +11,7 @@ import PaymentMethodModal from './modals/PaymentMethodModal';
 import BulkConfirmModal from './modals/BulkConfirmModal';
 import ClotureModals from './modals/ClotureModals';
 import ArchiveConfirmModal from './modals/ArchiveConfirmModal';
+import PayrollColumnsModal, { DEFAULT_VISIBLE_COLS } from './modals/PayrollColumnsModal';
 
 const STATUSES = {
   brouillon: { label: 'Brouillon', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', next: 'valide' },
@@ -64,7 +65,7 @@ const ZONE_COLORS = ['#38bdf8','#a78bfa','#34d399','#fbbf24','#f472b6','#fb7185'
 function AideComptableModal({ onClose }) {
   React.useEffect(() => {
     console.log("AIDE COMPTABLE MODAL MOUNTED");
-    // alert("La fenêtre d'aide s'ouvre !");
+    alert("La fenêtre d'aide s'ouvre ! (Si vous voyez ceci, la modale a bien été chargée)");
   }, []);
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(8px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} onClick={onClose}>
@@ -98,6 +99,21 @@ function AideComptableModal({ onClose }) {
             </div>
           </div>
 
+          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#f87171', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertCircle size={18} /> Priorité des Absences (Mutations Multiples)
+            </h4>
+            <p style={{ color: 'var(--muted)', fontSize: '0.95rem', lineHeight: '1.6', margin: '0 0 12px 0' }}>
+              Lorsqu&apos;un agent est muté plusieurs fois dans le mois, il peut accumuler un grand nombre de vacations tout en ayant des absences. Le système <strong>privilégiera toujours la sanction</strong>.
+            </p>
+            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '12px', fontFamily: 'monospace', color: '#e2e8f0' }}>
+              <span style={{ color: '#94a3b8' }}>Exemple (Agent muté 3 fois) :</span><br/>
+              L&apos;agent a pointé <strong>23 jours</strong> de présence cumulée sur ses différents sites, mais a eu <strong>9 absences</strong> réelles au cours du mois.<br/><br/>
+              <span style={{ color: '#f87171' }}>Calcul :</span> Base maximum (30 jours) - Absences réelles (9 jours)<br/>
+              <span style={{ color: '#f87171' }}>Résultat :</span> L&apos;agent sera payé pour <strong>21 jours</strong> (et non 22 ou 23).<br/>
+            </div>
+          </div>
+          
           <div style={{ background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
             <h4 style={{ margin: '0 0 12px 0', color: '#38bdf8', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <BadgeCheck size={18} /> Principe de calcul : Bonus Costume (COST)
@@ -144,11 +160,16 @@ export function AgentPayrollDetailsModal({ agent, taxes, funcLabel, payrollSetti
 
   const renderHistoryList = () => {
     let history = [];
-    if (agent.entrant_sortant_count > 0 && agent.status === 'entrant') {
-       history.push({ date: agent.profile_data?.date_embauche || agent.profile_data?.hire_date || 'N/A', type: 'Entrée', color: '#10b981', desc: 'Nouvel agent' });
+    if (agent.is_entrant === true || (agent.entrant_sortant_count > 0 && !agent.is_sortant)) {
+       const hireDate = agent.hire_date || agent.profile_data?.hire_date || agent.profile_data?.date_embauche || null;
+       const hireDateFmt = hireDate ? new Date(hireDate).toLocaleDateString('fr-FR') : 'N/A';
+       history.push({ date: hireDateFmt, type: 'Entrée', color: '#10b981', desc: 'Nouvel agent entrant ce mois' });
     }
-    if (agent.status === 'sortant' || agent.status === 'abandon' || agent.status === 'demission') {
-       history.push({ date: 'N/A', type: agent.status.toUpperCase(), color: '#ef4444', desc: 'Agent sortant/inactif' });
+    if (agent.is_sortant === true || agent.status === 'sortant' || agent.status === 'abandon' || agent.status === 'demission') {
+       const exitDate = agent.contract_end || null;
+       const exitDateFmt = exitDate ? new Date(exitDate).toLocaleDateString('fr-FR') : 'N/A';
+       const exitLabel = agent.status ? agent.status.toUpperCase() : 'SORTANT';
+       history.push({ date: exitDateFmt, type: exitLabel, color: '#ef4444', desc: 'Agent sortant/inactif' });
     }
     if (agent.profile_data?.mutation_breakdown) {
        const m = agent.profile_data.mutation_breakdown;
@@ -156,33 +177,78 @@ export function AgentPayrollDetailsModal({ agent, taxes, funcLabel, payrollSetti
            m.forEach(item => {
                history.push({ date: 'N/A', type: 'Mutation', color: '#3b82f6', desc: `De ${item.old_site || '?'} vers ${item.new_site || '?'}` });
            });
-       } else if (m.original && m.mutated) {
-           history.push({ 
-               date: 'N/A', 
-               type: 'Mutation Inter-Sites', 
-               color: '#3b82f6', 
-               desc: (
-                   <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-                       <div style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', borderLeft: '4px solid #3b82f6', border: '1px solid rgba(255,255,255,0.03)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                           <div style={{ fontWeight: '700', color: 'white', marginBottom: '4px', fontSize: '0.85rem' }}>Site Initial : {m.original.site || '?'} ({m.original.subsite || '-'})</div>
-                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
-                               <span>Jours travaillés: <span style={{color:'white', fontWeight:'600'}}>{m.original.worked_days || 0}</span></span>
-                               <span style={{ fontWeight: '700', color: '#10b981' }}>{Number(m.original.base_prorata || 0).toLocaleString()} XOF</span>
-                           </div>
-                       </div>
-                       <div style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', borderLeft: '4px solid #8b5cf6', border: '1px solid rgba(255,255,255,0.03)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                           <div style={{ fontWeight: '700', color: 'white', marginBottom: '4px', fontSize: '0.85rem' }}>Nouveau Site : {m.mutated.site || '?'} ({m.mutated.subsite || '-'})</div>
-                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
-                               <span>Jours travaillés: <span style={{color:'white', fontWeight:'600'}}>{m.mutated.worked_days || 0}</span></span>
-                               <span style={{ fontWeight: '700', color: '#10b981' }}>{Number(m.mutated.base_prorata || 0).toLocaleString()} XOF</span>
-                           </div>
-                       </div>
-                   </div>
-               )
-           });
-       }
+       } else if (m.stages && Array.isArray(m.stages)) {
+            history.push({ 
+                date: 'N/A', 
+                type: 'Mutation Inter-Sites', 
+                color: '#3b82f6', 
+                desc: (
+                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                        {m.stages.map((stage, idx) => {
+                            const isLast = idx === m.stages.length - 1;
+                            const borderColor = isLast ? '#8b5cf6' : '#3b82f6';
+                            const title = isLast ? 'Site Final : ' : `Site ${idx + 1} : `;
+                            
+                            return (
+                                <div key={idx} style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', borderLeft: `4px solid ${borderColor}`, borderTop: '1px solid rgba(255,255,255,0.03)', borderRight: '1px solid rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.03)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                                    <div style={{ fontWeight: '700', color: 'white', marginBottom: '4px', fontSize: '0.85rem' }}>{title}{stage.site || '?'} ({stage.subsite || '-'})</div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
+                                        <span>Jours travaillés: <span style={{color:'white', fontWeight:'600'}}>{stage.worked_days || 0}</span></span>
+                                        <span style={{ fontWeight: '700', color: '#10b981' }}>{Number(stage.base_prorata || 0).toLocaleString()} XOF</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )
+            });
+        } else if (m.original && m.mutated) {
+            history.push({ 
+                date: 'N/A', 
+                type: 'Mutation Inter-Sites', 
+                color: '#3b82f6', 
+                desc: (
+                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                        <div style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', borderLeft: '4px solid #3b82f6', borderTop: '1px solid rgba(255,255,255,0.03)', borderRight: '1px solid rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.03)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                            <div style={{ fontWeight: '700', color: 'white', marginBottom: '4px', fontSize: '0.85rem' }}>Site Initial : {m.original.site || '?'} ({m.original.subsite || '-'})</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
+                                <span>Jours travaillés: <span style={{color:'white', fontWeight:'600'}}>{m.original.worked_days || 0}</span></span>
+                                <span style={{ fontWeight: '700', color: '#10b981' }}>{Number(m.original.base_prorata || 0).toLocaleString()} XOF</span>
+                            </div>
+                        </div>
+                        <div style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', borderLeft: '4px solid #8b5cf6', borderTop: '1px solid rgba(255,255,255,0.03)', borderRight: '1px solid rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.03)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                            <div style={{ fontWeight: '700', color: 'white', marginBottom: '4px', fontSize: '0.85rem' }}>Site Muté : {m.mutated.site || '?'} ({m.mutated.subsite || '-'})</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
+                                <span>Jours travaillés: <span style={{color:'white', fontWeight:'600'}}>{m.mutated.worked_days || 0}</span></span>
+                                <span style={{ fontWeight: '700', color: '#10b981' }}>{Number(m.mutated.base_prorata || 0).toLocaleString()} XOF</span>
+                            </div>
+                        </div>
+                    </div>
+                )
+            });
+        }
     } else if (agent.profile_data?.mutated_from_function && agent.profile_data.mutated_from_function !== agent.function) {
        history.push({ date: 'N/A', type: 'Mutation Poste', color: '#8b5cf6', desc: `De ${agent.profile_data.mutated_from_function} vers ${funcLabel(agent.function)}` });
+    }
+
+    if (agent.profile_data?.multi_site_deployments && agent.profile_data.multi_site_deployments.length > 0) {
+        history.push({
+            date: 'N/A',
+            type: 'Affectation Multi-Sites (Temps Partiel)',
+            color: '#10b981',
+            desc: (
+                <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                    {agent.profile_data.multi_site_deployments.map((dep, idx) => (
+                        <div key={idx} style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', borderLeft: '4px solid #10b981', border: '1px solid rgba(255,255,255,0.03)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                            <div style={{ fontWeight: '700', color: 'white', marginBottom: '4px', fontSize: '0.85rem' }}>Site : {dep.site || '?'}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
+                                <span>Jours travaillés: <span style={{color:'white', fontWeight:'600'}}>{dep.worked_days || 0}</span></span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )
+        });
     }
 
     const scObj = typeof agent.status_change === 'string' ? JSON.parse(agent.status_change) : agent.status_change;
@@ -311,6 +377,39 @@ export function AgentPayrollDetailsModal({ agent, taxes, funcLabel, payrollSetti
                     Temps Partiel
                   </span>
                 )}
+                {(() => {
+                  const sortantMotifDetail = agent.absence_details?.find(d => 
+                    ['ABANDON', 'DEMISSION', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT'].includes(d.reason) || 
+                    (d.reason && d.reason.startsWith('SORTANT_'))
+                  );
+                  if (!sortantMotifDetail) return null;
+                  const sortantLabel = sortantMotifDetail.reason.startsWith('SORTANT_') 
+                    ? sortantMotifDetail.reason.substring(8).toUpperCase() 
+                    : sortantMotifDetail.reason.replace('_', ' ');
+
+                  let dateSortie = "";
+                  if (sortantMotifDetail.date) {
+                    const parts = sortantMotifDetail.date.split('-');
+                    if (parts.length === 3) {
+                      dateSortie = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    } else {
+                      dateSortie = sortantMotifDetail.date;
+                    }
+                  }
+
+                  return (
+                    <React.Fragment>
+                      {dateSortie && (
+                        <span style={{ fontSize: '0.8rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '4px 10px', borderRadius: '12px', fontWeight: 600, letterSpacing: 'normal' }}>
+                          cet agent est Sortant à partir du : {dateSortie}
+                        </span>
+                      )}
+                      <span style={{ fontSize: '0.8rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 10px', borderRadius: '12px', fontWeight: 600, letterSpacing: 'normal' }}>
+                        Motif : {sortantLabel}
+                      </span>
+                    </React.Fragment>
+                  );
+                })()}
               </h2>
               <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
                 <span style={{ color: '#64748b', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -478,6 +577,8 @@ export function AgentPayrollDetailsModal({ agent, taxes, funcLabel, payrollSetti
         </div>
   
       </div>
+      
+
       <style>{`
         @keyframes slideUp{from{opacity:0;transform:translateY(35px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -532,7 +633,42 @@ function AgentDetailsModal({ agent, onClose }) {
             onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = '0 15px 30px rgba(0,0,0,0.4), inset 0 0 20px rgba(0,0,0,0.2)'; e.currentTarget.style.background = 'rgba(239,68,68,0.05)'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'inset 0 0 20px rgba(0,0,0,0.2)'; e.currentTarget.style.background = 'rgba(0,0,0,0.2)'; }}
           >
-            <h4 style={{ margin: '0 0 16px 0', color: '#ef4444', fontSize: '1.15rem', fontWeight: 700, letterSpacing: '0.02em' }}>Absences</h4>
+            <h4 style={{ margin: '0 0 16px 0', color: '#ef4444', fontSize: '1.15rem', fontWeight: 700, letterSpacing: '0.02em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Absences</span>
+              {(() => {
+                const sortantMotifDetail = agent.absence_details?.find(d => 
+                  ['ABANDON', 'DEMISSION', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT'].includes(d.reason) || 
+                  (d.reason && d.reason.startsWith('SORTANT_'))
+                );
+                if (!sortantMotifDetail) return null;
+                const sortantLabel = sortantMotifDetail.reason.startsWith('SORTANT_') 
+                  ? sortantMotifDetail.reason.substring(8).toUpperCase() 
+                  : sortantMotifDetail.reason.replace('_', ' ');
+
+                let dateSortie = "";
+                if (sortantMotifDetail.date) {
+                  const parts = sortantMotifDetail.date.split('-');
+                  if (parts.length === 3) {
+                    dateSortie = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                  } else {
+                    dateSortie = sortantMotifDetail.date;
+                  }
+                }
+
+                return (
+                  <React.Fragment>
+                    {dateSortie && (
+                      <span style={{ fontSize: '0.85rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '4px 10px', borderRadius: '12px', fontWeight: 600, letterSpacing: 'normal' }}>
+                        cet agent est Sortant à partir du : {dateSortie}
+                      </span>
+                    )}
+                    <span style={{ fontSize: '0.85rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 10px', borderRadius: '12px', fontWeight: 600, letterSpacing: 'normal' }}>
+                      Motif : {sortantLabel}
+                    </span>
+                  </React.Fragment>
+                );
+              })()}
+            </h4>
             {renderBadgeList(agent.absence_details, '#ef4444', 'rgba(239,68,68,0.1)')}
           </div>
 
@@ -1022,6 +1158,8 @@ export default function PayrollView({ setView }) {
   const [functions, setFunctions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [publishedPeriods, setPublishedPeriods] = useState([]);
+  const [primeExclusionModal, setPrimeExclusionModal] = useState(null);
+  const [primeExclusionLoading, setPrimeExclusionLoading] = useState(false);
   const [archivedPeriods, setArchivedPeriods] = useState([]);
   const [viewMode, setViewMode] = useState(() => {
     // Si on revient depuis la grille de pointage (window SPA ou localStorage),
@@ -1069,6 +1207,7 @@ export default function PayrollView({ setView }) {
   const [statusChangeInfoModal, setStatusChangeInfoModal] = useState(null);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [bulkConfirmModal, setBulkConfirmModal] = useState(null);
+  const [globalPayConfirmModal, setGlobalPayConfirmModal] = useState(false);
   const [showArchiveConfirmModal, setShowArchiveConfirmModal] = useState(false);
   const [archiveActionLoading, setArchiveActionLoading] = useState(false);
   const [reclamations, setReclamations] = useState([]);
@@ -1203,6 +1342,7 @@ export default function PayrollView({ setView }) {
 
   const formatArchiveTitle = (p) => {
     if (!p) return '';
+    if (!p.includes('-')) return `Archive de ${p}`; // Support for periods that are just text (e.g., "Août 2026")
     const [y, m] = p.split('-');
     const date = new Date(y, parseInt(m) - 1, 1);
     const monthName = date.toLocaleString('fr-FR', { month: 'long' });
@@ -1228,6 +1368,38 @@ export default function PayrollView({ setView }) {
   });
   const [payrollSettings, setPayrollSettings] = useState({});
   const [payrollVariables, setPayrollVariables] = useState({});
+  const [visibleCols, setVisibleCols] = useState(null); // null = chargement en cours
+  const [isColConfigOpen, setIsColConfigOpen] = useState(false);
+  const [colSaveStatus, setColSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved'
+
+  // Chargement des préférences de colonnes depuis le backend
+  useEffect(() => {
+    apiCall('get_column_prefs', { view_key: 'payroll_table' }, 'GET')
+      .then(res => {
+        if (res?.success) {
+          setVisibleCols(res.prefs ?? DEFAULT_VISIBLE_COLS);
+        } else {
+          setVisibleCols(DEFAULT_VISIBLE_COLS);
+        }
+      })
+      .catch(() => setVisibleCols(DEFAULT_VISIBLE_COLS));
+  }, []);
+
+  // Sauvegarde des préférences de colonnes vers le backend
+  const handleColChange = async (newCols) => {
+    setVisibleCols(newCols);
+    setColSaveStatus('saving');
+    try {
+      await apiCall('save_column_prefs', { view_key: 'payroll_table', prefs: newCols });
+      setColSaveStatus('saved');
+      setTimeout(() => setColSaveStatus('idle'), 2000);
+    } catch (e) {
+      setColSaveStatus('idle');
+    }
+  };
+
+  // Helper: colonne visible ?
+  const colVisible = (key) => visibleCols === null || visibleCols[key] !== false;
 
   const calculateTaxesCI = (brutImposable, parts) => {
     const baseIS = Math.round(brutImposable * 0.8);
@@ -1361,6 +1533,7 @@ export default function PayrollView({ setView }) {
         apiCall('get_payroll_statuses', { period, scope: 'company' }, 'GET')
       ]);
       if (Array.isArray(sitesRes)) setSites(sitesRes);
+      else if (sitesRes && sitesRes.success && Array.isArray(sitesRes.sites)) setSites(sitesRes.sites);
       if (Array.isArray(salRes)) { setSalaries(salRes); setLoadedSites({ all: true }); }
       else if (salRes && salRes.salaries) { setSalaries(salRes.salaries); setLoadedSites({ all: true }); }
       if (Array.isArray(funcRes)) setFunctions(funcRes);
@@ -1388,7 +1561,7 @@ export default function PayrollView({ setView }) {
         
         // Auto-jump to the most recent period with REAL data (archived or published)
         // Merge archived + published, prefer archived (they have actual payroll snapshots)
-        const allDataPeriods = [...new Set([...archs, ...pubs])].sort().reverse();
+        const allDataPeriods = [...new Set([...archs, ...pubs])].filter(p => /^\d{4}-\d{2}$/.test(p)).sort().reverse();
         if (allDataPeriods.length > 0) {
           // Use the most recent period that has actual data, not just latest_publication timestamp
           const targetPeriod = allDataPeriods[0];
@@ -1422,6 +1595,55 @@ export default function PayrollView({ setView }) {
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
+  };
+
+  
+  const handleTogglePrimeSite = async (agent, exclusionType) => {
+    setPrimeExclusionLoading(true);
+    try {
+      const pData = typeof agent.profile_data === 'string' ? JSON.parse(agent.profile_data) : (agent.profile_data || {});
+      const updatedProfile = { ...pData };
+      
+      if (exclusionType === 'none') {
+          delete updatedProfile.prime_site_excluded;
+          delete updatedProfile.prime_site_excluded_period;
+      } else if (exclusionType === 'period') {
+          updatedProfile.prime_site_excluded = false;
+          updatedProfile.prime_site_excluded_period = period;
+      } else if (exclusionType === 'permanent') {
+          updatedProfile.prime_site_excluded = true;
+          delete updatedProfile.prime_site_excluded_period;
+      }
+      
+      const res = await apiCall('update_agent_profile', { agent_id: agent.id, profile_data: updatedProfile, period: period });
+      if (res.success) {
+        setPrimeExclusionModal(null);
+        setPrimeExclusionLoading(false);
+
+        if (viewMode === 'archives' && selectedArchive) {
+          // Si on est dans les archives, on force le rechargement de l'archive
+          const loadArch = async () => {
+            setArchiveLoading(true);
+            try {
+              const r = await apiCall(`get_payroll_archive_detail&period=${selectedArchive}&scope=company`, {}, 'GET');
+              if (r?.success) setArchiveDetail(r.archive);
+            } catch (e) { console.error(e); } 
+            finally { setArchiveLoading(false); }
+          };
+          loadArch();
+        } else {
+          // Sinon on recharge les données du mois en cours
+          loadData();
+        }
+      } else {
+        alert(res.message || 'Erreur lors de la sauvegarde');
+        setPrimeExclusionLoading(false);
+      }
+    } catch(e) {
+      console.error(e);
+      alert('Erreur serveur');
+      setPrimeExclusionLoading(false);
+    }
   };
 
   useEffect(() => { if (isAllowed) loadData(); }, [period]);
@@ -1460,8 +1682,17 @@ export default function PayrollView({ setView }) {
 
   // Déterminer la liste des sites à afficher et leur ordre
   const activeSites = React.useMemo(() => {
-    if (isArchiveMode && archiveDetail?.sites) {
-      return archiveDetail.sites.map(s => ({ id: s.id, name: s.name }));
+    if (isArchiveMode) {
+      if (archiveDetail?.sites && archiveDetail.sites.length > 0) {
+        return archiveDetail.sites.map(s => ({ id: s.id, name: s.name }));
+      } else {
+        // Fallback for older archives that didn't freeze the sites array
+        const uniqueSites = [...new Set((activeSalaries || []).map(s => s.site).filter(Boolean))];
+        return uniqueSites.map((siteName, index) => {
+          const matchingCurrentSite = sites.find(s => s.name === siteName);
+          return { id: matchingCurrentSite ? matchingCurrentSite.id : `legacy-${index}`, name: siteName };
+        });
+      }
     }
     const sitesWithAgents = sites.filter(site => {
       const cleanSiteName = (site.name || '').replace(/^[\p{Emoji}\s]+/u, '').trim();
@@ -1531,6 +1762,45 @@ export default function PayrollView({ setView }) {
     }
   };
 
+  const handleGlobalPay = async () => {
+    if (isArchiveMode || isBulkUpdating) return;
+    const agents = salaries;
+    if (agents.length === 0) return;
+
+    setIsBulkUpdating(true);
+    try {
+      const updates = [];
+      const newStatuses = { ...activeStatuses };
+      
+      agents.forEach(agent => {
+        const zoneName = agent.subsite || '';
+        const siteObj = sites.find(s => s.name === agent.site);
+        const siteId = siteObj ? siteObj.id : agent.site; 
+        const key = getStatusKey(agent.name, siteId, zoneName);
+        newStatuses[key] = 'paye';
+        updates.push({
+          site_id: String(siteId || ''),
+          zone_name: String(zoneName),
+          agent_name: String(agent.name),
+          status: 'paye'
+        });
+      });
+
+      setStatuses(newStatuses);
+      localStorage.setItem('pontage_payroll_statuses', JSON.stringify(newStatuses));
+
+      const res = await apiCall('bulk_save_payroll_status', { period, updates }, 'POST');
+      if (!res.success) {
+        alert(res.message || 'Erreur lors de la mise à jour en masse globale');
+      }
+    } catch (e) {
+      console.error("Global bulk update error", e);
+      alert('Erreur réseau lors de la mise à jour en masse globale');
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
   // Agents d'un site
   const agentsForSite = (siteName) => filteredSalaries.filter(s => s.site === siteName);
 
@@ -1559,7 +1829,9 @@ export default function PayrollView({ setView }) {
       boxShadow: globalSearchText ? '0 0 20px rgba(56, 189, 248, 0.25)' : '0 4px 12px rgba(0,0,0,0.1)',
       minWidth: '280px',
       flex: 1,
-      maxWidth: '480px'
+      maxWidth: '480px',
+      marginRight: 'auto',
+      marginLeft: '20px'
     }}>
       <Search size={18} style={{ color: globalSearchText ? '#38bdf8' : '#64748b' }} />
       <input
@@ -1699,19 +1971,42 @@ export default function PayrollView({ setView }) {
       let admin_count = 0;
       let agents_count = 0;
       let total_reclamations = 0;
+
+      // OPTIMIZATION: Index reclamations
+      const reclamationsByAgentId = {};
+      const reclamationsByAgentName = {};
+      reclamations.forEach(r => {
+        if (r.mois_concerne !== period) return;
+        if (r.agent_matricule) {
+          if (!reclamationsByAgentId[r.agent_matricule]) reclamationsByAgentId[r.agent_matricule] = [];
+          reclamationsByAgentId[r.agent_matricule].push(r);
+        }
+        if (r.agent_nom) {
+          if (!reclamationsByAgentName[r.agent_nom]) reclamationsByAgentName[r.agent_nom] = [];
+          reclamationsByAgentName[r.agent_nom].push(r);
+        }
+      });
+      const motifsRecl = ["justificatif d'absence", "annulation de permission", "mise à pied", "erreur de paie", "erreur de pointage", "omission"];
+
       salaries.forEach(s => {
         const taxes = calculateAgentTaxes(s);
         
-        // Calcul des ponctions comme dans le Journal
-        const montantPonctions = reclamations
-          .filter(r => r.mois_concerne === period && (r.agent_matricule ? r.agent_matricule === s.id : r.agent_nom === s.name) && ['Clôturé', 'Transmis'].includes(r.statut) && (r.type_erreur || r.motif || r.reclamation_categorie || '').toLowerCase() === 'ponction')
-          .reduce((acc, r) => acc + (parseFloat(r.montant || r.montant_estime) || 0), 0);
-          
-        // Calcul des réclamations (ajouts nets) comme dans le Journal
-        const motifsRecl = ["justificatif d'absence", "annulation de permission", "mise à pied", "erreur de paie", "erreur de pointage", "omission"];
-        const montantReclamations = reclamations
-          .filter(r => r.mois_concerne === period && (r.agent_matricule ? r.agent_matricule === s.id : r.agent_nom === s.name) && r.statut === 'Clôturé' && motifsRecl.includes((r.type_erreur || r.motif || r.reclamation_categorie || '').toLowerCase()))
-          .reduce((acc, r) => acc + (parseFloat(r.montant || r.montant_estime) || 0), 0);
+        const agentRecls = [...(reclamationsByAgentId[s.id] || []), ...(reclamationsByAgentName[s.name] || [])];
+        
+        let montantPonctions = 0;
+        let montantReclamations = 0;
+
+        agentRecls.forEach(r => {
+          if (r.statut === 'Clôturé' || r.statut === 'Transmis') {
+            const type = (r.type_erreur || r.motif || r.reclamation_categorie || '').toLowerCase();
+            const montant = parseFloat(r.montant || r.montant_estime) || 0;
+            if (type === 'ponction') {
+              montantPonctions += montant;
+            } else if (r.statut === 'Clôturé' && motifsRecl.includes(type)) {
+              montantReclamations += montant;
+            }
+          }
+        });
 
         total_reclamations += montantReclamations;
 
@@ -1738,39 +2033,60 @@ export default function PayrollView({ setView }) {
       }, 'POST');
       
       // Préparer une liste enrichie d'agents pour l'archive, en récupérant le site et la zone certifiés par l'Etat de Paie
-      const enrichedSalaries = salaries.map(s => {
-        let certifiedSite = s.site;
-        let certifiedZone = s.subsite || '';
-        let found = false;
-
-        const suffix = `_${s.name}`;
-        const prefix = `${period}_`;
-        
-        for (const [key, val] of Object.entries(activeStatuses)) {
-          if (key.startsWith(prefix) && key.endsWith(suffix)) {
-             const middle = key.substring(prefix.length, key.length - suffix.length);
-             const lastUnderscore = middle.lastIndexOf('_');
-             if (lastUnderscore !== -1) {
-                const extSite = middle.substring(0, lastUnderscore);
-                const extZone = middle.substring(lastUnderscore + 1);
-                if (val !== 'brouillon') {
-                   certifiedSite = extSite;
-                   certifiedZone = extZone;
-                   found = true;
-                   break;
-                } else if (certifiedSite === s.site) {
-                   certifiedSite = extSite;
-                   certifiedZone = extZone;
-                }
+      const periodPrefix = `${period}_`;
+      
+      // OPTIMIZATION: Index active statuses by agent name
+      const validNames = new Set(salaries.map(s => s.name));
+      const statusByAgent = {};
+      
+      for (const [key, val] of Object.entries(activeStatuses)) {
+         if (!key.startsWith(periodPrefix)) continue;
+         const middleAndName = key.substring(periodPrefix.length);
+         const parts = middleAndName.split('_');
+         
+         let agentNameCandidate = '';
+         for (let i = parts.length - 1; i >= 1; i--) {
+             if (agentNameCandidate) agentNameCandidate = parts[i] + '_' + agentNameCandidate;
+             else agentNameCandidate = parts[i];
+             
+             if (validNames.has(agentNameCandidate)) {
+                 const extSiteAndZone = parts.slice(0, i).join('_');
+                 const lastUnderscore = extSiteAndZone.lastIndexOf('_');
+                 let extSite = extSiteAndZone;
+                 let extZone = '';
+                 if (lastUnderscore !== -1) {
+                     extSite = extSiteAndZone.substring(0, lastUnderscore);
+                     extZone = extSiteAndZone.substring(lastUnderscore + 1);
+                 }
+                 
+                 if (!statusByAgent[agentNameCandidate]) {
+                     statusByAgent[agentNameCandidate] = { site: extSite, zone: extZone, isDraft: val === 'brouillon' };
+                 } else if (val !== 'brouillon') {
+                     statusByAgent[agentNameCandidate] = { site: extSite, zone: extZone, isDraft: false };
+                 }
+                 break;
              }
-          }
-        }
-
-        return {
-          ...s,
-          archive_site: certifiedSite,
-          archive_zone: certifiedZone
-        };
+         }
+      }
+      
+      const enrichedSalaries = salaries.map(s => {
+         let certifiedSite = s.site;
+         let certifiedZone = s.subsite || '';
+         const st = statusByAgent[s.name];
+         if (st) {
+            if (!st.isDraft) {
+               certifiedSite = st.site;
+               certifiedZone = st.zone;
+            } else if (certifiedSite === s.site) {
+               certifiedSite = st.site;
+               certifiedZone = st.zone;
+            }
+         }
+         return {
+           ...s,
+           archive_site: certifiedSite,
+           archive_zone: certifiedZone
+         };
       });
 
       // -- AJOUT : Archiver automatiquement le Journal en même temps --
@@ -2057,7 +2373,7 @@ export default function PayrollView({ setView }) {
             <span style={{ background: 'rgba(56,189,248,0.1)', color: 'var(--b)', fontSize: '0.75rem', padding: '3px 10px', borderRadius: '20px', fontWeight: '600' }}>Comptabilité / RH</span>
           </div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary" onClick={() => setShowAideModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button type="button" className="btn btn-secondary" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAideModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <AlertCircle size={16} /> Aide Comptable
             </button>
             <PeriodSelect />
@@ -2107,7 +2423,7 @@ export default function PayrollView({ setView }) {
             <span style={{ background: 'rgba(56,189,248,0.1)', color: 'var(--b)', fontSize: '0.75rem', padding: '3px 10px', borderRadius: '20px', fontWeight: '600' }}>Comptabilité / RH</span>
           </div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary" onClick={() => setShowAideModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button type="button" className="btn btn-secondary" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAideModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <AlertCircle size={16} /> Aide Comptable
             </button>
             <PeriodSelect />
@@ -2152,7 +2468,7 @@ export default function PayrollView({ setView }) {
           </div>
           {renderSmartSearchBar()}
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button className="btn btn-secondary" onClick={() => setShowAideModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button type="button" className="btn btn-secondary" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAideModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <AlertCircle size={16} /> Aide Comptable
             </button>
             {!isArchiveMode && <PeriodSelect />}
@@ -2161,27 +2477,11 @@ export default function PayrollView({ setView }) {
                 Mode Lecture Seule
               </div>
             )}
-            <button className="btn btn-secondary" onClick={() => {
-              let csv = "data:text/csv;charset=utf-8,\uFEFFNom,Poste,Jours Trav,Absences,MAP,Perm.,Base,Retenues,Gains,Remb. Prêt,Net,Statut\n";
-              agents.forEach(s => {
-                const stLabel = STATUSES[getAgentStatus(s.name, activeSite.id, activeZone)]?.label || '';
-                csv += `"${s.name}","${funcLabel(s.function)}",${s.days_worked ?? (30 - s.absences - (s.map_count||0) - (s.entrant_sortant_count||0))},${s.absences},${s.map_count||0},${s.permission_count||0},${s.base},${s.deductions},${s.gains},${s.remboursement_pret||0},${s.total},"${stLabel}"\n`;
-              });
-              const link = document.createElement("a");
-              link.setAttribute("href", encodeURI(csv));
-              link.setAttribute("download", `paie_${activeSite.name}_${activeZone}_${period}.csv`.replace(/ /g, '_'));
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            }} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--border)' }}>
-              <ReceiptText size={16} /> Exporter CSV
-            </button>
+
             <button className="btn btn-secondary" onClick={() => setIsThemeModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Settings size={16} /> Thème
             </button>
-            <button className="btn btn-secondary" onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Printer size={16} /> Imprimer
-            </button>
+
             <button 
               className="btn" 
               style={{ background: showKPICards ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)', color: showKPICards ? '#818cf8' : 'white', border: `1px solid ${showKPICards ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '12px', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }} 
@@ -2282,32 +2582,57 @@ export default function PayrollView({ setView }) {
               <table className={`custom-table ${tableTheme}`}>
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <th style={{ color: 'white' }}>Nom & Prénom</th>
-                    <th style={{ color: 'white' }}>Poste</th>
-                    <th style={{ textAlign: 'center', color: 'white' }}>Jours Trav.</th>
-                    <th style={{ textAlign: 'center', minWidth: '180px', color: 'var(--danger)' }}>Absences</th>
-                    <th style={{ textAlign: 'center', color: 'var(--danger)', minWidth: '180px' }}>MAP</th>
-                    <th style={{ textAlign: 'center', color: '#8b5cf6', minWidth: '180px' }}>Permission</th>
-                    <th style={{ textAlign: 'right', color: 'white' }}>Base (XOF)</th>
-                    <th style={{ textAlign: 'right', color: 'var(--danger)' }}>Retenues</th>
-                    <th style={{ textAlign: 'right', color: '#22c55e' }}>Prime Site</th>
-                    <th style={{ textAlign: 'right', color: 'var(--b)' }}>Suppl.</th>
-                    <th style={{ textAlign: 'right', color: '#a855f7' }}>Ancienneté</th>
-                    {payrollSettings.enable_sursalaire !== false ? <th style={{ textAlign: 'right', color: '#38bdf8' }}>Sursalaire</th> : null}
-                    <th style={{ textAlign: 'right', color: 'white' }}>Brut</th>
-                    {payrollSettings.enable_cnps_salarial !== false ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>CNPS Sal.</th> : null}
-                    {payrollSettings.enable_cmu_employe !== false ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>CMU Sal.</th> : null}
-                    {payrollSettings.enable_its !== false ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>ITS</th> : null}
-                    {payrollSettings.enable_cnps_patronal !== false ? <th style={{ textAlign: 'right', color: '#f59e0b' }}>CNPS Pat.</th> : null}
-                    {payrollSettings.enable_cmu_employeur !== false ? <th style={{ textAlign: 'right', color: '#f59e0b' }}>CMU Pat.</th> : null}
-                    {payrollSettings.enable_accidents_travail !== false ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>Acc. Trav.</th> : null}
-                    {payrollSettings.enable_fdfp !== false ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>FDFP</th> : null}
-                    {payrollSettings.enable_taxe_apprentissage !== false ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>Taxe Appr.</th> : null}
-                    <th style={{ textAlign: 'right', color: '#f43f5e' }}>Av/Prêts</th>
-                    <th style={{ textAlign: 'center', color: '#06b6d4', minWidth: '180px' }}>Congés</th>
-                    <th style={{ textAlign: 'right', color: 'var(--a)' }}>Net à Payer</th>
-                    <th style={{ textAlign: 'center' }}>Statut</th>
+                    <th style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        <button
+                          type="button"
+                          title="Paramètres du tableau"
+                          onClick={() => setIsColConfigOpen(true)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'rgba(148,163,184,0.6)',
+                            padding: '2px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '4px',
+                            transition: 'color 0.2s ease'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#38bdf8'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'rgba(148,163,184,0.6)'}
+                        >
+                          <Settings size={13} />
+                        </button>
+                        <span>#</span>
+                      </div>
+                    </th>
+                    {colVisible('nom') && <th style={{ color: 'white' }}>Nom & Prénom</th>}
+                    {colVisible('poste') && <th style={{ color: 'white' }}>Poste</th>}
+                    {colVisible('jours') && <th style={{ textAlign: 'center', color: 'white' }}>Jours Trav.</th>}
+                    {colVisible('absences') && <th style={{ textAlign: 'center', minWidth: '100px', color: 'var(--danger)' }}>Absences</th>}
+                    {colVisible('map') && <th style={{ textAlign: 'center', color: 'var(--danger)', minWidth: '100px' }}>MAP</th>}
+                    {colVisible('permission') && <th style={{ textAlign: 'center', color: '#8b5cf6', minWidth: '100px' }}>Permission</th>}
+                    {colVisible('base') && <th style={{ textAlign: 'right', color: 'white' }}>Base (XOF)</th>}
+                    {colVisible('retenues') && <th style={{ textAlign: 'right', color: 'var(--danger)' }}>Retenues</th>}
+                    {colVisible('prime_site') && <th style={{ textAlign: 'right', color: '#22c55e' }}>Prime Site</th>}
+                    {colVisible('suppl') && <th style={{ textAlign: 'right', color: 'var(--b)' }}>Suppl.</th>}
+                    {colVisible('anciennete') && <th style={{ textAlign: 'right', color: '#a855f7' }}>Ancienneté</th>}
+                    {payrollSettings.enable_sursalaire !== false && colVisible('sursalaire') ? <th style={{ textAlign: 'right', color: '#38bdf8' }}>Sursalaire</th> : null}
+                    {colVisible('brut') && <th style={{ textAlign: 'right', color: 'white' }}>Brut</th>}
+                    {payrollSettings.enable_cnps_salarial !== false && colVisible('cnps_sal') ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>CNPS Sal.</th> : null}
+                    {payrollSettings.enable_cmu_employe !== false && colVisible('cmu_sal') ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>CMU Sal.</th> : null}
+                    {payrollSettings.enable_its !== false && colVisible('its') ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>ITS</th> : null}
+                    {payrollSettings.enable_cnps_patronal !== false && colVisible('cnps_pat') ? <th style={{ textAlign: 'right', color: '#f59e0b' }}>CNPS Pat.</th> : null}
+                    {payrollSettings.enable_cmu_employeur !== false && colVisible('cmu_pat') ? <th style={{ textAlign: 'right', color: '#f59e0b' }}>CMU Pat.</th> : null}
+                    {payrollSettings.enable_accidents_travail !== false && colVisible('acc_trav') ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>Acc. Trav.</th> : null}
+                    {payrollSettings.enable_fdfp !== false && colVisible('fdfp') ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>FDFP</th> : null}
+                    {payrollSettings.enable_taxe_apprentissage !== false && colVisible('taxe_appr') ? <th style={{ textAlign: 'right', color: 'var(--danger)' }}>Taxe Appr.</th> : null}
+                    {colVisible('av_prets') && <th style={{ textAlign: 'right', color: '#f43f5e' }}>Av/Prêts</th>}
+                    {colVisible('conges') && <th style={{ textAlign: 'center', color: '#06b6d4', minWidth: '100px' }}>Congés</th>}
+                    {colVisible('net') && <th style={{ textAlign: 'right', color: 'var(--a)', minWidth: '100px' }}>Net à Payer</th>}
+                    {colVisible('statut') && <th style={{ textAlign: 'center', minWidth: '100px' }}>Statut</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -2318,7 +2643,7 @@ export default function PayrollView({ setView }) {
                       <React.Fragment key={s.id || s.name || `agent-${idx}`}>
                         <tr className={status === 'paye' ? 'row-paye' : ''}>
                           <td style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{idx + 1}</td>
-                          <td style={{ fontWeight: '700', color: '#ffffff', whiteSpace: 'nowrap' }}>
+                          {colVisible('nom') && <td style={{ fontWeight: '700', color: '#ffffff', whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <button
                                 type="button"
@@ -2341,12 +2666,29 @@ export default function PayrollView({ setView }) {
                               >
                                 <Eye size={15} />
                               </button>
-                              <span 
-                                style={{ cursor: 'default' }}
-                              >{s.name}</span>
+                              {(() => {
+                                const isAgentSortant = (
+                                  s.is_sortant === true ||
+                                  ['sortant', 'abandon', 'demission', 'licencie', 'retire'].includes(s.status?.toLowerCase()) || 
+                                  !!s.exit_reason || 
+                                  (s.absence_details && s.absence_details.some(d => 
+                                    ['ABANDON', 'DEMISSION', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT'].includes(d.reason) || 
+                                    (d.reason && d.reason.startsWith('SORTANT_'))
+                                  ))
+                                );
+                                return (
+                                  <span 
+                                    style={{ 
+                                      cursor: 'default', 
+                                      color: isAgentSortant ? '#ef4444' : 'inherit' 
+                                    }}
+                                    title={isAgentSortant ? 'Agent Sortant (Inactif)' : ''}
+                                  >{s.name}</span>
+                                );
+                              })()}
                             </div>
-                          </td>
-                          <td style={{ cursor: s.profile_data?.mutation_breakdown ? 'pointer' : (s.status_change ? 'pointer' : 'default') }} onClick={() => {
+                          </td>}
+                          {colVisible('poste') && <td style={{ cursor: s.profile_data?.mutation_breakdown ? 'pointer' : (s.status_change ? 'pointer' : 'default') }} onClick={() => {
                             if (s.profile_data?.mutation_breakdown) {
                               setSelectedMutationDetails({agent: s, details: s.profile_data.mutation_breakdown});
                             } else if (s.status_change) {
@@ -2379,8 +2721,8 @@ export default function PayrollView({ setView }) {
                                 );
                               }
                             })()}
-                          </td>
-                          <td 
+                          </td>}
+                          {colVisible('jours') && <td 
                             style={{ 
                               textAlign: 'center', 
                               fontWeight: '600', 
@@ -2391,8 +2733,8 @@ export default function PayrollView({ setView }) {
                             <span style={{ borderBottom: 'none', paddingBottom: '2px', color: 'white' }}>
                               {s.days_worked ?? (30 - (s.absences||0) - (s.map_count||0) - (s.entrant_sortant_count||0))}
                             </span>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
+                          </td>}
+                          {colVisible('absences') && <td style={{ textAlign: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                               <span style={{ color: 'var(--danger)' }}>
                                 {s.absences > 0 ? s.absences : '—'}
@@ -2408,8 +2750,8 @@ export default function PayrollView({ setView }) {
                                 </button>
                               )}
                             </div>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
+                          </td>}
+                          {colVisible('map') && <td style={{ textAlign: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                               <span style={{ color: 'var(--danger)' }}>
                                 {(s.map_count||0) > 0 ? s.map_count : '—'}
@@ -2425,8 +2767,8 @@ export default function PayrollView({ setView }) {
                                 </button>
                               )}
                             </div>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
+                          </td>}
+                          {colVisible('permission') && <td style={{ textAlign: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                               <span style={{ color: (s.permission_count||0) > 0 ? '#8b5cf6' : 'var(--muted)' }}>
                                 {(s.permission_count||0) > 0 ? s.permission_count : '—'}
@@ -2442,11 +2784,29 @@ export default function PayrollView({ setView }) {
                                 </button>
                               )}
                             </div>
-                          </td>
-                          <td style={{ textAlign: 'right', color: 'white' }}>{((s.base_full || s.base) || 0).toLocaleString()}</td>
-                          <td style={{ textAlign: 'right', color: s.deductions > 0 ? 'var(--danger)' : 'var(--muted)' }}>{s.deductions > 0 ? `-${(s.deductions||0).toLocaleString()}` : '—'}</td>
-                          <td style={{ textAlign: 'right', color: '#22c55e', fontWeight: (s.prime_site||0) > 0 ? '700' : '400' }}>{(s.prime_site||0) > 0 ? `+${(s.prime_site||0).toLocaleString()}` : '—'}</td>
-                          <td style={{ textAlign: 'right', color: s.gains > 0 ? '#8b5cf6' : 'var(--muted)', fontWeight: s.gains > 0 ? '700' : '400' }}>
+                          </td>}
+                          {colVisible('base') && <td style={{ textAlign: 'right', color: 'white' }}>{((s.base_full || s.base) || 0).toLocaleString()}</td>}
+                          {colVisible('retenues') && <td style={{ textAlign: 'right', color: s.deductions > 0 ? 'var(--danger)' : 'var(--muted)' }}>{s.deductions > 0 ? `-${(s.deductions||0).toLocaleString()}` : '—'}</td>}
+                          {colVisible('prime_site') && (
+                        <td style={{ textAlign: 'right', color: s.is_prime_excluded ? '#94a3b8' : '#22c55e', fontWeight: (s.prime_site||0) > 0 || s.is_prime_excluded ? '700' : '400' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                            {s.is_prime_excluded ? (
+                              <>
+                                <ShieldOff size={14} color="#ef4444" style={{ cursor: 'pointer', opacity: 0.8 }} onClick={(e) => { e.stopPropagation(); setPrimeExclusionModal({agent: {id: s.id, name: `${s.nom} ${s.prenoms}`, profile_data: s.profile_data, is_prime_excluded: s.is_prime_excluded}}); }} title="Activer la prime" />
+                                <span style={{ textDecoration: 'line-through', color: '#64748b' }}>Désactivée</span>
+                              </>
+                            ) : (
+                              <>
+                                {((s.prime_site||0) > 0) && (
+                                  <ShieldOff size={14} color="#64748b" style={{ cursor: 'pointer', opacity: 0.5 }} onClick={(e) => { e.stopPropagation(); setPrimeExclusionModal({agent: {id: s.id, name: `${s.nom} ${s.prenoms}`, profile_data: s.profile_data, is_prime_excluded: s.is_prime_excluded}}); }} title="Désactiver la prime" />
+                                )}
+                                {(s.prime_site||0) > 0 ? `+${(s.prime_site||0).toLocaleString()}` : '—'}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                          {colVisible('suppl') && <td style={{ textAlign: 'right', color: s.gains > 0 ? '#8b5cf6' : 'var(--muted)', fontWeight: s.gains > 0 ? '700' : '400' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
                               <span>{s.gains > 0 ? `+${(s.gains||0).toLocaleString()}` : '—'}</span>
                               {s.gains > 0 && s.sp_details && s.sp_details.length > 0 && (
@@ -2460,20 +2820,20 @@ export default function PayrollView({ setView }) {
                                 </button>
                               )}
                             </div>
-                          </td>
-                          <td style={{ textAlign: 'right', color: '#a855f7' }}>+{calculateAgentTaxes(s).primeAnciennete.toLocaleString()}</td>
-                          {payrollSettings.enable_sursalaire !== false ? (<td style={{ textAlign: 'right', color: '#38bdf8' }}>+{calculateAgentTaxes(s).primeVariable.toLocaleString()}</td>) : null}
-                          <td style={{ textAlign: 'right', color: 'white', fontWeight: 'bold' }}>{calculateAgentTaxes(s).brut.toLocaleString()}</td>
-                          {payrollSettings.enable_cnps_salarial !== false ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).cnpsSalarial.toLocaleString()}</td>) : null}
-                          {payrollSettings.enable_cmu_employe !== false ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).cmuEmploye.toLocaleString()}</td>) : null}
-                          {payrollSettings.enable_its !== false ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).impotsTaxes.toLocaleString()}</td>) : null}
-                          {payrollSettings.enable_cnps_patronal !== false ? (<td style={{ textAlign: 'right', color: '#f59e0b' }}>+{calculateAgentTaxes(s).cnpsPatronal.toLocaleString()}</td>) : null}
-                          {payrollSettings.enable_cmu_employeur !== false ? (<td style={{ textAlign: 'right', color: '#f59e0b' }}>+{calculateAgentTaxes(s).cmuEmployeur.toLocaleString()}</td>) : null}
-                          {payrollSettings.enable_accidents_travail !== false ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).accidentsTravail.toLocaleString()}</td>) : null}
-                          {payrollSettings.enable_fdfp !== false ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).taxeFormation.toLocaleString()}</td>) : null}
-                          {payrollSettings.enable_taxe_apprentissage !== false ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).taxeApprentissage.toLocaleString()}</td>) : null}
-                          <td style={{ textAlign: 'right', color: calculateAgentTaxes(s).totalDeductionsNettes > 0 ? '#f43f5e' : 'var(--muted)', fontWeight: calculateAgentTaxes(s).totalDeductionsNettes > 0 ? '700' : '400' }}>{calculateAgentTaxes(s).totalDeductionsNettes > 0 ? `-${calculateAgentTaxes(s).totalDeductionsNettes.toLocaleString()}` : '—'}</td>
-                          <td style={{ textAlign: 'center' }}>
+                          </td>}
+                          {colVisible('anciennete') && <td style={{ textAlign: 'right', color: '#a855f7' }}>+{calculateAgentTaxes(s).primeAnciennete.toLocaleString()}</td>}
+                          {payrollSettings.enable_sursalaire !== false && colVisible('sursalaire') ? (<td style={{ textAlign: 'right', color: '#38bdf8' }}>+{calculateAgentTaxes(s).primeVariable.toLocaleString()}</td>) : null}
+                          {colVisible('brut') && <td style={{ textAlign: 'right', color: 'white', fontWeight: 'bold' }}>{calculateAgentTaxes(s).brut.toLocaleString()}</td>}
+                          {payrollSettings.enable_cnps_salarial !== false && colVisible('cnps_sal') ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).cnpsSalarial.toLocaleString()}</td>) : null}
+                          {payrollSettings.enable_cmu_employe !== false && colVisible('cmu_sal') ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).cmuEmploye.toLocaleString()}</td>) : null}
+                          {payrollSettings.enable_its !== false && colVisible('its') ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).impotsTaxes.toLocaleString()}</td>) : null}
+                          {payrollSettings.enable_cnps_patronal !== false && colVisible('cnps_pat') ? (<td style={{ textAlign: 'right', color: '#f59e0b' }}>+{calculateAgentTaxes(s).cnpsPatronal.toLocaleString()}</td>) : null}
+                          {payrollSettings.enable_cmu_employeur !== false && colVisible('cmu_pat') ? (<td style={{ textAlign: 'right', color: '#f59e0b' }}>+{calculateAgentTaxes(s).cmuEmployeur.toLocaleString()}</td>) : null}
+                          {payrollSettings.enable_accidents_travail !== false && colVisible('acc_trav') ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).accidentsTravail.toLocaleString()}</td>) : null}
+                          {payrollSettings.enable_fdfp !== false && colVisible('fdfp') ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).taxeFormation.toLocaleString()}</td>) : null}
+                          {payrollSettings.enable_taxe_apprentissage !== false && colVisible('taxe_appr') ? (<td style={{ textAlign: 'right', color: 'var(--danger)' }}>-{calculateAgentTaxes(s).taxeApprentissage.toLocaleString()}</td>) : null}
+                          {colVisible('av_prets') && <td style={{ textAlign: 'right', color: calculateAgentTaxes(s).totalDeductionsNettes > 0 ? '#f43f5e' : 'var(--muted)', fontWeight: calculateAgentTaxes(s).totalDeductionsNettes > 0 ? '700' : '400' }}>{calculateAgentTaxes(s).totalDeductionsNettes > 0 ? `-${calculateAgentTaxes(s).totalDeductionsNettes.toLocaleString()}` : '—'}</td>}
+                          {colVisible('conges') && <td style={{ textAlign: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                               <span style={{ color: (s.cp_count||0) > 0 ? '#06b6d4' : 'var(--muted)' }}>
                                 {(s.cp_count||0) > 0 ? s.cp_count : '—'}
@@ -2489,9 +2849,9 @@ export default function PayrollView({ setView }) {
                                 </button>
                               )}
                             </div>
-                          </td>
-                          <td style={{ textAlign: 'right', fontWeight: '800', color: 'var(--a)', fontSize: '1.05rem' }}>{calculateAgentTaxes(s).netAPayer.toLocaleString()}</td>
-                          <td style={{ textAlign: 'center' }}>
+                          </td>}
+                          {colVisible('net') && <td style={{ textAlign: 'right', fontWeight: '800', color: 'var(--a)', fontSize: '1.05rem' }}>{calculateAgentTaxes(s).netAPayer.toLocaleString()}</td>}
+                          {colVisible('statut') && <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => cycleStatus(s.name, activeSite.id, activeZone)}
                               style={{ background: st.bg, color: st.color, border: `1px solid ${st.color}50`, borderRadius: '20px', padding: '4px 12px', fontSize: '0.78rem', fontWeight: '700', cursor: st.next ? 'pointer' : 'default', transition: 'all 0.2s', whiteSpace: 'nowrap' }}
@@ -2500,7 +2860,7 @@ export default function PayrollView({ setView }) {
                               {status === 'paye' && <CheckCircle2 size={12} style={{ display: 'inline', marginRight: '4px' }} />}
                               {st.label}
                             </button>
-                          </td>
+                          </td>}
                         </tr>
                         {/* expanded row removed */}
                       </React.Fragment>
@@ -2575,6 +2935,69 @@ export default function PayrollView({ setView }) {
         <AgentDetailsModal agent={selectedAgentDetails} onClose={() => setSelectedAgentDetails(null)} />
         <MutationDetailsModal selectedMutationDetails={selectedMutationDetails} onClose={() => setSelectedMutationDetails(null)} />
         <StatusChangeInfoModalComponent agent={statusChangeInfoModal} onClose={() => setStatusChangeInfoModal(null)} />
+
+      {primeExclusionModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: '#1e293b', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', maxWidth: '400px', width: '90%' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px 0', color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldOff size={20} color={primeExclusionModal.agent.is_prime_excluded ? "#22c55e" : "#ef4444"}/> 
+              {primeExclusionModal.agent.is_prime_excluded ? 'Réactiver la Prime de Site' : 'Désactiver la Prime de Site'}
+            </h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '24px' }}>
+              Pour l'agent <strong>{primeExclusionModal.agent.name}</strong>, comment souhaitez-vous {primeExclusionModal.agent.is_prime_excluded ? 'réactiver' : 'désactiver'} la prime de site ?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              
+              {primeExclusionModal.agent.is_prime_excluded ? (
+                <button
+                  type="button"
+                  disabled={primeExclusionLoading}
+                  onClick={() => handleTogglePrimeSite(primeExclusionModal.agent, 'none')}
+                  style={{ padding: '12px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '8px', cursor: primeExclusionLoading ? 'not-allowed' : 'pointer', fontWeight: 'bold', opacity: primeExclusionLoading ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'opacity 0.2s' }}
+                >
+                  {primeExclusionLoading && <span style={{ width: '14px', height: '14px', border: '2px solid #22c55e', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />}
+                  Réactiver la prime (Annuler la désactivation)
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={primeExclusionLoading}
+                    onClick={() => handleTogglePrimeSite(primeExclusionModal.agent, 'period')}
+                    style={{ padding: '12px', background: 'rgba(56,189,248,0.1)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)', borderRadius: '8px', cursor: primeExclusionLoading ? 'not-allowed' : 'pointer', fontWeight: 'bold', opacity: primeExclusionLoading ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'opacity 0.2s' }}
+                  >
+                    {primeExclusionLoading && <span style={{ width: '14px', height: '14px', border: '2px solid #38bdf8', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />}
+                    Pour ce mois uniquement
+                  </button>
+                  <button
+                    type="button"
+                    disabled={primeExclusionLoading}
+                    onClick={() => handleTogglePrimeSite(primeExclusionModal.agent, 'permanent')}
+                    style={{ padding: '12px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', cursor: primeExclusionLoading ? 'not-allowed' : 'pointer', fontWeight: 'bold', opacity: primeExclusionLoading ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'opacity 0.2s' }}
+                  >
+                    {primeExclusionLoading && <span style={{ width: '14px', height: '14px', border: '2px solid #ef4444', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />}
+                    Définitivement (Tous les mois)
+                  </button>
+                </>
+              )}
+
+            </div>
+            <div style={{ marginTop: '24px', textAlign: 'center' }}>
+              <button onClick={() => setPrimeExclusionModal(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>Fermer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+        <PayrollColumnsModal
+          isOpen={isColConfigOpen}
+          visibleCols={visibleCols ?? {}}
+          payrollSettings={payrollSettings}
+          onChange={handleColChange}
+          onClose={() => setIsColConfigOpen(false)}
+          saveStatus={colSaveStatus}
+        />
         <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}`}</style>
       </div>
     );
@@ -2768,12 +3191,22 @@ export default function PayrollView({ setView }) {
           {isArchiveMode && <BackBtn onClick={() => setSelectedArchive(null)} label="Liste" />}
           <ReceiptText size={24} style={{ color: 'var(--a)' }} />
           <h2 style={{ fontSize: '1.4rem' }}>{isArchiveMode ? formatArchiveTitle(selectedArchive) : 'État de Paie'}</h2>
-          {!isArchiveMode && <span style={{ background: 'rgba(56,189,248,0.1)', color: 'var(--b)', fontSize: '0.75rem', padding: '3px 10px', borderRadius: '20px', fontWeight: '600' }}>Comptabilité / RH</span>}
         </div>
         {renderSmartSearchBar()}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           {!isArchiveMode && (
             <>
+              <button 
+                className="btn" 
+                onClick={() => setGlobalPayConfirmModal(true)} 
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)', transition: 'all 0.2s', fontWeight: 'bold' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(34, 197, 94, 0.3)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(34, 197, 94, 0.1)'; e.currentTarget.style.boxShadow = 'none' }}
+                disabled={isBulkUpdating}
+                title="Tout payer pour tous les sites"
+              >
+                {isBulkUpdating ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Tout payer
+              </button>
               <button className="btn btn-primary" onClick={handleClotureFluctuation} style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }} title="Clôturer l'état de paie pour la fluctuation salariale">
                 <CheckCircle2 size={16} /> Clôturer
                 {globalProgress === 100 && (
@@ -2811,9 +3244,17 @@ export default function PayrollView({ setView }) {
         </div>
       ) : (
         <>
-          <p style={{ color: 'var(--muted)', margin: '20px 0 16px 0', fontSize: '0.95rem' }}>
-            Sélectionnez un site pour accéder à ses zones, puis aux états de paie.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 16px 0', flexWrap: 'wrap', gap: '10px' }}>
+            <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.95rem' }}>
+              Sélectionnez un site pour accéder à ses zones, puis aux états de paie.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '20px', padding: '5px 14px' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--b)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+              <span style={{ color: 'var(--b)', fontWeight: '700', fontSize: '0.9rem', letterSpacing: '0.02em' }}>
+                {String(activeSites.length).padStart(2, '0')} site{activeSites.length > 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
             {activeSites.map((site, idx) => {
               const { agentsCount, total, paid, validated, zones } = siteSummary(site);
@@ -3002,6 +3443,18 @@ export default function PayrollView({ setView }) {
           loading={archiveActionLoading}
         />
       )}
+      
+      {globalPayConfirmModal && (
+        <BulkConfirmModal
+          status="paye"
+          siteName="TOUS LES SITES"
+          onConfirm={() => {
+            handleGlobalPay();
+            setGlobalPayConfirmModal(false);
+          }}
+          onClose={() => setGlobalPayConfirmModal(false)}
+        />
+      )}
 
       {showAideModal && <AideComptableModal onClose={() => setShowAideModal(false)} />}
       
@@ -3009,6 +3462,7 @@ export default function PayrollView({ setView }) {
 
       <style>{`
         @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes pulseReady {
           0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0.7); }
           50% { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(34,197,94,0); }

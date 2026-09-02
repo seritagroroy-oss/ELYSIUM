@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import SpecialServiceModal from './SpecialServiceModal';
+import AdminScheduleModal from './AdminScheduleModal';
 import HomonymWarningModal from './HomonymWarningModal';
+import EntrantConfigModal from './EntrantConfigModal';
 import { Settings } from 'lucide-react';
 
 function SearchableSelect({ options, value, onChange, placeholder }) {
@@ -103,13 +105,18 @@ export default function AddAgentModal({
   const [isDebut, setIsDebut] = useState(false);
   const [debutDate, setDebutDate] = useState('');
   const [ancienSite, setAncienSite] = useState('');
-  const [isAdminSchedule, setIsAdminSchedule] = useState(false);
+  const [adminScheduleDays, setAdminScheduleDays] = useState([]);
+  const [showAdminScheduleModal, setShowAdminScheduleModal] = useState(false);
   const [isSpecialService, setIsSpecialService] = useState(false);
   const [specialServiceBase, setSpecialServiceBase] = useState(12);
   const [specialServiceDays, setSpecialServiceDays] = useState([]);
   const [showSpecialServiceModal, setShowSpecialServiceModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [disableDefaultRepos, setDisableDefaultRepos] = useState(false);
+
+  const [showEntrantConfigModal, setShowEntrantConfigModal] = useState(false);
+  const [entrantMotif, setEntrantMotif] = useState('ENTRANT');
+  
   const [showHomonymWarningModal, setShowHomonymWarningModal] = useState(false);
   const [hasConfirmedHomonym, setHasConfirmedHomonym] = useState(false);
   
@@ -195,11 +202,7 @@ export default function AddAgentModal({
         setShowSpecialServiceModal(true);
         return;
       }
-      if (specialServiceBase !== cycleTotalDays) {
-        alert(`Incohérence détectée : vous avez configuré une base de ${specialServiceBase} jours alors que cet agent travaillera réellement ${cycleTotalDays} jours sur ce mois. Veuillez corriger ou utiliser l'ajustement automatique.`);
-        setShowSpecialServiceModal(true);
-        return;
-      }
+      // On n'alerte plus sur la différence de base car elle s'ajuste automatiquement
     }
     
     setIsLoading(true);
@@ -212,10 +215,12 @@ export default function AddAgentModal({
         contractEnd,
         isEntrant,
         entrantDate,
+        entrantMotif,
         isDebut,
         debutDate,
         ancienSite,
-        adminSchedule: isAdminSchedule,
+        adminSchedule: adminScheduleDays.length > 0,
+        adminScheduleDays: adminScheduleDays,
         specialService: isSpecialService,
         specialServiceBase: specialServiceBase,
         specialServiceDays: specialServiceDays,
@@ -364,11 +369,27 @@ export default function AddAgentModal({
           loc = zName;
         }
 
+        let isPartTime = false;
+        console.log("DEBUG HOMONYM - Agent:", a.name, "Raw profile_data:", a.profile_data);
+        if (a.profile_data) {
+            try {
+                const profile = typeof a.profile_data === 'string' ? JSON.parse(a.profile_data) : a.profile_data;
+                console.log("DEBUG HOMONYM - Parsed profile:", profile);
+                if (profile && typeof profile === 'object' && !Array.isArray(profile)) {
+                    isPartTime = !!profile.special_service;
+                }
+            } catch (e) {
+                console.error("DEBUG HOMONYM - Error parsing profile_data:", e);
+            }
+        }
+        console.log("DEBUG HOMONYM - isPartTime evaluated to:", isPartTime);
+
         results.push({
           id: agentId,
           name: a.name,
           fullLocation: loc || 'Site non spécifié',
-          function: a.function_label || a.function_name || a.function || 'AS'
+          function: a.function_label || a.function_name || a.function || 'AS',
+          isPartTime: isPartTime
         });
       }
     };
@@ -413,8 +434,8 @@ export default function AddAgentModal({
   }, [name, siteData, allSites, globalAgents]);
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '800px', padding: '20px 30px', background: '#0f172a', border: '1px solid rgba(56,189,248,0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.8)' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(6px)' }}>
+      <div className="glass-panel" style={{ display: (showEntrantConfigModal || showSpecialServiceModal || showAdminScheduleModal) ? 'none' : 'block', width: '100%', maxWidth: '800px', padding: '20px 30px', background: '#0f172a', border: '1px solid rgba(56,189,248,0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.8)' }}>
         <h3 style={{ margin: '0 0 15px 0', color: 'white', textAlign: 'center', fontSize: '1.4rem' }}>Ajouter un Agent de sécurité</h3>
         {errorMsg && <div className="alert alert-danger" style={{ padding: '8px', marginBottom: '10px' }}>{errorMsg}</div>}
         <form onSubmit={handleSubmit}>
@@ -450,7 +471,10 @@ export default function AddAgentModal({
                   }}
                 >
                   <span>
-                    ⚠️ <strong>{existingHomonyms.length} Homonyme{existingHomonyms.length > 1 ? 's' : ''} détecté{existingHomonyms.length > 1 ? 's' : ''}</strong> ({existingHomonyms.map(h => h.fullLocation).join(' ; ')})
+                    {existingHomonyms.some(h => h.isPartTime)
+                      ? <>⚠️ <strong>Agent à temps partiel détecté</strong> ({existingHomonyms.map(h => h.fullLocation).join(' ; ')})</>
+                      : <>⚠️ <strong>{existingHomonyms.length} Homonyme{existingHomonyms.length > 1 ? 's' : ''} détecté{existingHomonyms.length > 1 ? 's' : ''}</strong> ({existingHomonyms.map(h => h.fullLocation).join(' ; ')})</>
+                    }
                   </span>
                   <button
                     type="button"
@@ -540,8 +564,8 @@ export default function AddAgentModal({
             </div>
             
             {/* 2. Temps Partiel */}
-            <div className="form-group" style={{ background: 'rgba(245, 158, 11, 0.05)', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)', marginBottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '41px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#fbbf24', margin: 0, fontSize: '0.85rem', fontWeight: 600, width: '100%' }}>
+            <div className="form-group" style={{ background: 'rgba(245, 158, 11, 0.05)', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)', marginBottom: '0', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: '41px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#fbbf24', margin: 0, fontSize: '0.85rem', fontWeight: 600, flex: 1 }}>
                 <input 
                   type="checkbox" 
                   checked={isSpecialService} 
@@ -570,19 +594,32 @@ export default function AddAgentModal({
 
             {/* 3. Agent Entrant */}
             {!isSpecialService && (
-              <div className="form-group" style={{ background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '41px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-color)', margin: 0, fontSize: '0.85rem', fontWeight: 600 }}>
+              <div className="form-group" style={{ background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '0', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: '41px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-color)', margin: 0, fontSize: '0.85rem', fontWeight: 600, flex: 1, whiteSpace: 'nowrap' }}>
                   <input 
                     type="checkbox" 
                     checked={isEntrant} 
                     onChange={e => {
-                      setIsEntrant(e.target.checked);
-                      if (e.target.checked) setIsDebut(false);
+                      if (e.target.checked) {
+                        setShowEntrantConfigModal(true);
+                      } else {
+                        setIsEntrant(false);
+                      }
                     }}
                     style={{ width: '16px', height: '16px', flexShrink: 0 }}
                   />
-                  Cet agent est un Agent Entrant
+                  Agent Entrant
                 </label>
+                {isEntrant && (
+                  <button 
+                    type="button"
+                    onClick={() => setShowEntrantConfigModal(true)}
+                    style={{ background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    title={`Motif: ${entrantMotif} | Date: ${entrantDate || 'Non définie'}`}
+                  >
+                    <Settings size={15} />
+                  </button>
+                )}
               </div>
             )}
 
@@ -604,16 +641,32 @@ export default function AddAgentModal({
 
             {/* 5. Repos Weekend */}
             {!isSpecialService && (
-                <div className="form-group" style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.2)', marginBottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '41px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#818cf8', margin: 0, fontSize: '0.85rem', fontWeight: 600 }}>
+                <div className="form-group" style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.2)', marginBottom: '0', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: '41px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#c084fc', margin: 0, fontSize: '0.85rem', fontWeight: 600, flex: 1, whiteSpace: 'nowrap' }}>
                     <input 
                       type="checkbox" 
-                      checked={isAdminSchedule} 
-                      onChange={e => setIsAdminSchedule(e.target.checked)}
+                      checked={adminScheduleDays.length > 0} 
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setShowAdminScheduleModal(true);
+                        } else {
+                          setAdminScheduleDays([]);
+                        }
+                      }}
                       style={{ width: '16px', height: '16px', flexShrink: 0 }}
                     />
-                    Repos Weekend
+                    Repos Personnalisé
                   </label>
+                  {adminScheduleDays.length > 0 && (
+                    <button 
+                      type="button"
+                      onClick={() => setShowAdminScheduleModal(true)}
+                      style={{ background: 'transparent', border: 'none', color: '#c084fc', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      title="Configurer les jours de repos"
+                    >
+                      <Settings size={15} />
+                    </button>
+                  )}
                 </div>
             )}
 
@@ -632,41 +685,7 @@ export default function AddAgentModal({
                 </div>
             )}
           </div>
-          <SpecialServiceModal 
-            isOpen={showSpecialServiceModal}
-            onClose={() => setShowSpecialServiceModal(false)}
-            specialServiceBase={specialServiceBase}
-            setSpecialServiceBase={setSpecialServiceBase}
-            specialServiceDays={specialServiceDays}
-            setSpecialServiceDays={setSpecialServiceDays}
-            isEntrant={isEntrant}
-            setIsEntrant={setIsEntrant}
-            entrantDate={entrantDate}
-            setEntrantDate={setEntrantDate}
-            isDebut={isDebut}
-            setIsDebut={setIsDebut}
-            debutDate={debutDate}
-            setDebutDate={setDebutDate}
-            minDate={minDate}
-            maxDate={maxDate}
-            datesList={datesList}
-          />
-          
-          {!isSpecialService && isEntrant && (
-            <div style={{ marginTop: '0', marginBottom: '10px', padding: '15px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: '#60a5fa', fontSize: '0.9rem', fontWeight: 600 }}>Date d'entrée (Le pointage commencera à partir de cette date)</label>
-              <input 
-                type="date"
-                className="form-input"
-                style={{ borderColor: 'rgba(59, 130, 246, 0.5)' }}
-                value={entrantDate}
-                onChange={e => setEntrantDate(e.target.value)}
-                required={isEntrant && !isSpecialService}
-                min={minDate}
-                max={maxDate}
-              />
-            </div>
-          )}
+
 
           {!isSpecialService && isDebut && (
             <div style={{ marginTop: '0', marginBottom: '10px', padding: '15px', background: 'rgba(236, 72, 153, 0.1)', border: '1px solid rgba(236, 72, 153, 0.3)', borderRadius: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -806,6 +825,77 @@ export default function AddAgentModal({
           }}
         />
       )}
+
+      <SpecialServiceModal 
+        isOpen={showSpecialServiceModal}
+        onClose={() => setShowSpecialServiceModal(false)}
+        specialServiceBase={specialServiceBase}
+        setSpecialServiceBase={setSpecialServiceBase}
+        specialServiceDays={specialServiceDays}
+        setSpecialServiceDays={setSpecialServiceDays}
+        isEntrant={isEntrant}
+        setIsEntrant={setIsEntrant}
+        entrantDate={entrantDate}
+        setEntrantDate={setEntrantDate}
+        isDebut={isDebut}
+        setIsDebut={setIsDebut}
+        debutDate={debutDate}
+        setDebutDate={setDebutDate}
+        minDate={minDate}
+        maxDate={maxDate}
+        datesList={datesList}
+        noOverlay={true}
+      />
+
+      {showEntrantConfigModal && (
+        <EntrantConfigModal
+          agentName={name}
+          entrantMotif={entrantMotif}
+          onEntrantMotifChange={setEntrantMotif}
+          entrantDate={entrantDate}
+          onEntrantDateChange={setEntrantDate}
+          period={period}
+          noOverlay={true}
+          onClose={() => {
+            setShowEntrantConfigModal(false);
+            if (!entrantDate) setIsEntrant(false);
+          }}
+          onSubmit={(e) => {
+            if (e) e.preventDefault();
+            if (entrantDate) {
+              setIsEntrant(true);
+              setIsDebut(false);
+              setShowEntrantConfigModal(false);
+            } else {
+              // Fallback
+              setShowEntrantConfigModal(false);
+              setIsEntrant(false);
+            }
+          }}
+        />
+      )}
+
+      {showAdminScheduleModal && (
+        <AdminScheduleModal
+          isOpen={showAdminScheduleModal}
+          onClose={() => {
+            setShowAdminScheduleModal(false);
+            if (adminScheduleDays.length === 0) {
+              setAdminScheduleDays([]);
+            }
+          }}
+          adminScheduleDays={adminScheduleDays}
+          setAdminScheduleDays={setAdminScheduleDays}
+          onValidate={() => {
+            if (adminScheduleDays.length === 0) {
+              setAdminScheduleDays([]);
+            }
+            setShowAdminScheduleModal(false);
+          }}
+          noOverlay={true}
+        />
+      )}
     </div>
   );
 }
+
