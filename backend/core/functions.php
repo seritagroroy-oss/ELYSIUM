@@ -1811,7 +1811,9 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         }
                         // ABANDON = vraies absences. ENTRANT = jours neutres (réduisent l'objectif sans être absences).
                         // Les permissions (P) sont également exclues du calcul des absences.
-                        $absences = $totalAbandonRuptureBackend + max(0, (30 - $totalEntrantRuptureBackend - $totalAbandonRuptureBackend) - $totalRealWorkedUnits - $totalPermUnits);
+                        // On plafonne les abandons pour que absences + permissions <= 30 (mois de 31j sinon dépasse)
+                        $abandon_capped = min($totalAbandonRuptureBackend, max(0, 30 - $totalPermUnits - $totalRealWorkedUnits));
+                        $absences = $abandon_capped + max(0, (30 - $totalEntrantRuptureBackend - $totalAbandonRuptureBackend) - $totalRealWorkedUnits - $totalPermUnits);
                         // On remet les compteurs de rupture a 0 pour eviter la double retenue
                         $entrant_sortant_count = 0;
                         $entrant_count = 0;
