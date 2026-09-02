@@ -1769,27 +1769,38 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             // Réduire les deux compteurs pour corriger le calcul du frontend
                             // (compteur ✓ = 30 - absences - entrant_sortant_count)
                             $entrant_count = max(0, $entrant_count - $entrant_adjust);
-                            $entrant_sortant_count = max(0, $entrant_sortant_count - $entrant_adjust);
                         }
                     }
 
                     $is244872 = in_array(strtolower($agent['shift_type'] ?? ''), ['24h', '48h', '72h']);
                     $totalRuptureBackend = 0;
+                    $totalEntrantRuptureBackend = 0; // ENTRANT/REINTEGRATION/M| → jours neutres (pas d'absence)
+                    $totalAbandonRuptureBackend = 0; // ABANDON/DEMISSION/SORTANT → comptent comme absences
                     foreach ($dates as $d_check) {
                         $sJ_c = $att_map['J'][$d_check] ?? '';
                         $sN_c = $att_map['N'][$d_check] ?? '';
-                        $isRupJ = in_array($sJ_c, ['ENTRANT', 'REINTEGRATION']) || in_array($sJ_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sJ_c) && strpos($sJ_c, 'SORTANT_') === 0) || (is_string($sJ_c) && strpos($sJ_c, 'M|') === 0);
-                        $isRupN = in_array($sN_c, ['ENTRANT', 'REINTEGRATION']) || in_array($sN_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sN_c) && strpos($sN_c, 'SORTANT_') === 0) || (is_string($sN_c) && strpos($sN_c, 'M|') === 0);
+                        $isEntrantJ = in_array($sJ_c, ['ENTRANT', 'REINTEGRATION']) || (is_string($sJ_c) && strpos($sJ_c, 'M|') === 0) || (is_string($sJ_c) && strpos($sJ_c, 'PM|') === 0);
+                        $isEntrantN = in_array($sN_c, ['ENTRANT', 'REINTEGRATION']) || (is_string($sN_c) && strpos($sN_c, 'M|') === 0) || (is_string($sN_c) && strpos($sN_c, 'PM|') === 0);
+                        $isAbandonJ = in_array($sJ_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sJ_c) && strpos($sJ_c, 'SORTANT_') === 0);
+                        $isAbandonN = in_array($sN_c, ['ABANDON', 'DEMISSION', 'SORTANT', 'RETIRE', 'LICENCIE', 'LICENCIE_ADMIN', 'FIN_CONTRAT']) || (is_string($sN_c) && strpos($sN_c, 'SORTANT_') === 0);
+                        $isRupJ = $isEntrantJ || $isAbandonJ;
+                        $isRupN = $isEntrantN || $isAbandonN;
                         if ($isRupJ || $isRupN) {
                             $totalRuptureBackend++;
+                            if ($isEntrantJ || $isEntrantN) $totalEntrantRuptureBackend++;
+                            elseif ($isAbandonJ || $isAbandonN) $totalAbandonRuptureBackend++;
                         }
                     }
 
                     if ($is244872 && $totalRuptureBackend > 0) {
                         $totalRealWorkedUnits = 0;
+                        $totalPermUnits = 0;
                         foreach ($dates as $d_check) {
                             if (($att_map['J'][$d_check] ?? '') === '1') $totalRealWorkedUnits++;
                             if (($att_map['N'][$d_check] ?? '') === '1') $totalRealWorkedUnits++;
+                            // Compter les permissions comme jours pris en compte (pas des absences)
+                            if (($att_map['J'][$d_check] ?? '') === 'P') $totalPermUnits++;
+                            if (($att_map['N'][$d_check] ?? '') === 'P') $totalPermUnits++;
                             // Si PM| orphelin (pas de clone), compter comme jour travaille
                             if ($pm_orphan_count > 0) {
                                 $_sJc = $att_map['J'][$d_check] ?? '';
@@ -1798,8 +1809,9 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 if (is_string($_sNc) && strpos($_sNc, 'PM|') === 0) $totalRealWorkedUnits++;
                             }
                         }
-                        // Ajuster pour combler l'ecart par rapport a 30 (en déduisant les jours de rupture)
-                        $absences = max(0, (30 - $totalRuptureBackend) - $totalRealWorkedUnits);
+                        // ABANDON = vraies absences. ENTRANT = jours neutres (réduisent l'objectif sans être absences).
+                        // Les permissions (P) sont également exclues du calcul des absences.
+                        $absences = $totalAbandonRuptureBackend + max(0, (30 - $totalEntrantRuptureBackend - $totalAbandonRuptureBackend) - $totalRealWorkedUnits - $totalPermUnits);
                         // On remet les compteurs de rupture a 0 pour eviter la double retenue
                         $entrant_sortant_count = 0;
                         $entrant_count = 0;
