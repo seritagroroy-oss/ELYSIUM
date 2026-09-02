@@ -1490,33 +1490,6 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
 
                     $att_map = $all_attendances[$agent_id] ?? [];
 
-                    // --- DETECTION DES PM| ORPHELINS (mutation rapide sans clone physique) ---
-                    // Si l'agent a des jours PM| mais qu'aucun clone ne partage sa base d'ID,
-                    // ces jours doivent etre comptes comme travailles (pas deduits).
-                    $agent_id_base = preg_replace('/^ag_\d+_/', '', $agent_id);
-                    $has_real_clone = false;
-                    foreach ($all_agents_by_subsite as $_sub_agents) {
-                        foreach ($_sub_agents as $_other) {
-                            if ($_other['id'] !== $agent_id &&
-                                (strpos($_other['id'], $agent_id) !== false || strpos($agent_id, $_other['id']) !== false ||
-                                 (strlen($agent_id_base) > 5 && strpos($_other['id'], $agent_id_base) !== false))) {
-                                $has_real_clone = true;
-                                break 2;
-                            }
-                        }
-                    }
-                    // Compter les PM| dans ce mois pour cet agent
-                    $pm_orphan_count = 0;
-                    if (!$has_real_clone) {
-                        foreach ($dates as $_d) {
-                            $_sJ = $att_map['J'][$_d] ?? '';
-                            $_sN = $att_map['N'][$_d] ?? '';
-                            if (is_string($_sJ) && strpos($_sJ, 'PM|') === 0) $pm_orphan_count++;
-                            if (is_string($_sN) && strpos($_sN, 'PM|') === 0) $pm_orphan_count++;
-                        }
-                    }
-                    // --- FIN DETECTION PM| ORPHELINS ---
-
                     $absences = 0;
                     $entrant_sortant_count = 0;
                     $entrant_count = 0; // Jours ENTRANT uniquement (exclus des déductions)
@@ -1790,17 +1763,10 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         foreach ($dates as $d_check) {
                             if (($att_map['J'][$d_check] ?? '') === '1') $totalRealWorkedUnits++;
                             if (($att_map['N'][$d_check] ?? '') === '1') $totalRealWorkedUnits++;
-                            // Si PM| orphelin (pas de clone), compter comme jour travaille
-                            if ($pm_orphan_count > 0) {
-                                $_sJc = $att_map['J'][$d_check] ?? '';
-                                $_sNc = $att_map['N'][$d_check] ?? '';
-                                if (is_string($_sJc) && strpos($_sJc, 'PM|') === 0) $totalRealWorkedUnits++;
-                                if (is_string($_sNc) && strpos($_sNc, 'PM|') === 0) $totalRealWorkedUnits++;
-                            }
                         }
-                        // Ajuster pour combler l'ecart par rapport a 30
+                        // Ajuster pour combler l'écart par rapport à 30
                         $absences = max(0, 30 - $totalRealWorkedUnits);
-                        // On remet les compteurs de rupture a 0 pour eviter la double retenue
+                        // On remet les compteurs de rupture à 0 pour éviter la double retenue
                         $entrant_sortant_count = 0;
                         $entrant_count = 0;
                     }
@@ -1952,11 +1918,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             $is_entrant_or_np = (in_array($sJ, ['ENTRANT', 'REINTEGRATION']) || in_array($sN, ['ENTRANT', 'REINTEGRATION']) || $sJ === 'NON_PRESENT' || $sN === 'NON_PRESENT');
                             if (!$is_entrant_or_np) {
                                 $assigned_days++;
-                                $is_m_marker = (strpos($sJ, 'M|') === 0 || strpos($sN, 'M|') === 0);
-                                $is_pm_marker = (strpos($sJ, 'PM|') === 0 || strpos($sN, 'PM|') === 0);
-                                // Ne deduire un PM| que si l'agent a un vrai clone sur l'ancien site.
-                                // Si PM| orphelin (pas de clone), laisser ces jours dans real_active.
-                                if ($is_m_marker || ($is_pm_marker && $pm_orphan_count === 0)) {
+                                if (strpos($sJ, 'M|') === 0 || strpos($sJ, 'PM|') === 0 || strpos($sN, 'M|') === 0 || strpos($sN, 'PM|') === 0) {
                                     $mutated_away_days++;
                                 } else {
                                     if ($scObj) {
@@ -2286,17 +2248,6 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
             }
             return $idStr;
         };
-
-        // Trier les salaires par anciennete d'ID (timestamp) avant fusion.
-        // Garantit que l'original est fusionne avant ses clones successifs
-        // pour les agents mutes plusieurs fois.
-        usort($salaries, function($a, $b) {
-            preg_match('/ag_(\d+)_/', $a['id'], $mA);
-            preg_match('/ag_(\d+)_/', $b['id'], $mB);
-            $tA = (int)($mA[1] ?? 0);
-            $tB = (int)($mB[1] ?? 0);
-            return $tA <=> $tB; // Plus ancien en premier
-        });
 
         foreach ($salaries as $sal) {
             $name = trim($sal['name']);
