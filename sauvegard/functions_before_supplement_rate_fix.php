@@ -2077,8 +2077,13 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             
                             if (isset($spd['replacedAgentBase']) && $spd['replacedAgentBase'] !== null) {
                                 $replaced_base = $spd['replacedAgentBase'];
-                                // Le supp est payé au taux plein du poste remplacé
-                                $spd_gain = (int) round($replaced_base / $divisor);
+                                if ($replaced_base > $agent_base) {
+                                    // Scénario A : Poste supérieur -> Gagne la différence (bonus)
+                                    $spd_gain = (int) round(($replaced_base - $agent_base) / $divisor);
+                                } else {
+                                    // Scénario B : Poste inférieur -> S'adapte au taux remplacé
+                                    $spd_gain = (int) round($replaced_base / $divisor);
+                                }
                             } else {
                                 // Scénario C : Aucun remplacement
                                 $spd_gain = (int) round($agent_base / $divisor);
@@ -2122,8 +2127,13 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             $spd_gain = 0;
                             if (isset($spd['replacedAgentBase']) && $spd['replacedAgentBase'] !== null) {
                                 $replaced_base = $spd['replacedAgentBase'];
-                                // Le supp est payé au taux plein du poste remplacé
-                                $spd_gain = (int) round($replaced_base / $divToUse);
+                                if ($replaced_base > $base_used_for_deductions) {
+                                    // Scénario A : Poste supérieur -> Gagne la différence (bonus)
+                                    $spd_gain = (int) round(($replaced_base - $base_used_for_deductions) / $divToUse);
+                                } else {
+                                    // Scénario B : Poste inférieur -> S'adapte au taux remplacé
+                                    $spd_gain = (int) round($replaced_base / $divToUse);
+                                }
                             } else {
                                 // Scénario C : Aucun remplacement
                                 $spd_gain = (int) round($base_used_for_deductions / $divToUse);
