@@ -1798,8 +1798,8 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 if (is_string($_sNc) && strpos($_sNc, 'PM|') === 0) $totalRealWorkedUnits++;
                             }
                         }
-                        // Ajuster pour combler l'ecart par rapport a 30
-                        $absences = max(0, 30 - $totalRealWorkedUnits);
+                        // Ajuster pour combler l'ecart par rapport a 30 (en déduisant les jours de rupture)
+                        $absences = max(0, (30 - $totalRuptureBackend) - $totalRealWorkedUnits);
                         // On remet les compteurs de rupture a 0 pour eviter la double retenue
                         $entrant_sortant_count = 0;
                         $entrant_count = 0;
