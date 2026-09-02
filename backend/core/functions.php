@@ -1793,7 +1793,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         }
                     }
 
-                    if ($is244872 && $totalRuptureBackend > 0) {
+                    if ($is244872) {
                         $totalRealWorkedUnits = 0;
                         $totalPermUnits = 0;
                         foreach ($dates as $d_check) {
@@ -1810,14 +1810,16 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 if (is_string($_sNc) && strpos($_sNc, 'PM|') === 0) $totalRealWorkedUnits++;
                             }
                         }
-                        // ABANDON = vraies absences. ENTRANT = jours neutres (réduisent l'objectif sans être absences).
-                        // Les permissions (P) sont également exclues du calcul des absences.
-                        // On plafonne les abandons pour que absences + permissions <= 30 (mois de 31j sinon dépasse)
-                        $abandon_capped = min($totalAbandonRuptureBackend, max(0, 30 - $totalPermUnits - $totalRealWorkedUnits));
-                        $absences = $abandon_capped + max(0, (30 - $totalEntrantRuptureBackend - $totalAbandonRuptureBackend) - $totalRealWorkedUnits - $totalPermUnits);
-                        // On remet les compteurs de rupture a 0 pour eviter la double retenue
-                        $entrant_sortant_count = 0;
-                        $entrant_count = 0;
+                        if ($totalRuptureBackend > 0) {
+                            // ABANDON = vraies absences. ENTRANT = jours neutres (réduisent l'objectif sans être absences).
+                            // Les permissions (P) sont également exclues du calcul des absences.
+                            // On plafonne les abandons pour que absences + permissions <= 30 (mois de 31j sinon dépasse)
+                            $abandon_capped = min($totalAbandonRuptureBackend, max(0, 30 - $totalPermUnits - $totalRealWorkedUnits));
+                            $absences = $abandon_capped + max(0, (30 - $totalEntrantRuptureBackend - $totalAbandonRuptureBackend) - $totalRealWorkedUnits - $totalPermUnits);
+                            // On remet les compteurs de rupture a 0 pour eviter la double retenue
+                            $entrant_sortant_count = 0;
+                            $entrant_count = 0;
+                        }
                     }
 
                     // Initialise divisor
@@ -2018,8 +2020,8 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         if ($total_assigned > 0) {
                             $is_entrant_or_sortant = ($entrant_count > 0 || (isset($entrant_adjust) && $entrant_adjust > 0) || $exit_count > 0 || (isset($exit_adjust) && $exit_adjust > 0));
                             if ($is_special || $is_entrant_or_sortant) {
-                                $active_days_salary = $real_active;
-                                $active_days = $real_active;
+                                $active_days_salary = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
+                                $active_days = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
                             } else {
                                 $active_days_salary = (int) round($real_active * $divisor / $full_month_assigned_days);
                                 if ($active_days_salary > $divisor) $active_days_salary = $divisor;
@@ -2038,8 +2040,8 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             }
                             $is_entrant_or_sortant = ($entrant_count > 0 || (isset($entrant_adjust) && $entrant_adjust > 0) || $exit_count > 0 || (isset($exit_adjust) && $exit_adjust > 0));
                             if ($is_special || $is_entrant_or_sortant) {
-                                $active_days_salary = $real_active;
-                                $active_days = $real_active;
+                                $active_days_salary = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
+                                $active_days = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
                             } else {
                                 $active_days_salary = (int) round($real_active * $divisor / $full_month_assigned_days);
                                 if ($active_days_salary > $divisor) $active_days_salary = $divisor;
@@ -2119,7 +2121,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             } else {
                                 $is_entrant_or_sortant = ($entrant_count > 0 || (isset($entrant_adjust) && $entrant_adjust > 0) || $exit_count > 0 || (isset($exit_adjust) && $exit_adjust > 0));
                                 if ($is_entrant_or_sortant) {
-                                    $active_days = $real_active;
+                                    $active_days = $is244872 ? $totalRealWorkedUnits : $real_active;
                                 } else {
                                     $active_days = $assigned_days === 0 ? 0 : (int) round($real_active * $divisor / $full_month_assigned_days);
                                     if ($active_days > $divisor) $active_days = $divisor;
