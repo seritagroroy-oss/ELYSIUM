@@ -1984,7 +1984,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         $divToUse = $is_special ? ($full_month_assigned_days > 0 ? $full_month_assigned_days : 30) : $divisor;
                         $total_assigned = $assigned_days_old + $assigned_days_new;
                         if ($total_assigned > 0) {
-                            $is_entrant_or_sortant = ($entrant_count > 0 || (isset($entrant_adjust) && $entrant_adjust > 0) || $exit_count > 0 || (isset($exit_adjust) && $exit_adjust > 0));
+                            $is_entrant_or_sortant = ($entrant_count > 0 || $exit_count > 0 || (isset($totalEntrantRuptureBackend) && $totalEntrantRuptureBackend > 0) || (isset($totalAbandonRuptureBackend) && $totalAbandonRuptureBackend > 0));
                             if ($is_special || $is_entrant_or_sortant) {
                                 $active_days_salary = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
                                 $active_days = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
@@ -2004,7 +2004,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 if ($date < $scObj['date']) $countOld++;
                                 else $countNew++;
                             }
-                            $is_entrant_or_sortant = ($entrant_count > 0 || (isset($entrant_adjust) && $entrant_adjust > 0) || $exit_count > 0 || (isset($exit_adjust) && $exit_adjust > 0));
+                            $is_entrant_or_sortant = ($entrant_count > 0 || $exit_count > 0 || (isset($totalEntrantRuptureBackend) && $totalEntrantRuptureBackend > 0) || (isset($totalAbandonRuptureBackend) && $totalAbandonRuptureBackend > 0));
                             if ($is_special || $is_entrant_or_sortant) {
                                 $active_days_salary = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
                                 $active_days = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
@@ -2085,7 +2085,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                                 $prorata_base = $base;
                                 $active_days = $assigned_days === 0 ? 0 : $divisor;
                             } else {
-                                $is_entrant_or_sortant = ($entrant_count > 0 || (isset($entrant_adjust) && $entrant_adjust > 0) || $exit_count > 0 || (isset($exit_adjust) && $exit_adjust > 0));
+                                $is_entrant_or_sortant = ($entrant_count > 0 || $exit_count > 0 || (isset($totalEntrantRuptureBackend) && $totalEntrantRuptureBackend > 0) || (isset($totalAbandonRuptureBackend) && $totalAbandonRuptureBackend > 0));
                                 if ($is_entrant_or_sortant) {
                                     $active_days = $is244872 ? $totalRealWorkedUnits : $real_active;
                                 } else {
