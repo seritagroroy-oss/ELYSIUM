@@ -20,6 +20,7 @@ export function useDashboardActions(props) {
   const [showDeleteAgent, setShowDeleteAgent] = useState(false);
   const [deleteSiteData, setDeleteSiteData] = useState(null);
   const [pendingSubsiteScreenshot, setPendingSubsiteScreenshot] = useState(null);
+  const [pendingAgentScreenshot, setPendingAgentScreenshot] = useState(null);
   const [showFaqModal, setShowFaqModal] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState(null);
 
@@ -1897,7 +1898,7 @@ export function useDashboardActions(props) {
     }
   };
 
-  const handleDeleteAgent = (agent) => {
+  const handleDeleteAgent = async (agent) => {
     // Bloquer si la zone est verrouillée
     const agentId = typeof agent === 'object' ? agent.id : agent;
     
@@ -1911,6 +1912,48 @@ export function useDashboardActions(props) {
     if (agentSubsiteId && lockedZones.includes(agentSubsiteId)) {
       return;
     }
+
+    // Capture AVANT d'ouvrir la modale de confirmation
+    let screenshotData = null;
+    try {
+        const el = document.getElementById(`agent-row-${agentId}`);
+        if (el) {
+            const table = el.closest('table');
+            const thead = table ? table.querySelector('thead') : null;
+            if (thead) {
+                const tempDiv = document.createElement('div');
+                tempDiv.style.position = 'absolute';
+                tempDiv.style.left = '-9999px';
+                tempDiv.style.top = '0';
+                tempDiv.style.width = 'max-content';
+                tempDiv.style.background = '#0b1220';
+                tempDiv.style.padding = '10px';
+                const wrapper = document.createElement('table');
+                wrapper.style.borderCollapse = 'collapse';
+                wrapper.style.width = 'max-content';
+                wrapper.style.color = '#fff';
+                const clonedThead = thead.cloneNode(true);
+                clonedThead.querySelectorAll('th').forEach(th => { th.style.position = 'static'; });
+                wrapper.appendChild(clonedThead);
+                const tbody = document.createElement('tbody');
+                const clonedRow = el.cloneNode(true);
+                clonedRow.querySelectorAll('td').forEach(td => { td.style.position = 'static'; });
+                tbody.appendChild(clonedRow);
+                wrapper.appendChild(tbody);
+                tempDiv.appendChild(wrapper);
+                document.body.appendChild(tempDiv);
+                const canvas = await html2canvas(tempDiv, { backgroundColor: '#0f172a', scale: 1.5, windowWidth: tempDiv.scrollWidth, windowHeight: tempDiv.scrollHeight });
+                screenshotData = canvas.toDataURL('image/jpeg', 0.75);
+                document.body.removeChild(tempDiv);
+            } else {
+                const canvas = await html2canvas(el, { backgroundColor: '#0f172a', scale: 1.5 });
+                screenshotData = canvas.toDataURL('image/jpeg', 0.75);
+            }
+        }
+    } catch(err) {
+        console.error("Agent screenshot failed", err);
+    }
+    setPendingAgentScreenshot(screenshotData);
 
     if (typeof agent === 'object') {
        setDeleteAgentConfirm(agent);
@@ -1929,68 +1972,9 @@ export function useDashboardActions(props) {
     const agentId = typeof deleteAgentConfirm === 'object' ? deleteAgentConfirm.id : deleteAgentConfirm;
     const agentName = typeof deleteAgentConfirm === 'object' ? deleteAgentConfirm.name : null;
 
-    // 0. Capture snapshot BEFORE removing from DOM (incluant les dates de l'en-tête)
-    let screenshotData = null;
-    try {
-        const el = document.getElementById(`agent-row-${agentId}`);
-        if (el) {
-            const table = el.closest('table');
-            const thead = table ? table.querySelector('thead') : null;
-            
-            if (thead) {
-                // Créer un conteneur temporaire hors écran
-                const tempDiv = document.createElement('div');
-                tempDiv.style.position = 'absolute';
-                tempDiv.style.left = '-9999px';
-                tempDiv.style.top = '0';
-                tempDiv.style.width = 'max-content';
-                tempDiv.style.background = '#0b1220';
-                tempDiv.style.padding = '10px';
-                tempDiv.style.borderRadius = '8px';
-                
-                const wrapper = document.createElement('table');
-                wrapper.style.borderCollapse = 'collapse';
-                wrapper.style.width = 'max-content';
-                wrapper.style.color = '#fff';
-                wrapper.style.fontFamily = 'Inter, sans-serif'; // Assuming standard font
-                
-                // Clone de l'en-tête et suppression du position sticky pour éviter les bugs html2canvas
-                const clonedThead = thead.cloneNode(true);
-                clonedThead.querySelectorAll('th').forEach(th => {
-                    th.style.position = 'static';
-                });
-                wrapper.appendChild(clonedThead);
-                
-                // Clone du corps avec l'agent
-                const tbody = document.createElement('tbody');
-                const clonedAgentRow = el.cloneNode(true);
-                clonedAgentRow.querySelectorAll('td').forEach(td => {
-                    td.style.position = 'static';
-                });
-                tbody.appendChild(clonedAgentRow);
-                wrapper.appendChild(tbody);
-                
-                tempDiv.appendChild(wrapper);
-                document.body.appendChild(tempDiv);
-                
-                const canvas = await html2canvas(tempDiv, { 
-                    backgroundColor: '#0f172a',
-                    scale: 1.5,
-                    windowWidth: tempDiv.scrollWidth,
-                    windowHeight: tempDiv.scrollHeight
-                });
-                screenshotData = canvas.toDataURL('image/jpeg', 0.75);
-                
-                document.body.removeChild(tempDiv);
-            } else {
-                // Fallback normal
-                const canvas = await html2canvas(el, { backgroundColor: '#0f172a', scale: 1.5 });
-                screenshotData = canvas.toDataURL('image/jpeg', 0.75);
-            }
-        }
-    } catch(err) {
-        console.error("Screenshot failed", err);
-    }
+    // 0. Capture déjà prise dans handleDeleteAgent avant l'ouverture de la modale
+    const screenshotData = pendingAgentScreenshot;
+    setPendingAgentScreenshot(null);
 
     // 1. On ferme la modale immédiatement
     setDeleteAgentConfirm(null);
