@@ -452,10 +452,16 @@ switch ($action) {
             echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
-        $site_name_to_log = !empty($data['name']) ? $data['name'] : ($data['subsite_id'] ?? 'Inconnu');
+        $subsite_id = $data['subsite_id'] ?? '';
+        $site_name_to_log = $subsite_id;
+        if ($subsite_id) {
+            $stmt = getDb()->prepare("SELECT name FROM subsites WHERE id = ?");
+            $stmt->execute([$subsite_id]);
+            $res = $stmt->fetch();
+            if ($res && !empty($res['name'])) $site_name_to_log = $res['name'];
+        }
         if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_SUBSITE', "Site: " . $site_name_to_log);
         $serviceKey = $_SESSION['service_id'] ?? null;
-        $subsite_id = $data['subsite_id'] ?? '';
         if (!$subsite_id) {
             echo json_encode(['success' => false, 'message' => 'Sous-site manquant']);
             break;
