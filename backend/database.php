@@ -1371,7 +1371,7 @@ function getAttendanceStats(string $companyId, string $period = ''): array
 function logBlackBox($db, $company_id, $service_id, $period, $action_type, $details) {
     if (!$db || !$company_id || !$period || !$action_type) return false;
     
-    $user = $_SESSION['username'] ?? 'SYSTEM';
+    $user = $_SESSION['user_name'] ?? 'SYSTEM';
     
     try {
         $now = date('Y-m-d H:i:s');
