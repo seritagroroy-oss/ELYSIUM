@@ -70,7 +70,8 @@ const BlacklistModal = ({ onClose }) => {
     const map = {
       'ADD_AGENT': 'Ajout d\'agent',
       'DELETE_AGENT': 'Suppression d\'agent',
-      'DELETE_SUBSITE': 'Suppression de site',
+      'DELETE_SUBSITE': 'Suppression de zone',
+      'DELETE_SITE': 'Suppression de site',
       'ADD_PERMISSION': 'Ajout de permission/congé',
       'AGENT_SORTANT': 'Déclaration agent sortant',
       'CANCEL_SORTANT': 'Annulation agent sortant',

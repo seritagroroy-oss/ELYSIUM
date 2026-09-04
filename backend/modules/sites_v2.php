@@ -341,6 +341,18 @@ switch ($action) {
         $sqlite->prepare("DELETE FROM subsites WHERE site_id = ?")->execute([$site_id]);
         $sqlite->prepare("DELETE FROM sites WHERE id = ?")->execute([$site_id]);
         error_log("DEBUG delete_site: finished deleting site_id = " . $site_id);
+        
+        if (function_exists('logBlackBox')) {
+            $period = $data['period'] ?? date('Y-m');
+            // Chercher le serviceKey lié à ce site
+            $stmtSvc = $sqlite->prepare("SELECT id FROM services WHERE company_id = ? LIMIT 1");
+            $stmtSvc->execute([$company_id]);
+            $svcRow = $stmtSvc->fetch();
+            $serviceKey = $svcRow['id'] ?? resolveCurrentServiceKeySql();
+            $log_details = "Site: {$site_name}";
+            logBlackBox($sqlite, $company_id, $serviceKey, $period, 'DELETE_SITE', $log_details);
+        }
+
         echo json_encode(['success' => true]);
         break;
     case 'rename_subsite':

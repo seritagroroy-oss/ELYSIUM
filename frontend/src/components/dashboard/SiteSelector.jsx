@@ -1768,7 +1768,7 @@ export default function SiteSelector({ state, actions }) {
           }}
           onConfirm={async () => {
             try {
-              const res = await apiCall('delete_site', { site_id: deleteSiteData.id, motif: 'Suppression depuis dashboard' });
+              const res = await apiCall('delete_site', { site_id: deleteSiteData.id, motif: 'Suppression depuis dashboard', period });
               if (res.success) {
                 const newSites = sites.filter(s => s.id !== deleteSiteData.id);
                 setSites(newSites);
