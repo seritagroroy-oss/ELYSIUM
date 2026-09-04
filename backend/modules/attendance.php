@@ -587,6 +587,8 @@ switch ($action) {
 
     // ─────────────────────────────────────────────────────────────────────────
     case 'delete_agent_entrant':
+        $agent_name_to_log = !empty($data['name']) ? $data['name'] : ($data['agent_id'] ?? 'Inconnu');
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_AGENT_ENTRANT', "Agent: " . $agent_name_to_log);
         $agent_id = $data['agent_id'] ?? '';
         $period   = $data['period'] ?? date('Y-m');
 

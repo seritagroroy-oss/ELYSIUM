@@ -1341,6 +1341,8 @@ switch ($action) {
         echo json_encode(['success' => true, 'sites' => $sites]);
         break;
     case 'delete_agent':
+        $agent_name_to_log = !empty($data['name']) ? $data['name'] : ($data['agent_id'] ?? 'Inconnu');
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_AGENT', "Agent: " . $agent_name_to_log);
         $agent_id = $data['agent_id'] ?? '';
         $delete_all_sites = !empty($data['delete_all_sites']);
         $agent_name = $data['name'] ?? '';
@@ -1380,6 +1382,15 @@ switch ($action) {
         echo json_encode(['success' => true]);
         break;
         case 'get_blackbox_logs':
+        $period = $data['period'] ?? date('Y-m');
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        $stmt = $sqlite->prepare("SELECT * FROM activity_logs WHERE company_id = ? AND period = ? ORDER BY action_date DESC");
+        $stmt->execute([$company_id, $period]);
+        echo json_encode(['success' => true, 'logs' => $stmt->fetchAll()]);
+        break;
+
+    case 'get_blackbox_logs':
         $period = $data['period'] ?? date('Y-m');
         $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $sqlite = getDb();
