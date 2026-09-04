@@ -277,7 +277,19 @@ const BlacklistModal = ({ onClose }) => {
                           {translateAction(log.action_type)}
                         </div>
                         <div style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '4px' }}>
-                          {log.details}
+                          {(() => {
+                            if (log.action_type === 'DELETE_SUBSITE' && log.details.includes(' / ')) {
+                              const parts = log.details.split(' / ');
+                              const zone = parts.pop();
+                              const parent = parts.join(' / ');
+                              return (
+                                <>
+                                  {parent} / <span style={{ color: '#ef4444', fontWeight: 'bold' }}>{zone}</span>
+                                </>
+                              );
+                            }
+                            return log.details;
+                          })()}
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>
                           Par: {log.user} | Période: {log.period}

@@ -455,10 +455,20 @@ switch ($action) {
         $subsite_id = $data['subsite_id'] ?? '';
         $site_name_to_log = $subsite_id;
         if ($subsite_id) {
-            $stmt = getDb()->prepare("SELECT name FROM subsites WHERE id = ?");
+            // Récupère à la fois le nom de la zone et le nom du site parent
+            $stmt = getDb()->prepare("SELECT sub.name as subsite_name, s.name as site_name FROM subsites sub LEFT JOIN sites s ON sub.site_id = s.id WHERE sub.id = ?");
             $stmt->execute([$subsite_id]);
             $res = $stmt->fetch();
-            if ($res && !empty($res['name'])) $site_name_to_log = $res['name'];
+            if ($res) {
+                $parent_name = !empty($res['site_name']) ? $res['site_name'] : '';
+                $zone_name = !empty($res['subsite_name']) ? $res['subsite_name'] : '';
+                
+                if ($parent_name && $zone_name) {
+                    $site_name_to_log = $parent_name . ' / ' . $zone_name;
+                } elseif ($zone_name) {
+                    $site_name_to_log = $zone_name;
+                }
+            }
         }
         if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_SUBSITE', "Site: " . $site_name_to_log);
         $serviceKey = $_SESSION['service_id'] ?? null;
