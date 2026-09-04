@@ -1431,7 +1431,7 @@ switch ($action) {
     case 'get_blackbox_logs':
         $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $sqlite = getDb();
-        $stmt = $sqlite->prepare("SELECT * FROM activity_logs WHERE company_id = ? ORDER BY action_date DESC LIMIT 500");
+        $stmt = $sqlite->prepare("SELECT * FROM activity_logs WHERE company_id = ? ORDER BY action_date DESC");
         $stmt->execute([$company_id]);
         echo json_encode(['success' => true, 'logs' => $stmt->fetchAll()]);
         break;
