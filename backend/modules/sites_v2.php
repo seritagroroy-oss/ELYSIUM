@@ -1328,6 +1328,23 @@ switch ($action) {
             }
         }
 
+        // ─── Log Boîte Noire ───────────────────────────────────────────────────
+        $zone_name_for_log = $subsite_id;
+        if ($subsite_id) {
+            $stmtZone = $sqlite->prepare("SELECT sub.name as zone_name, s.name as site_name FROM subsites sub LEFT JOIN sites s ON sub.site_id = s.id WHERE sub.id = ?");
+            $stmtZone->execute([$subsite_id]);
+            $zoneRow = $stmtZone->fetch();
+            if ($zoneRow) {
+                $parts = [];
+                if (!empty($zoneRow['site_name'])) $parts[] = $zoneRow['site_name'];
+                if (!empty($zoneRow['zone_name'])) $parts[] = $zoneRow['zone_name'];
+                $zone_name_for_log = implode(' / ', $parts);
+            }
+        }
+        $log_details = "Agent: {$name} | Fonction: {$function} | Vacation: {$shift_type} | Zone: {$zone_name_for_log}";
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $company_id, $serviceKey, $period ?: date('Y-m'), 'ADD_AGENT', $log_details);
+        // ───────────────────────────────────────────────────────────────────────
+
         saveScopedData($db, $serviceKey);
         echo json_encode(['success' => true, 'agent_id' => $new_agent_id]);
         break;

@@ -68,14 +68,23 @@ const BlacklistModal = ({ onClose }) => {
 
   const translateAction = (action) => {
     const map = {
+      'ADD_AGENT': 'Ajout d\'agent',
       'DELETE_AGENT': 'Suppression d\'agent',
       'DELETE_SUBSITE': 'Suppression de site',
       'ADD_PERMISSION': 'Ajout de permission/congé',
       'AGENT_SORTANT': 'Déclaration agent sortant',
       'CANCEL_SORTANT': 'Annulation agent sortant',
-      'AGENT_ENTRANT': 'Déclaration agent entrant'
+      'AGENT_ENTRANT': 'Déclaration agent entrant',
+      'DELETE_AGENT_SORTANT': 'Annulation agent sortant',
+      'DELETE_AGENT_ENTRANT': 'Annulation agent entrant'
     };
     return map[action] || action;
+  };
+
+  const getActionColor = (action) => {
+    if (action === 'ADD_AGENT') return '#22c55e';        // vert
+    if (action?.startsWith('DELETE')) return '#ef4444';  // rouge
+    return '#8b5cf6';                                    // violet (défaut)
   };
 
   const formatDate = (dateString) => {
@@ -270,12 +279,12 @@ const BlacklistModal = ({ onClose }) => {
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {filteredLogs.map(log => (
-                    <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '15px', padding: '15px', background: 'rgba(139, 92, 246, 0.05)', borderRadius: '10px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                    <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '15px', padding: '15px', background: `rgba(0,0,0,0.15)`, borderRadius: '10px', border: `1px solid ${getActionColor(log.action_type)}40` }}>
                       <div style={{ minWidth: '150px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>
                         {formatDate(log.action_date)}
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#8b5cf6', marginBottom: '4px' }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 'bold', color: getActionColor(log.action_type), marginBottom: '4px' }}>
                           {translateAction(log.action_type)}
                         </div>
                         <div style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '4px' }}>
