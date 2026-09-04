@@ -1367,3 +1367,24 @@ function getAttendanceStats(string $companyId, string $period = ''): array
         'period'        => $period,
     ];
 }
+
+function logBlackBox($db, $company_id, $service_id, $period, $action_type, $details) {
+    if (!$db || !$company_id || !$period || !$action_type) return false;
+    
+    $user = $_SESSION['username'] ?? 'SYSTEM';
+    
+    try {
+        $stmt = $db->prepare("INSERT INTO activity_logs (company_id, service_id, period, action_date, user, action_type, details) VALUES (?, ?, ?, NOW(), ?, ?, ?)");
+        return $stmt->execute([
+            $company_id,
+            $service_id,
+            $period,
+            $user,
+            $action_type,
+            $details
+        ]);
+    } catch (Exception $e) {
+        error_log("BlackBox Error: " . $e->getMessage());
+        return false;
+    }
+}

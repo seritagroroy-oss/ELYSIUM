@@ -177,6 +177,7 @@ switch ($action) {
 
     // ─────────────────────────────────────────────────────────────────────────
     case 'mark_agent_sortant':
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $period, 'AGENT_SORTANT', "Agent ID: " . ($data['agent_id']??''));
         $agent_id       = $data['agent_id'] ?? '';
         $departure_date = $data['departure_date'] ?? '';
         $type           = $data['type'] ?? '';
@@ -263,6 +264,7 @@ switch ($action) {
 
     // ─────────────────────────────────────────────────────────────────────────
     case 'delete_agent_sortant':
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $period, 'CANCEL_SORTANT', "Agent ID $agent_id");
         $agent_id = $data['agent_id'] ?? '';
         $period   = $data['period'] ?? date('Y-m');
 
@@ -415,6 +417,7 @@ switch ($action) {
 
     // ─────────────────────────────────────────────────────────────────────────
     case 'mark_agent_entrant':
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $period, 'AGENT_ENTRANT', "Agent ID: " . ($data['agent_id']??''));
         $agent_id   = $data['agent_id'] ?? '';
         $start_date = $data['start_date'] ?? '';
         $function   = $data['function'] ?? '';

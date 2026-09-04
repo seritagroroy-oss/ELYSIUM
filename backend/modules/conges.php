@@ -267,6 +267,7 @@ switch ($action) {
         break;
 
     case 'add_permission':
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $period??date('Y-m'), 'ADD_PERMISSION', "Agent ID: " . ($data['agent_id']??''));
         $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $agent_id = $data['agent_id'] ?? '';
         $reason = $data['reason'] ?? '';

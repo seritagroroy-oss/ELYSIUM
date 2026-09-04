@@ -1405,13 +1405,9 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
             $all_agents_db[$r['id']] = $r;
             $all_agents_by_name_lower[strtolower(trim($r['name']))] = $r;
         }
+        // --- FIN PRÉ-CHARGEMENT ---
+
         // --- PRÉ-CHARGEMENT (Eager Loading) ---
-        $stmtAllSpecialAgents = $sqlite->prepare("SELECT name, salary FROM special_agents WHERE company_id = ?");
-        $stmtAllSpecialAgents->execute([$companyKey]);
-        $special_agents_map = [];
-        while ($r = $stmtAllSpecialAgents->fetch()) {
-            $special_agents_map[strtolower(trim($r['name']))] = (int)$r['salary'];
-        }
         // 1. Charger tous les subsites d'un coup
         $site_ids = array_column($sites_rows, 'id');
         $all_subsites_by_site = [];
@@ -1478,11 +1474,6 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                 foreach ($agents_rows as $agent) {
                     $agent_id = $agent['id'];
                     $func_id = $agent['function'] ?? 'AS';
-
-                    $agent_name_lower = strtolower(trim($agent['name']));
-                    if (isset($special_agents_map[$agent_name_lower])) {
-                        $agent['salary'] = $special_agents_map[$agent_name_lower];
-                    }
 
                     $is_special_salary_flag = isset($agent['salary']) && (int) $agent['salary'] > 0;
                     $base = $is_special_salary_flag
@@ -1811,17 +1802,10 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     $sp_count = 0;
                     $sp_details = [];
                     // 1. Pointages explicitement dans la ligne Supplémentaire
-                    foreach ($dates as $date) {
-                        // Vérifier s'il y a déjà une valeur spécifique (SJ ou SN) pour éviter les doublons avec S
-                        $has_specific = (isset($att_map['SJ'][$date]) && $att_map['SJ'][$date] !== '' && $att_map['SJ'][$date] !== 'A' && $att_map['SJ'][$date] !== 'R')
-                                     || (isset($att_map['SN'][$date]) && $att_map['SN'][$date] !== '' && $att_map['SN'][$date] !== 'A' && $att_map['SN'][$date] !== 'R');
-
-                        foreach (['S', 'SJ', 'SN'] as $sp_key) {
+                    foreach (['S', 'SJ', 'SN'] as $sp_key) {
+                        foreach ($dates as $date) {
                             $sp_status = $att_map[$sp_key][$date] ?? '';
                             if ($sp_status !== '' && $sp_status !== 'A' && $sp_status !== 'R') {
-                                // Ignorer la ligne générique S si une ligne spécifique SJ/SN est déjà présente
-                                if ($sp_key === 'S' && $has_specific) continue;
-
                                 $sp_count++;
                                 $shift_label = 'Supplémentaire';
                                 if ($sp_key === 'SJ')
@@ -2004,10 +1988,11 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             if ($is_special || $is_entrant_or_sortant) {
                                 $active_days_salary = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
                                 $active_days = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
-                                if ($active_days > 30) { $active_days = 30; $active_days_salary = 30; }
                             } else {
-                                $active_days_salary = $divisor;
-                                $active_days = $divisor;
+                                $active_days_salary = (int) round($real_active * $divisor / $full_month_assigned_days);
+                                if ($active_days_salary > $divisor) $active_days_salary = $divisor;
+                                $active_days = (int) round($real_active * $divisor / $full_month_assigned_days);
+                                if ($active_days > $divisor) $active_days = $divisor;
                             }
                             
                             $active_days_old = (int) round(($assigned_days_old / $total_assigned) * $active_days_salary);
@@ -2023,10 +2008,11 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                             if ($is_special || $is_entrant_or_sortant) {
                                 $active_days_salary = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
                                 $active_days = $is_entrant_or_sortant && $is244872 ? $totalRealWorkedUnits : $real_active;
-                                if ($active_days > 30) { $active_days = 30; $active_days_salary = 30; }
                             } else {
-                                $active_days_salary = $divisor;
-                                $active_days = $divisor;
+                                $active_days_salary = (int) round($real_active * $divisor / $full_month_assigned_days);
+                                if ($active_days_salary > $divisor) $active_days_salary = $divisor;
+                                $active_days = (int) round($real_active * $divisor / $full_month_assigned_days);
+                                if ($active_days > $divisor) $active_days = $divisor;
                             }
                             
                             if (count($dates) > 0) {
@@ -2089,25 +2075,23 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         
                         $base_used_for_deductions = $base; // Utilisé pour les éventuels calculs annexes, mais deductions et gains sont déjà fixés
                     } else {
-                        if ($is_special && !$is_special_salary_flag) {
-                            // Temps partiel : prorata sur les jours réels + jours bonus hors planning
+                        if ($is_special) {
                             $active_days = $real_active + $tp_extra_dates_count;
-                            if ($active_days > 30) $active_days = 30;
-                            $divToUse = 30;
+                            $divToUse = 30; // Toujours diviser par 30 pour le prorata de salaire temps partiel
                             $prorata_base = (int) round($base * ($active_days / $divToUse));
-                        } elseif ($is_special_salary_flag) {
-                            // Salaire fixe configuré : pas de prorata
-                            $active_days = $real_active + $tp_extra_dates_count;
-                            if ($active_days > 30) $active_days = 30;
-                            $prorata_base = $base;
                         } else {
-                            $is_entrant_or_sortant = ($entrant_count > 0 || $exit_count > 0 || (isset($totalEntrantRuptureBackend) && $totalEntrantRuptureBackend > 0) || (isset($totalAbandonRuptureBackend) && $totalAbandonRuptureBackend > 0));
-                            if ($is_entrant_or_sortant) {
-                                $active_days = $is244872 ? ($totalRealWorkedUnits + ($absences ?? 0) + ($totalPermUnits ?? 0)) : $real_active;
-                                if ($active_days > 30) $active_days = 30;
-                                $prorata_base = (int) round($base * ($active_days / $divisor));
-                            } else {
+                            // Si l'agent n'a pas de jours ENTRANT et a travaillé tous ses jours prévus, sa base = base complète
+                            if ($entrant_count === 0 && $real_active >= $full_month_assigned_days) {
+                                $prorata_base = $base;
                                 $active_days = $assigned_days === 0 ? 0 : $divisor;
+                            } else {
+                                $is_entrant_or_sortant = ($entrant_count > 0 || $exit_count > 0 || (isset($totalEntrantRuptureBackend) && $totalEntrantRuptureBackend > 0) || (isset($totalAbandonRuptureBackend) && $totalAbandonRuptureBackend > 0));
+                                if ($is_entrant_or_sortant) {
+                                     $active_days = $is244872 ? ($totalRealWorkedUnits + ($absences ?? 0) + ($totalPermUnits ?? 0)) : $real_active;
+                                } else {
+                                    $active_days = $assigned_days === 0 ? 0 : (int) round($real_active * $divisor / $full_month_assigned_days);
+                                    if ($active_days > $divisor) $active_days = $divisor;
+                                }
                                 $prorata_base = (int) round($base * ($active_days / $divisor));
                             }
                         }
@@ -2119,7 +2103,7 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         $total_deductible = $absences + $map_count + $permission_count;
 
                         unset($actual_worked_days);
-                        if (!$is244872 && ($is_entrant_or_sortant ?? false)) {
+                        if (!$is244872) {
                             $actual_worked_days = max(0, $real_active - ($absences + $map_count + $permission_count));
                             if ($actual_worked_days > 0 && $total_deductible > (30 - $actual_worked_days)) {
                                 $max_allowed_deductions = max(0, 30 - $actual_worked_days);
@@ -2135,17 +2119,15 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
 
                         // ENTRANT exclus des déductions : l'agent n'était pas encore en poste, ce n'est pas une absence
                         if ($is_special) {
-                            // Agents Temps Partiel : pas de déductions (conformément à l'ancienne règle)
-                            $deductions = 0;
+                            $divToUse = $full_month_assigned_days > 0 ? $full_month_assigned_days : 30;
+                            $deductions = (int) round(($financial_absence_units + $map_count + $permission_count) * ($base_used_for_deductions / $divToUse));
                         } else {
                             $deductions = (int) round(($financial_absence_units + ($entrant_sortant_count - $entrant_count) + $map_count + $permission_count) * ($base_used_for_deductions / $divisor));
                         }
                         
-                        $debug_deductions = "base:$base_used_for_deductions, fin_abs:$financial_absence_units, ded:$deductions, is_spec:" . ($is_special?"1":"0") . ", s_sal_flag:" . ($is_special_salary_flag?"1":"0");
-                        
                         $gains = 0;
                         foreach ($sp_details as &$spd) {
-                            $divToUse = $is_special ? 30 : $divisor; // Toujours 30 pour les suppléments Temps Partiel
+                            $divToUse = $is_special ? ($full_month_assigned_days > 0 ? $full_month_assigned_days : 30) : $divisor;
                             $spd_gain = 0;
                             if (isset($spd['replacedAgentBase']) && $spd['replacedAgentBase'] !== null) {
                                 $replaced_base = $spd['replacedAgentBase'];
@@ -2269,9 +2251,8 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         'sc_abs_old' => $deduction_days_old ?? 0,
                         'sc_abs_new' => $deduction_days_new ?? 0,
                         'real_active' => $real_active,
-                        'true_worked_days' => $is244872 ? ($totalRealWorkedUnits ?? 0) : max(0, $real_active - ($absences + $map_count + $permission_count)),
                         'active_days' => $is_special ? ($real_active + $tp_extra_dates_count) : $active_days,
-                        'days_worked' => $is_special ? max(0, ($real_active + $tp_extra_dates_count) - ($absences + $map_count + $permission_count)) : (($is_entrant_or_sortant ?? false) ? max(0, $active_days - ($absences + $map_count + $permission_count)) : max(0, 30 - ($absences + $map_count + $permission_count))),
+                        'days_worked' => $is_special ? max(0, ($real_active + $tp_extra_dates_count) - ($absences + $map_count + $permission_count)) : min(30, (isset($actual_worked_days) && $actual_worked_days > 0 ? max($actual_worked_days, $active_days - ($absences + $map_count + $permission_count)) : max(0, $active_days - ($absences + $map_count + $permission_count)))),
                         'is_entrant' => ($entrant_count > 0 || (isset($entrant_adjust) && $entrant_adjust > 0)),
                         'hire_date' => $agent['hire_date'] ?? $first_entrant_date ?? null,
                         'is_sortant' => ($exit_count > 0 || (isset($exit_adjust) && $exit_adjust > 0)),
@@ -2279,7 +2260,6 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                         'att_count' => $att_count,
                         'absences' => $absences,
                         'entrant_sortant_count' => $entrant_sortant_count,
-                        'entrant_count' => $entrant_count,
                         'absence_details' => $absence_details,
                         'map_count' => $map_count,
                         'map_details' => $map_details,
@@ -2342,15 +2322,6 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     break;
                 }
 
-                $salIsSpecial = !empty($sal['profile_data']['special_service']);
-                $existingIsSpecial = !empty($existing['profile_data']['special_service']);
-                
-                if ($salIsSpecial && $existingIsSpecial) {
-                    // Les deux sont Temps Partiel : fusion inter-sites obligatoire
-                    $matched_key = $key;
-                    break;
-                }
-
                 $hasMutationMarker = function($entry) {
                     if (!empty($entry['mutated_from_function']) || !empty($entry['profile_data']['mutated_from_function'])) return true;
                     foreach (array_merge($entry['sp_details'] ?? [], $entry['absence_details'] ?? []) as $det) {
@@ -2406,119 +2377,74 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                 }
                 
                 $merged_base = $adjusted_old_base + $adjusted_new_base;
-                
-                $is_multi_site_special = !empty($sal['profile_data']['special_service']) && !empty($existing['profile_data']['special_service']);
-                
-                if ($is_multi_site_special) {
-                    // Fusion Temps Partiel : base recalculée sur le total des jours actifs / 30
-                    // On retire les jours supplémentaires (sp_count) pour ne pas les payer deux fois (base + gains)
-                    $tp_sp_count = ($oldest['sp_count'] ?? 0) + ($newest['sp_count'] ?? 0);
-                    $merged_active_days = $total_active_days - $tp_sp_count;
-                    if ($merged_active_days > 30) $merged_active_days = 30;
-                    
-                    $old_base_full = $oldest['base_full'] ?? 75000;
-                    if (!empty($oldest['is_special_salary'])) {
-                        $merged_base = $old_base_full;
-                    } else {
-                        $merged_base = (int) round($old_base_full * ($merged_active_days / 30));
-                    }
-                    $adjusted_old_base = $merged_base;
-                    $adjusted_new_base = 0;
-                    
-                    $merged_profile = $newest['profile_data'] ?? [];
-                    if (!is_array($merged_profile)) $merged_profile = [];
-                    
-                    // Remplir multi_site_deployments (uniquement les jours travaillés hors suppléments)
-                    $deployments = $oldest['profile_data']['multi_site_deployments'] ?? [];
-                    if (empty($deployments)) {
-                        $old_worked = $oldest['active_days'] ?? 0;
-                        if ($old_worked > 0) {
-                            $old_site_name = !empty($oldest['subsite']) ? $oldest['subsite'] : $oldest['site'];
-                            $deployments[] = ['site' => $old_site_name, 'worked_days' => $old_worked];
-                        }
-                    }
-                    
-                    $new_worked = $newest['active_days'] ?? 0;
-                    if ($new_worked > 0) {
-                        $new_site_name = !empty($newest['subsite']) ? $newest['subsite'] : $newest['site'];
-                        $deployments[] = ['site' => $new_site_name, 'worked_days' => $new_worked];
-                    }
-                    $merged_profile['multi_site_deployments'] = $deployments;
-                } else {
-                    // Fusion normale (non Temps Partiel)
-                    $merged_base = $adjusted_old_base + $adjusted_new_base;
-                    $merged_active_days = min($divisor_merge, $total_active_days);
+                $merged_active_days = min($divisor_merge, $total_active_days);
 
-                    // Track the function change for display in Poste column
-                    $merged_profile = $newest['profile_data'] ?? [];
-                    if (!is_array($merged_profile)) $merged_profile = [];
-                    if ($oldest['function'] !== $newest['function']) {
-                        $merged_profile['mutated_from_function'] = $oldest['function'];
-                    }
-                    // Preserve multi_site_deployments and special_service if the oldest had them
-                    if (!empty($oldest['profile_data']['multi_site_deployments'])) {
-                        $merged_profile['multi_site_deployments'] = $oldest['profile_data']['multi_site_deployments'];
-                    }
-                    if (!empty($oldest['profile_data']['special_service'])) {
-                        $merged_profile['special_service'] = $oldest['profile_data']['special_service'];
-                        $merged_profile['special_service_base'] = $oldest['profile_data']['special_service_base'] ?? 15;
-                    }
-                    
-                    // Add mutation breakdown
-                    $stages_oldest = [];
-                    $stages_newest = [];
-                    
-                    if (!empty($oldest['profile_data']['mutation_breakdown']['stages'])) {
-                        $stages_oldest = $oldest['profile_data']['mutation_breakdown']['stages'];
-                    } elseif (!empty($oldest['profile_data']['mutation_breakdown']['original'])) {
-                        $stages_oldest[] = $oldest['profile_data']['mutation_breakdown']['original'];
-                        $stages_oldest[] = $oldest['profile_data']['mutation_breakdown']['mutated'];
-                    } else {
-                        $stages_oldest[] = [
-                            'site' => $oldest['site'],
-                            'subsite' => $oldest['subsite'],
-                            'function' => $oldest['function_label'] ?? $oldest['function'],
-                            'active_days' => $adjusted_old_active,
-                            'calendar_active_days' => $oldest['real_active'] ?? 0,
-                            'absences' => $oldest['absences'] ?? 0,
-                            'map_count' => $oldest['map_count'] ?? 0,
-                            'permission_count' => $oldest['permission_count'] ?? 0,
-                            'entrant_sortant_count' => $oldest['entrant_sortant_count'] ?? 0,
-                            'worked_days' => $adjusted_old_active - (($oldest['absences'] ?? 0) + ($oldest['map_count'] ?? 0) + ($oldest['permission_count'] ?? 0) + ($oldest['entrant_sortant_count'] ?? 0)),
-                            'base_prorata' => $adjusted_old_base,
-                            'base_full' => $oldest['base_full'] ?? 0,
-                        ];
-                    }
-                    
-                    if (!empty($newest['profile_data']['mutation_breakdown']['stages'])) {
-                        $stages_newest = $newest['profile_data']['mutation_breakdown']['stages'];
-                    } elseif (!empty($newest['profile_data']['mutation_breakdown']['original'])) {
-                        $stages_newest[] = $newest['profile_data']['mutation_breakdown']['original'];
-                        $stages_newest[] = $newest['profile_data']['mutation_breakdown']['mutated'];
-                    } else {
-                        $stages_newest[] = [
-                            'site' => $newest['site'],
-                            'subsite' => $newest['subsite'],
-                            'function' => $newest['function_label'] ?? $newest['function'],
-                            'active_days' => $adjusted_new_active,
-                            'calendar_active_days' => $newest['real_active'] ?? 0,
-                            'absences' => $newest['absences'] ?? 0,
-                            'map_count' => $newest['map_count'] ?? 0,
-                            'permission_count' => $newest['permission_count'] ?? 0,
-                            'entrant_sortant_count' => $newest['entrant_sortant_count'] ?? 0,
-                            'worked_days' => $adjusted_new_active - (($newest['absences'] ?? 0) + ($newest['map_count'] ?? 0) + ($newest['permission_count'] ?? 0) + ($newest['entrant_sortant_count'] ?? 0)),
-                            'base_prorata' => $adjusted_new_base,
-                            'base_full' => $newest['base_full'] ?? 0,
-                        ];
-                    }
-                    
-                    $all_stages = array_merge($stages_oldest, $stages_newest);
-                    $merged_profile['mutation_breakdown'] = [
-                        'stages' => $all_stages,
-                        'original' => $all_stages[0] ?? [],
-                        'mutated' => end($all_stages) ?: [],
+                // Track the function change for display in Poste column
+                $merged_profile = $newest['profile_data'] ?? [];
+                if (!is_array($merged_profile)) $merged_profile = [];
+                if ($oldest['function'] !== $newest['function']) {
+                    $merged_profile['mutated_from_function'] = $oldest['function'];
+                }
+                
+                // Add mutation breakdown — tableau sequentiel pour supporter N mutations
+                // On accumule les etapes successives au lieu d'ecraser original/mutated
+                $stages_oldest = [];
+                $stages_newest = [];
+                
+                // Recuperer les stages deja accumules si l'entree est deja le resultat d'une fusion
+                if (!empty($oldest['profile_data']['mutation_breakdown']['stages'])) {
+                    $stages_oldest = $oldest['profile_data']['mutation_breakdown']['stages'];
+                } elseif (!empty($oldest['profile_data']['mutation_breakdown']['original'])) {
+                    // Convertir l'ancienne structure original/mutated en stages
+                    $stages_oldest[] = $oldest['profile_data']['mutation_breakdown']['original'];
+                    $stages_oldest[] = $oldest['profile_data']['mutation_breakdown']['mutated'];
+                } else {
+                    $stages_oldest[] = [
+                        'site' => $oldest['site'],
+                        'subsite' => $oldest['subsite'],
+                        'function' => $oldest['function_label'] ?? $oldest['function'],
+                        'active_days' => $adjusted_old_active,
+                        'calendar_active_days' => $oldest['real_active'] ?? 0,
+                        'absences' => $oldest['absences'] ?? 0,
+                        'map_count' => $oldest['map_count'] ?? 0,
+                        'permission_count' => $oldest['permission_count'] ?? 0,
+                        'entrant_sortant_count' => $oldest['entrant_sortant_count'] ?? 0,
+                        'worked_days' => $adjusted_old_active - (($oldest['absences'] ?? 0) + ($oldest['map_count'] ?? 0) + ($oldest['permission_count'] ?? 0) + ($oldest['entrant_sortant_count'] ?? 0)),
+                        'base_prorata' => $adjusted_old_base,
+                        'base_full' => $oldest['base_full'] ?? 0,
                     ];
-                } // fin du if/else TP vs non-TP
+                }
+                
+                if (!empty($newest['profile_data']['mutation_breakdown']['stages'])) {
+                    $stages_newest = $newest['profile_data']['mutation_breakdown']['stages'];
+                } elseif (!empty($newest['profile_data']['mutation_breakdown']['original'])) {
+                    $stages_newest[] = $newest['profile_data']['mutation_breakdown']['original'];
+                    $stages_newest[] = $newest['profile_data']['mutation_breakdown']['mutated'];
+                } else {
+                    $stages_newest[] = [
+                        'site' => $newest['site'],
+                        'subsite' => $newest['subsite'],
+                        'function' => $newest['function_label'] ?? $newest['function'],
+                        'active_days' => $adjusted_new_active,
+                        'calendar_active_days' => $newest['real_active'] ?? 0,
+                        'absences' => $newest['absences'] ?? 0,
+                        'map_count' => $newest['map_count'] ?? 0,
+                        'permission_count' => $newest['permission_count'] ?? 0,
+                        'entrant_sortant_count' => $newest['entrant_sortant_count'] ?? 0,
+                        'worked_days' => $adjusted_new_active - (($newest['absences'] ?? 0) + ($newest['map_count'] ?? 0) + ($newest['permission_count'] ?? 0) + ($newest['entrant_sortant_count'] ?? 0)),
+                        'base_prorata' => $adjusted_new_base,
+                        'base_full' => $newest['base_full'] ?? 0,
+                    ];
+                }
+                
+                $all_stages = array_merge($stages_oldest, $stages_newest);
+                
+                // Conserver aussi original/mutated pour la compatibilite avec l'ancien frontend
+                $merged_profile['mutation_breakdown'] = [
+                    'stages' => $all_stages,
+                    'original' => $all_stages[0] ?? [],
+                    'mutated' => end($all_stages) ?: [],
+                ];
 
                 $merged_map[$matched_key] = [
                     'id' => $newest['id'],
@@ -2532,35 +2458,14 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     'base' => $merged_base,
                     'base_full' => $newest['base_full'] ?? $newest['base'],
                     'active_days' => $merged_active_days,
-                    'true_worked_days' => ($existing['true_worked_days'] ?? 0) + ($sal['true_worked_days'] ?? 0),
-                    'days_worked' => (function() use ($existing, $sal, $merged_active_days) {
-                        $total_true_worked = ($existing['true_worked_days'] ?? 0) + ($sal['true_worked_days'] ?? 0);
-                        $total_absences  = ($existing['absences'] ?? 0) + ($sal['absences'] ?? 0);
-                        $total_map       = ($existing['map_count'] ?? 0) + ($sal['map_count'] ?? 0);
-                        $total_perm      = ($existing['permission_count'] ?? 0) + ($sal['permission_count'] ?? 0);
-                        // Les jours ENTRANT sur l'un des deux sites ne peuvent pas générer des absences sur l'autre site
-                        // On plafonne les absences totales à (30 - entrant_count_global - jours_réellement_travaillés)
-                        $total_entrant_days = ($existing['entrant_count'] ?? 0) + ($sal['entrant_count'] ?? 0);
-                        $max_possible_abs = max(0, 30 - $total_true_worked - $total_entrant_days);
-                        if ($total_absences > $max_possible_abs) {
-                            $total_absences = $max_possible_abs;
-                        }
-                        $original_total_absences = $total_absences;
-                        if ($total_true_worked > 0 && ($total_absences + $total_map + $total_perm) > (30 - $total_true_worked - $total_entrant_days)) {
-                            $max_allowed = max(0, 30 - $total_true_worked - $total_entrant_days);
-                            if ($max_allowed === 0 && $original_total_absences > 0) {
-                                $max_allowed = $original_total_absences;
-                            }
-                            if (($total_absences + $total_map + $total_perm) > $max_allowed) {
-                                $total_absences = max(0, $max_allowed - $total_map - $total_perm);
-                            }
-                        }
-                        return max(0, $merged_active_days - $total_absences - $total_map - $total_perm);
-                    })(),
+                    'days_worked' => max(0, $merged_active_days - 
+                        (($existing['absences'] ?? 0) + ($sal['absences'] ?? 0)) - 
+                        (($existing['map_count'] ?? 0) + ($sal['map_count'] ?? 0)) - 
+                        (($existing['permission_count'] ?? 0) + ($sal['permission_count'] ?? 0))),
                     'att_count' => ($existing['att_count'] ?? 0) + ($sal['att_count'] ?? 0),
                     
                     'heures_travaillees' => ($existing['heures_travaillees'] ?? 0) + ($sal['heures_travaillees'] ?? 0),
-                    // absences is computed below to ensure it's capped
+                    'absences' => ($existing['absences'] ?? 0) + ($sal['absences'] ?? 0),
                     'entrant_sortant_count' => ($existing['entrant_sortant_count'] ?? 0) + ($sal['entrant_sortant_count'] ?? 0),
                     'absence_details' => array_merge($existing['absence_details'] ?? [], $sal['absence_details'] ?? []),
                     'map_count' => ($existing['map_count'] ?? 0) + ($sal['map_count'] ?? 0),
@@ -2575,63 +2480,20 @@ $settings_raw = getServiceDataSql($serviceKey, 'settings', ['cycle_start' => 21,
                     // Recalcul des deductions sur base pleine / 30 apres fusion
                     // Garantit qu'une absence vaut toujours salaire_plein/30 peu importe le prorata par site
                     'deductions' => (function() use ($existing, $sal, $newest) {
-                        $total_true_worked = ($existing['true_worked_days'] ?? 0) + ($sal['true_worked_days'] ?? 0);
                         $total_absences  = ($existing['absences'] ?? 0) + ($sal['absences'] ?? 0);
                         $total_map       = ($existing['map_count'] ?? 0) + ($sal['map_count'] ?? 0);
                         $total_perm      = ($existing['permission_count'] ?? 0) + ($sal['permission_count'] ?? 0);
                         $total_sortant   = ($existing['entrant_sortant_count'] ?? 0) + ($sal['entrant_sortant_count'] ?? 0);
                         $total_entrant   = ($existing['entrant_count'] ?? 0) + ($sal['entrant_count'] ?? 0);
                         $full_base       = $newest['base_full'] ?? $newest['base'] ?? 0;
-                        
-                        // Plafonnement des absences : les jours ENTRANT sur un site ne peuvent pas générer
-                        // des absences fictives sur l'autre site (cas mutation en cours de mois).
-                        $max_possible_abs = max(0, 30 - $total_true_worked - $total_entrant);
-                        if ($total_absences > $max_possible_abs) {
-                            $total_absences = $max_possible_abs;
-                        }
-                        $original_total_absences = $total_absences;
-                        if ($total_true_worked > 0 && ($total_absences + $total_map + $total_perm) > (30 - $total_true_worked - $total_entrant)) {
-                            $max_allowed = max(0, 30 - $total_true_worked - $total_entrant);
-                            if ($max_allowed === 0 && $original_total_absences > 0) {
-                                $max_allowed = $original_total_absences;
-                            }
-                            if (($total_absences + $total_map + $total_perm) > $max_allowed) {
-                                $total_absences = max(0, $max_allowed - $total_map - $total_perm);
-                            }
-                        }
-
                         if ($full_base <= 0) {
+                            // Fallback si base_full absent : sommer les deductions individuelles
                             return $existing['deductions'] + $sal['deductions'];
                         }
-                        // Les jours ENTRANT ne génèrent pas de retenue, donc on n'inclut que les jours
-                        // de sortie réels (sortant - entrant) dans le calcul des déductions.
                         return (int) round(
                             ($total_absences + max(0, $total_sortant - $total_entrant) + $total_map + $total_perm)
                             * ($full_base / 30)
                         );
-                    })(),
-                    'absences' => (function() use ($existing, $sal) {
-                        $total_true_worked = ($existing['true_worked_days'] ?? 0) + ($sal['true_worked_days'] ?? 0);
-                        $total_absences  = ($existing['absences'] ?? 0) + ($sal['absences'] ?? 0);
-                        $total_map       = ($existing['map_count'] ?? 0) + ($sal['map_count'] ?? 0);
-                        $total_perm      = ($existing['permission_count'] ?? 0) + ($sal['permission_count'] ?? 0);
-                        // Les jours ENTRANT ne doivent pas gonfler les absences lors de la fusion de deux sites
-                        $total_entrant_days = ($existing['entrant_count'] ?? 0) + ($sal['entrant_count'] ?? 0);
-                        $max_possible_abs = max(0, 30 - $total_true_worked - $total_entrant_days);
-                        if ($total_absences > $max_possible_abs) {
-                            $total_absences = $max_possible_abs;
-                        }
-                        $original_total_absences = $total_absences;
-                        if ($total_true_worked > 0 && ($total_absences + $total_map + $total_perm) > (30 - $total_true_worked - $total_entrant_days)) {
-                            $max_allowed = max(0, 30 - $total_true_worked - $total_entrant_days);
-                            if ($max_allowed === 0 && $original_total_absences > 0) {
-                                $max_allowed = $original_total_absences;
-                            }
-                            if (($total_absences + $total_map + $total_perm) > $max_allowed) {
-                                $total_absences = max(0, $max_allowed - $total_map - $total_perm);
-                            }
-                        }
-                        return $total_absences;
                     })(),
                     'gains' => $existing['gains'] + $sal['gains'],
                     'prime_site' => $existing['prime_site'] + $sal['prime_site'],

@@ -162,7 +162,7 @@ if (in_array($action, [
     'update_agent_info','update_agent_salary','get_functions','save_functions',
     'archive_all_sites','get_archives','get_archive_detail','delete_archive',
     'clear_site_mutations','clear_agent_site_mutations','delete_agent_mutations','get_agent_schedules','update_agent_schedules','update_subsite_config',
-    'get_lost_sites', 'toggle_blacklist', 'get_closure_alerts', 'ack_closure_alert', 'get_site_agents', 'move_agent_zone', 'toggle_permanent_supplement', 'check_agent_multisite'
+    'get_lost_sites', 'toggle_blacklist', 'get_closure_alerts', 'ack_closure_alert', 'get_site_agents', 'move_agent_zone', 'toggle_permanent_supplement', 'check_agent_multisite', 'get_blackbox_logs'
 ])) {
     require_once __DIR__ . '/backend/modules/sites_v2.php';
 

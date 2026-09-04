@@ -4,9 +4,10 @@ import { X, Search, ShieldAlert, ShieldCheck, MapPinOff, Calendar } from 'lucide
 import './lost-site-card.css';
 
 const BlacklistModal = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState('agents'); // 'agents' or 'sites'
+  const [activeTab, setActiveTab] = useState('agents'); // 'agents', 'sites', or 'blackbox'
   const [agents, setAgents] = useState([]);
   const [lostSites, setLostSites] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -18,10 +19,15 @@ const BlacklistModal = ({ onClose }) => {
         if (res && res.success) {
           setAgents(res.agents || []);
         }
-      } else {
+      } else if (activeTab === 'sites') {
         const res = await apiCall('get_lost_sites');
         if (res && res.success) {
           setLostSites(res.lost_sites || []);
+        }
+      } else if (activeTab === 'blackbox') {
+        const res = await apiCall('get_blackbox_logs');
+        if (res && res.success) {
+          setLogs(res.logs || []);
         }
       }
     } catch (e) {
@@ -56,6 +62,36 @@ const BlacklistModal = ({ onClose }) => {
     const siteName = s.site_name || '';
     const subsiteName = s.name || '';
     return siteName.toLowerCase().includes(searchTerm.toLowerCase()) || subsiteName.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
+  const translateAction = (action) => {
+    const map = {
+      'DELETE_AGENT': 'Suppression d\'agent',
+      'DELETE_SUBSITE': 'Suppression de site',
+      'ADD_PERMISSION': 'Ajout de permission/congé',
+      'AGENT_SORTANT': 'Déclaration agent sortant',
+      'CANCEL_SORTANT': 'Annulation agent sortant',
+      'AGENT_ENTRANT': 'Déclaration agent entrant'
+    };
+    return map[action] || action;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    try {
+      const d = new Date(dateString);
+      const pad = (n) => n.toString().padStart(2, '0');
+      return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} à ${pad(d.getHours())}h${pad(d.getMinutes())}`;
+    } catch(e) {
+      return dateString;
+    }
+  };
+
+  const filteredLogs = logs.filter(l => {
+    const translatedAction = translateAction(l.action_type || '');
+    return translatedAction.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           (l.details || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+           (l.user || '').toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   return (
@@ -101,6 +137,27 @@ const BlacklistModal = ({ onClose }) => {
             >
               <MapPinOff size={24} /> Sites Perdus
             </button>
+            <button 
+              onClick={() => setActiveTab('blackbox')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: activeTab === 'blackbox' ? '#8b5cf6' : 'rgba(255,255,255,0.5)',
+                fontSize: '1.2rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                borderBottom: activeTab === 'blackbox' ? '2px solid #8b5cf6' : '2px solid transparent',
+                paddingBottom: '4px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', background: '#8b5cf6', borderRadius: '4px', color: 'white', fontSize: '12px' }}>
+                BOX
+              </div> Boîte Noire
+            </button>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>
             <X size={24} />
@@ -112,7 +169,7 @@ const BlacklistModal = ({ onClose }) => {
           <input
             type="text"
             className="form-input"
-            placeholder={activeTab === 'agents' ? "Rechercher un agent par nom..." : "Rechercher un site par nom..."}
+            placeholder={activeTab === 'agents' ? "Rechercher un agent par nom..." : activeTab === 'sites' ? "Rechercher un site par nom..." : "Rechercher dans les logs..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ width: '100%', paddingLeft: '45px' }}
@@ -120,85 +177,119 @@ const BlacklistModal = ({ onClose }) => {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px' }}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.5)' }}>Chargement...</div>
-          ) : activeTab === 'agents' ? (
-            filteredAgents.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.5)' }}>Aucun agent trouvé.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {filteredAgents.map(agent => (
-                  <div key={agent.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', transition: 'all 0.2s' }}>
-                    <div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: agent.is_blacklisted === 1 ? '#ef4444' : '#fff' }}>{agent.name}</div>
-                      <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginTop: '4px' }}>
-                        Fonction: {agent.function || 'N/A'} • Sortie le {agent.exit_date ? new Date(agent.exit_date).toLocaleDateString('fr-FR') : 'N/A'} • Motif: {agent.exit_reason?.replace('SORTANT_', '') || 'N/A'}
-                      </div>
-                      <div style={{ fontSize: '0.82rem', color: 'rgba(99,179,237,0.8)', marginTop: '3px' }}>
-                        📍 {agent.site_name
-                          ? (agent.subsite_name && agent.subsite_name !== agent.site_name
-                              ? `${agent.site_name} › ${agent.subsite_name}`
-                              : agent.site_name)
-                          : 'Site non renseigné'}
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => toggleBlacklist(agent.id, agent.is_blacklisted)}
-                      style={{
-                        padding: '8px 16px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        cursor: 'pointer',
-                        background: agent.is_blacklisted === 1 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                        color: agent.is_blacklisted === 1 ? '#ef4444' : '#10b981',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      {agent.is_blacklisted === 1 ? <ShieldAlert size={16} /> : <ShieldCheck size={16} />}
-                      {agent.is_blacklisted === 1 ? 'Blacklisté' : 'Autorisé'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )
-          ) : (
-            filteredSites.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.5)' }}>Aucun site perdu trouvé.</div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '15px' }}>
-                {filteredSites.map(site => (
-                  <div key={site.id} className="lost-site-card" style={{ display: 'flex', flexDirection: 'column', padding: '20px', borderRadius: '10px', transition: 'all 0.2s' }}>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <MapPinOff size={20} /> {site.site_name} - {site.name}
-                    </div>
-                    <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      <Calendar size={16} color="var(--muted)" /> 
-                      Fin de contrat: {site.contract_end_date ? new Date(site.contract_end_date).toLocaleDateString('fr-FR') : 'Non définie'}
-                    </div>
-                    {site.contract_end_motif && (
-                      <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '6px', marginTop: '5px' }}>
-                        <strong>Motif: </strong>
-                        {site.contract_end_motif}
-                      </div>
-                    )}
-                    {site.lost_agents_summary && site.lost_agents_summary.length > 0 && (
-                      <div style={{ fontSize: '0.85rem', color: '#ef4444', marginTop: '8px', padding: '10px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '6px', border: '1px dashed rgba(239, 68, 68, 0.3)' }}>
-                        <strong>Agents perdus: </strong>
-                        <div style={{ marginTop: '4px', marginLeft: '8px' }}>
-                          {site.lost_agents_summary.map((line, idx) => (
-                            <div key={idx} style={{ marginBottom: '2px' }}>{line}</div>
-                          ))}
+          {(() => {
+            if (loading) {
+              return <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.5)' }}>Chargement...</div>;
+            }
+            if (activeTab === 'agents') {
+              if (filteredAgents.length === 0) {
+                return <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.5)' }}>Aucun agent trouvé.</div>;
+              }
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {filteredAgents.map(agent => (
+                    <div key={agent.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', transition: 'all 0.2s' }}>
+                      <div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: agent.is_blacklisted === 1 ? '#ef4444' : '#fff' }}>{agent.name}</div>
+                        <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginTop: '4px' }}>
+                          Fonction: {agent.function || 'N/A'} • Sortie le {agent.exit_date ? new Date(agent.exit_date).toLocaleDateString('fr-FR') : 'N/A'} • Motif: {agent.exit_reason?.replace('SORTANT_', '') || 'N/A'}
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: 'rgba(99,179,237,0.8)', marginTop: '3px' }}>
+                          📍 {agent.site_name
+                            ? (agent.subsite_name && agent.subsite_name !== agent.site_name
+                                ? `${agent.site_name} › ${agent.subsite_name}`
+                                : agent.site_name)
+                            : 'Site non renseigné'}
                         </div>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )
-          )}
+                      <button 
+                        onClick={() => toggleBlacklist(agent.id, agent.is_blacklisted)}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          cursor: 'pointer',
+                          background: agent.is_blacklisted === 1 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                          color: agent.is_blacklisted === 1 ? '#ef4444' : '#10b981',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {agent.is_blacklisted === 1 ? <ShieldAlert size={16} /> : <ShieldCheck size={16} />}
+                        {agent.is_blacklisted === 1 ? 'Blacklisté' : 'Autorisé'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            if (activeTab === 'sites') {
+              if (filteredSites.length === 0) {
+                return <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.5)' }}>Aucun site perdu trouvé.</div>;
+              }
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '15px' }}>
+                  {filteredSites.map(site => (
+                    <div key={site.id} className="lost-site-card" style={{ display: 'flex', flexDirection: 'column', padding: '20px', borderRadius: '10px', transition: 'all 0.2s' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <MapPinOff size={20} /> {site.site_name} - {site.name}
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <Calendar size={16} color="var(--muted)" /> 
+                        Fin de contrat: {site.contract_end_date ? new Date(site.contract_end_date).toLocaleDateString('fr-FR') : 'Non définie'}
+                      </div>
+                      {site.contract_end_motif && (
+                        <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '6px', marginTop: '5px' }}>
+                          <strong>Motif: </strong>
+                          {site.contract_end_motif}
+                        </div>
+                      )}
+                      {site.lost_agents_summary && site.lost_agents_summary.length > 0 && (
+                        <div style={{ fontSize: '0.85rem', color: '#ef4444', marginTop: '8px', padding: '10px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '6px', border: '1px dashed rgba(239, 68, 68, 0.3)' }}>
+                          <strong>Agents perdus: </strong>
+                          <div style={{ marginTop: '4px', marginLeft: '8px' }}>
+                            {site.lost_agents_summary.map((line, idx) => (
+                              <div key={idx} style={{ marginBottom: '2px' }}>{line}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            if (activeTab === 'blackbox') {
+              if (filteredLogs.length === 0) {
+                return <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.5)' }}>Aucune activité trouvée dans la Boîte Noire.</div>;
+              }
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {filteredLogs.map(log => (
+                    <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '15px', padding: '15px', background: 'rgba(139, 92, 246, 0.05)', borderRadius: '10px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                      <div style={{ minWidth: '150px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>
+                        {formatDate(log.action_date)}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#8b5cf6', marginBottom: '4px' }}>
+                          {translateAction(log.action_type)}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '4px' }}>
+                          {log.details}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>
+                          Par: {log.user} | Période: {log.period}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
     </div>

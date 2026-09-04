@@ -1881,9 +1881,21 @@ switch ($action) {
                         $agent_snap['total'] = ($agent_snap['total'] ?? 0) - $old_prime + $agent_snap['prime_site'];
                         unset($agent_snap['_original_prime_site']);
 
-                        // Synchroniser le profile_data avec la version live
+                        // Synchroniser le profile_data avec la version live (pour les infos de paiement etc.)
+                        // tout en préservant les champs générés dynamiquement (historique sites, mutations)
                         if (!empty($liveProf)) {
-                            $agent_snap['profile_data'] = $liveProf;
+                            $current_prof = (isset($agent_snap['profile_data']) && is_array($agent_snap['profile_data'])) ? $agent_snap['profile_data'] : [];
+                            $old_deployments = $current_prof['multi_site_deployments'] ?? null;
+                            $old_mutated = $current_prof['mutated_from_function'] ?? null;
+                            
+                            $agent_snap['profile_data'] = array_merge($current_prof, is_array($liveProf) ? $liveProf : []);
+                            
+                            if ($old_deployments !== null) {
+                                $agent_snap['profile_data']['multi_site_deployments'] = $old_deployments;
+                            }
+                            if ($old_mutated !== null) {
+                                $agent_snap['profile_data']['mutated_from_function'] = $old_mutated;
+                            }
                         }
                     }
                     unset($agent_snap);

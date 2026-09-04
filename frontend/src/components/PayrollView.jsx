@@ -231,14 +231,14 @@ export function AgentPayrollDetailsModal({ agent, taxes, funcLabel, payrollSetti
        history.push({ date: 'N/A', type: 'Mutation Poste', color: '#8b5cf6', desc: `De ${agent.profile_data.mutated_from_function} vers ${funcLabel(agent.function)}` });
     }
 
-    if (agent.profile_data?.multi_site_deployments && agent.profile_data.multi_site_deployments.length > 0) {
+    if (profileObj?.multi_site_deployments && profileObj.multi_site_deployments.length > 0) {
         history.push({
             date: 'N/A',
             type: 'Affectation Multi-Sites (Temps Partiel)',
             color: '#10b981',
             desc: (
                 <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-                    {agent.profile_data.multi_site_deployments.map((dep, idx) => (
+                    {profileObj.multi_site_deployments.map((dep, idx) => (
                         <div key={idx} style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', borderLeft: '4px solid #10b981', border: '1px solid rgba(255,255,255,0.03)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                             <div style={{ fontWeight: '700', color: 'white', marginBottom: '4px', fontSize: '0.85rem' }}>Site : {dep.site || '?'}</div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
@@ -2785,7 +2785,7 @@ export default function PayrollView({ setView }) {
                               )}
                             </div>
                           </td>}
-                          {colVisible('base') && <td style={{ textAlign: 'right', color: 'white' }}>{((s.base_full || s.base) || 0).toLocaleString()}</td>}
+                          {colVisible('base') && <td style={{ textAlign: 'right', color: 'white' }}>{((s.profile_data?.special_service ? s.base : (s.base_full || s.base)) || 0).toLocaleString()}</td>}
                           {colVisible('retenues') && <td style={{ textAlign: 'right', color: s.deductions > 0 ? 'var(--danger)' : 'var(--muted)' }}>{s.deductions > 0 ? `-${(s.deductions||0).toLocaleString()}` : '—'}</td>}
                           {colVisible('prime_site') && (
                         <td style={{ textAlign: 'right', color: s.is_prime_excluded ? '#94a3b8' : '#22c55e', fontWeight: (s.prime_site||0) > 0 || s.is_prime_excluded ? '700' : '400' }}>
@@ -2870,7 +2870,7 @@ export default function PayrollView({ setView }) {
                 <tfoot>
                   <tr style={{ background: 'linear-gradient(90deg, rgba(34,197,94,0.1) 0%, rgba(34,197,94,0.02) 100%)', borderTop: '2px solid #22c55e', borderBottom: '1px solid #22c55e' }}>
                     <td colSpan={7} style={{ fontWeight: '800', padding: '16px 16px', color: '#22c55e', fontSize: '0.95rem' }}>TOTAL ZONE</td>
-                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#22c55e' }}>{agents.reduce((a, s) => a + (s.base_full || s.base || 0), 0).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#22c55e' }}>{agents.reduce((a, s) => a + (s.profile_data?.special_service ? (s.base || 0) : (s.base_full || s.base || 0)), 0).toLocaleString()}</td>
                     <td style={{ textAlign: 'right', fontWeight: '800', color: '#ef4444' }}>-{agents.reduce((a, s) => a + (s.deductions||0), 0).toLocaleString()}</td>
                     <td style={{ textAlign: 'right', fontWeight: '800', color: '#a855f7' }}>+{agents.reduce((a, s) => a + (s.prime_site||0), 0).toLocaleString()}</td>
                     <td style={{ textAlign: 'right', fontWeight: '800', color: '#38bdf8' }}>+{agents.reduce((a, s) => a + (s.gains||0), 0).toLocaleString()}</td>
