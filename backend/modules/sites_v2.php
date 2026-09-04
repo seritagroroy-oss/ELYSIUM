@@ -454,7 +454,7 @@ switch ($action) {
         }
         $subsite_id = $data['subsite_id'] ?? '';
         $site_name_to_log = $subsite_id;
-        $snapshot_data = null;
+        $snapshot_data = !empty($data['screenshot']) ? saveScreenshot($data['screenshot']) : null;
         if ($subsite_id) {
             // Récupère à la fois le nom de la zone et le nom du site parent
             $stmt = getDb()->prepare("SELECT sub.*, s.name as site_name FROM subsites sub LEFT JOIN sites s ON sub.site_id = s.id WHERE sub.id = ?");
@@ -1363,7 +1363,7 @@ switch ($action) {
     case 'delete_agent':
         $agent_id = $data['agent_id'] ?? '';
         $agent_name_to_log = !empty($data['name']) ? $data['name'] : ($agent_id ?: 'Inconnu');
-        $snapshot_data = null;
+        $snapshot_data = !empty($data['screenshot']) ? saveScreenshot($data['screenshot']) : null;
         if ($agent_id) {
             $stmt = getDb()->prepare("SELECT * FROM agents WHERE id = ?");
             $stmt->execute([$agent_id]);

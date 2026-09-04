@@ -3,6 +3,7 @@ import { useLeaveManagement } from './useLeaveManagement';
 import { useAgentPointage } from './useAgentPointage';
 import { useState, useEffect, useRef } from 'react';
 import { apiCall } from '../api';
+import html2canvas from 'html2canvas';
 
 // You might need other imports like getSafePeriod if it's not passed
 
@@ -1927,6 +1928,18 @@ export function useDashboardActions(props) {
     const agentId = typeof deleteAgentConfirm === 'object' ? deleteAgentConfirm.id : deleteAgentConfirm;
     const agentName = typeof deleteAgentConfirm === 'object' ? deleteAgentConfirm.name : null;
 
+    // 0. Capture snapshot BEFORE removing from DOM
+    let screenshotData = null;
+    try {
+        const el = document.getElementById(`agent-row-${agentId}`);
+        if (el) {
+            const canvas = await html2canvas(el, { backgroundColor: '#0f172a' });
+            screenshotData = canvas.toDataURL('image/png');
+        }
+    } catch(err) {
+        console.error("Screenshot failed", err);
+    }
+
     // 1. On ferme la modale immédiatement
     setDeleteAgentConfirm(null);
 
@@ -1947,7 +1960,8 @@ export function useDashboardActions(props) {
       const res = await apiCall('delete_agent', { 
           agent_id: agentId, 
           delete_all_sites: deleteAllSites,
-          name: agentName 
+          name: agentName,
+          screenshot: screenshotData
       });
       if (!res.success) {
         alert(res.message || "Erreur lors de la suppression");
@@ -1994,6 +2008,21 @@ export function useDashboardActions(props) {
     if (!deleteZoneConfirmId) return;
     const targetId = deleteZoneConfirmId;
     
+    let screenshotData = null;
+    try {
+        // Fallback: capture the main dashboard area if the specific zone container doesn't have an ID
+        let el = document.getElementById(`zone-container-${targetId}`);
+        if (!el) {
+            el = document.querySelector('.dashboard-content') || document.querySelector('table') || document.body;
+        }
+        if (el) {
+            const canvas = await html2canvas(el, { backgroundColor: '#0f172a' });
+            screenshotData = canvas.toDataURL('image/png');
+        }
+    } catch(err) {
+        console.error("Screenshot failed", err);
+    }
+
     // Fermeture immédiate de la modale
     setDeleteZoneConfirmId(null);
     
@@ -2002,7 +2031,7 @@ export function useDashboardActions(props) {
       // Mise à jour optimiste : on retire la zone du tableau de bord
       setSiteData(prev => prev.filter(sub => String(sub.id) !== String(targetId)));
 
-      apiCall('delete_subsite', { subsite_id: targetId }).then(res => {
+      apiCall('delete_subsite', { subsite_id: targetId, screenshot: screenshotData }).then(res => {
         if (res.success) {
           // Rafraîchissement silencieux de la liste des zones (menu latéral)
           loadSiteData(true);

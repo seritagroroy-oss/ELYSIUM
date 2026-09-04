@@ -1368,6 +1368,24 @@ function getAttendanceStats(string $companyId, string $period = ''): array
     ];
 }
 
+function saveScreenshot($base64) {
+    if (empty($base64)) return null;
+    if (preg_match('/^data:image\/(\w+);base64,/', $base64, $type)) {
+        $base64 = substr($base64, strpos($base64, ',') + 1);
+        $type = strtolower($type[1]);
+        if (!in_array($type, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) return null;
+        $base64 = str_replace(' ', '+', $base64);
+        $data = base64_decode($base64);
+        if ($data === false) return null;
+        $filename = uniqid('snap_') . '.' . $type;
+        $dir = dirname(__DIR__) . '/uploads/snapshots';
+        if (!is_dir($dir)) mkdir($dir, 0777, true);
+        file_put_contents($dir . '/' . $filename, $data);
+        return 'uploads/snapshots/' . $filename;
+    }
+    return null;
+}
+
 function logBlackBox($db, $company_id, $service_id, $period, $action_type, $details, $snapshot_data = null) {
     if (!$db || !$company_id || !$period || !$action_type) return false;
     

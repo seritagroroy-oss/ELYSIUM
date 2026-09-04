@@ -589,7 +589,7 @@ switch ($action) {
     case 'delete_agent_entrant':
         $agent_id = $data['agent_id'] ?? '';
         $agent_name_to_log = $agent_id;
-        $snapshot_data = null;
+        $snapshot_data = !empty($data['screenshot']) ? saveScreenshot($data['screenshot']) : null;
         if ($agent_id) {
             $stmt = getDb()->prepare("SELECT * FROM agents WHERE id = ?");
             $stmt->execute([$agent_id]);
