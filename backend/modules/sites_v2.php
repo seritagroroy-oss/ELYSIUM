@@ -1428,21 +1428,11 @@ switch ($action) {
         saveScopedData($db, $serviceKey);
         echo json_encode(['success' => true]);
         break;
-        case 'get_blackbox_logs':
-        $period = $data['period'] ?? date('Y-m');
-        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
-        $sqlite = getDb();
-        $stmt = $sqlite->prepare("SELECT * FROM activity_logs WHERE company_id = ? AND period = ? ORDER BY action_date DESC");
-        $stmt->execute([$company_id, $period]);
-        echo json_encode(['success' => true, 'logs' => $stmt->fetchAll()]);
-        break;
-
     case 'get_blackbox_logs':
-        $period = $data['period'] ?? date('Y-m');
         $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $sqlite = getDb();
-        $stmt = $sqlite->prepare("SELECT * FROM activity_logs WHERE company_id = ? AND period = ? ORDER BY action_date DESC");
-        $stmt->execute([$company_id, $period]);
+        $stmt = $sqlite->prepare("SELECT * FROM activity_logs WHERE company_id = ? ORDER BY action_date DESC LIMIT 500");
+        $stmt->execute([$company_id]);
         echo json_encode(['success' => true, 'logs' => $stmt->fetchAll()]);
         break;
 
