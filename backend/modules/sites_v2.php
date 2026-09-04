@@ -452,6 +452,8 @@ switch ($action) {
             echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
+        $site_name_to_log = !empty($data['name']) ? $data['name'] : ($data['subsite_id'] ?? 'Inconnu');
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_SUBSITE', "Site: " . $site_name_to_log);
         $serviceKey = $_SESSION['service_id'] ?? null;
         $subsite_id = $data['subsite_id'] ?? '';
         if (!$subsite_id) {
