@@ -2203,7 +2203,7 @@ export default function DashboardTable({
 
           if (forceIndividual) {
             return (
-              <div key={subsite.id} style={{ marginTop: '16px' }}>
+              <div key={subsite.id} id={`zone-container-${subsite.id}`} style={{ marginTop: '16px' }}>
                 <div className="glass-panel subsite-card" style={{ padding: '10px 14px', marginBottom: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
                   <h3 style={{ fontSize: '1.05rem', margin: 0, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px', textAlign: 'center' }}>
                     {isMutatedGroup ? '🔄' : '📍'} {subsite.name} {subsite.contract_end_date && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>/ Fin de contrat le {new Date(subsite.contract_end_date).toLocaleDateString('fr-FR')}</span>}
@@ -2320,7 +2320,7 @@ export default function DashboardTable({
 
 return (
   <DroppableZone key={subsite.id} id={subsite.id}>
-    <div className="glass-panel subsite-card" style={{ marginTop: '16px', padding: '8px 10px', overflowX: 'auto', background: isMutatedGroup ? 'rgba(14, 165, 233, 0.05)' : undefined, border: isMutatedGroup ? '1px solid rgba(14, 165, 233, 0.2)' : undefined }}>
+    <div id={`zone-container-${subsite.id}`} className="glass-panel subsite-card" style={{ marginTop: '16px', padding: '8px 10px', overflowX: 'auto', background: isMutatedGroup ? 'rgba(14, 165, 233, 0.05)' : undefined, border: isMutatedGroup ? '1px solid rgba(14, 165, 233, 0.2)' : undefined }}>
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px', position: 'relative' }}>
       <h3 style={{ fontSize: '1.05rem', margin: 0, color: isMutatedGroup ? 'var(--c)' : 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px', textAlign: 'center' }}>
         {isMutatedGroup ? '🔄' : '📍'} {subsite.name} {subsite.contract_end_date && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>/ Fin de contrat le {new Date(subsite.contract_end_date).toLocaleDateString('fr-FR')}</span>}
