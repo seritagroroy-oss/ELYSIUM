@@ -19,6 +19,7 @@ export function useDashboardActions(props) {
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [showDeleteAgent, setShowDeleteAgent] = useState(false);
   const [deleteSiteData, setDeleteSiteData] = useState(null);
+  const [pendingSubsiteScreenshot, setPendingSubsiteScreenshot] = useState(null);
   const [showFaqModal, setShowFaqModal] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState(null);
 
@@ -2051,7 +2052,20 @@ export function useDashboardActions(props) {
     }
   };
 
-  const handleDeleteSubsite = (subsiteId) => {
+  const handleDeleteSubsite = async (subsiteId) => {
+    // Capture la zone AVANT d'ouvrir la modale de confirmation
+    let screenshotData = null;
+    try {
+        const el = document.getElementById(`zone-container-${subsiteId}`);
+        const target = el || document.querySelector('table') || document.body;
+        if (target) {
+            const canvas = await html2canvas(target, { backgroundColor: '#0f172a', scale: 2 });
+            screenshotData = canvas.toDataURL('image/png');
+        }
+    } catch(err) {
+        console.error("Zone screenshot failed", err);
+    }
+    setPendingSubsiteScreenshot(screenshotData);
     setDeleteZoneConfirmId(subsiteId);
   };
 
@@ -2059,20 +2073,9 @@ export function useDashboardActions(props) {
     if (!deleteZoneConfirmId) return;
     const targetId = deleteZoneConfirmId;
     
-    let screenshotData = null;
-    try {
-        // Fallback: capture the main dashboard area if the specific zone container doesn't have an ID
-        let el = document.getElementById(`zone-container-${targetId}`);
-        if (!el) {
-            el = document.querySelector('.dashboard-content') || document.querySelector('table') || document.body;
-        }
-        if (el) {
-            const canvas = await html2canvas(el, { backgroundColor: '#0f172a' });
-            screenshotData = canvas.toDataURL('image/png');
-        }
-    } catch(err) {
-        console.error("Screenshot failed", err);
-    }
+    // Screenshot déjà pris dans handleDeleteSubsite, avant l'ouverture de la modale
+    const screenshotData = pendingSubsiteScreenshot;
+    setPendingSubsiteScreenshot(null);
 
     // Fermeture immédiate de la modale
     setDeleteZoneConfirmId(null);
