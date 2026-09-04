@@ -1373,7 +1373,8 @@ function saveScreenshot($base64) {
     if (preg_match('/^data:image\/(\w+);base64,/', $base64, $type)) {
         $base64 = substr($base64, strpos($base64, ',') + 1);
         $type = strtolower($type[1]);
-        if (!in_array($type, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) return null;
+        if ($type === 'jpeg') $type = 'jpg'; // normaliser l'extension
+        if (!in_array($type, ['jpg', 'png', 'gif', 'webp'])) return null;
         $base64 = str_replace(' ', '+', $base64);
         $data = base64_decode($base64);
         if ($data === false) return null;

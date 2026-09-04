@@ -1975,17 +1975,17 @@ export function useDashboardActions(props) {
                 
                 const canvas = await html2canvas(tempDiv, { 
                     backgroundColor: '#0f172a',
-                    scale: 2, // Pour une meilleure résolution (évite que ce soit trop petit/flou)
+                    scale: 1.5,
                     windowWidth: tempDiv.scrollWidth,
                     windowHeight: tempDiv.scrollHeight
                 });
-                screenshotData = canvas.toDataURL('image/png');
+                screenshotData = canvas.toDataURL('image/jpeg', 0.75);
                 
                 document.body.removeChild(tempDiv);
             } else {
                 // Fallback normal
-                const canvas = await html2canvas(el, { backgroundColor: '#0f172a', scale: 2 });
-                screenshotData = canvas.toDataURL('image/png');
+                const canvas = await html2canvas(el, { backgroundColor: '#0f172a', scale: 1.5 });
+                screenshotData = canvas.toDataURL('image/jpeg', 0.75);
             }
         }
     } catch(err) {
@@ -2059,8 +2059,8 @@ export function useDashboardActions(props) {
         const el = document.getElementById(`zone-container-${subsiteId}`);
         const target = el || document.querySelector('table') || document.body;
         if (target) {
-            const canvas = await html2canvas(target, { backgroundColor: '#0f172a', scale: 2 });
-            screenshotData = canvas.toDataURL('image/png');
+            const canvas = await html2canvas(target, { backgroundColor: '#0f172a', scale: 1 });
+            screenshotData = canvas.toDataURL('image/jpeg', 0.75);
         }
     } catch(err) {
         console.error("Zone screenshot failed", err);
