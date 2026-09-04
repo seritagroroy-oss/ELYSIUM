@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiCall } from '../api';
-import { X, Search, ShieldAlert, ShieldCheck, MapPinOff, Calendar, Eye } from 'lucide-react';
+import { X, Search, ShieldAlert, ShieldCheck, MapPinOff, Calendar, Eye, Download } from 'lucide-react';
 import './lost-site-card.css';
 
 const BlacklistModal = ({ onClose }) => {
@@ -11,6 +11,7 @@ const BlacklistModal = ({ onClose }) => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSnapshot, setSelectedSnapshot] = useState(null);
+  const [snapshotZoom, setSnapshotZoom] = useState(100);
 
   const loadData = async () => {
     setLoading(true);
@@ -306,6 +307,7 @@ const BlacklistModal = ({ onClose }) => {
                                }
                             } catch(e) {}
                             setSelectedSnapshot({ type: log.action_type, data: parsedData });
+                            setSnapshotZoom(100);
                           }}
                           style={{
                             background: 'rgba(139, 92, 246, 0.2)',
@@ -340,14 +342,37 @@ const BlacklistModal = ({ onClose }) => {
               <h3 style={{ margin: 0, color: '#c4b5fd', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Eye size={20} /> État avant suppression
               </h3>
-              <button onClick={() => setSelectedSnapshot(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {typeof selectedSnapshot.data === 'string' && selectedSnapshot.data.startsWith('uploads/snapshots') && (
+                  <>
+                    <button
+                      onClick={() => setSnapshotZoom(z => Math.max(25, z - 25))}
+                      title="Réduire"
+                      style={{ background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)', color: '#c4b5fd', width: '32px', height: '32px', borderRadius: '6px', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >－</button>
+                    <span style={{ color: '#c4b5fd', fontSize: '0.9rem', minWidth: '45px', textAlign: 'center' }}>{snapshotZoom}%</span>
+                    <button
+                      onClick={() => setSnapshotZoom(z => Math.min(300, z + 25))}
+                      title="Agrandir"
+                      style={{ background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)', color: '#c4b5fd', width: '32px', height: '32px', borderRadius: '6px', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >＋</button>
+                    <a
+                      href={"/" + selectedSnapshot.data}
+                      download={"snapshot_" + selectedSnapshot.data.split('/').pop()}
+                      title="Télécharger l'image"
+                      style={{ background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(34,197,94,0.4)', color: '#86efac', width: '32px', height: '32px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
+                    ><Download size={16} /></a>
+                  </>
+                )}
+                <button onClick={() => setSelectedSnapshot(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
+                  <X size={24} />
+                </button>
+              </div>
             </div>
             
             <div style={{ background: 'rgba(0,0,0,0.3)', padding: '5px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', flex: 1, overflow: 'auto', display: 'flex', justifyContent: typeof selectedSnapshot.data === 'string' && selectedSnapshot.data.startsWith('uploads/snapshots') ? 'flex-start' : 'center' }}>
               {typeof selectedSnapshot.data === 'string' && selectedSnapshot.data.startsWith('uploads/snapshots') ? (
-                <img src={"/" + selectedSnapshot.data} alt="Snapshot" style={{ objectFit: 'contain', borderRadius: '6px', maxHeight: '100%' }} />
+                <img src={"/" + selectedSnapshot.data} alt="Snapshot" style={{ width: snapshotZoom + '%', maxWidth: 'none', borderRadius: '6px', display: 'block' }} />
               ) : (
                 <pre style={{ margin: 0, color: '#a78bfa', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
                   {JSON.stringify(selectedSnapshot.data, null, 2)}
