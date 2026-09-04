@@ -595,7 +595,7 @@ switch ($action) {
             $stmt->execute([$agent_id]);
             $res = $stmt->fetch();
             if ($res) {
-                $snapshot_data = json_encode($res, JSON_UNESCAPED_UNICODE);
+                if (!$snapshot_data) $snapshot_data = json_encode($res, JSON_UNESCAPED_UNICODE);
                 if (!empty($res['name'])) $agent_name_to_log = $res['name'];
             }
         }
