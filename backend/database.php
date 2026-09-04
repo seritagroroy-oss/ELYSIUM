@@ -1374,7 +1374,7 @@ function logBlackBox($db, $company_id, $service_id, $period, $action_type, $deta
     $user = $_SESSION['username'] ?? 'SYSTEM';
     
     try {
-        $stmt = $db->prepare("INSERT INTO activity_logs (company_id, service_id, period, action_date, user, action_type, details) VALUES (?, ?, ?, NOW(), ?, ?, ?)");
+        $stmt = $db->prepare("INSERT INTO activity_logs (company_id, service_id, period, action_date, user, action_type, details) VALUES (?, ?, ?, DATETIME('now', 'localtime'), ?, ?, ?)");
         return $stmt->execute([
             $company_id,
             $service_id,
