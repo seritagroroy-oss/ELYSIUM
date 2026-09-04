@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiCall } from '../api';
-import { X, Search, ShieldAlert, ShieldCheck, MapPinOff, Calendar } from 'lucide-react';
+import { X, Search, ShieldAlert, ShieldCheck, MapPinOff, Calendar, Eye } from 'lucide-react';
 import './lost-site-card.css';
 
 const BlacklistModal = ({ onClose }) => {
@@ -10,6 +10,7 @@ const BlacklistModal = ({ onClose }) => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSnapshot, setSelectedSnapshot] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -295,6 +296,25 @@ const BlacklistModal = ({ onClose }) => {
                           Par: {log.user} | Période: {log.period}
                         </div>
                       </div>
+                      {log.snapshot_data && (
+                        <button 
+                          onClick={() => setSelectedSnapshot({ type: log.action_type, data: JSON.parse(log.snapshot_data) })}
+                          style={{
+                            background: 'rgba(139, 92, 246, 0.2)',
+                            border: '1px solid rgba(139, 92, 246, 0.4)',
+                            color: '#c4b5fd',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          <Eye size={14} /> Voir l'état
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -304,6 +324,28 @@ const BlacklistModal = ({ onClose }) => {
           })()}
         </div>
       </div>
+
+      {selectedSnapshot && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass-panel" style={{ width: '90%', maxWidth: '600px', padding: '20px', borderRadius: '12px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: '#c4b5fd', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Eye size={20} /> État avant suppression
+              </h3>
+              <button onClick={() => setSelectedSnapshot(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <pre style={{ margin: 0, color: '#a78bfa', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                {JSON.stringify(selectedSnapshot.data, null, 2)}
+              </pre>
+            </div>
+            
+          </div>
+        </div>
+      )}
     </div>
   );
 };

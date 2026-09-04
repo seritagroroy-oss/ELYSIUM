@@ -454,14 +454,16 @@ switch ($action) {
         }
         $subsite_id = $data['subsite_id'] ?? '';
         $site_name_to_log = $subsite_id;
+        $snapshot_data = null;
         if ($subsite_id) {
             // Récupère à la fois le nom de la zone et le nom du site parent
-            $stmt = getDb()->prepare("SELECT sub.name as subsite_name, s.name as site_name FROM subsites sub LEFT JOIN sites s ON sub.site_id = s.id WHERE sub.id = ?");
+            $stmt = getDb()->prepare("SELECT sub.*, s.name as site_name FROM subsites sub LEFT JOIN sites s ON sub.site_id = s.id WHERE sub.id = ?");
             $stmt->execute([$subsite_id]);
             $res = $stmt->fetch();
             if ($res) {
+                $snapshot_data = json_encode($res, JSON_UNESCAPED_UNICODE);
                 $parent_name = !empty($res['site_name']) ? $res['site_name'] : '';
-                $zone_name = !empty($res['subsite_name']) ? $res['subsite_name'] : '';
+                $zone_name = !empty($res['name']) ? $res['name'] : '';
                 
                 if ($parent_name && $zone_name) {
                     $site_name_to_log = $parent_name . ' / ' . $zone_name;
@@ -470,7 +472,7 @@ switch ($action) {
                 }
             }
         }
-        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_SUBSITE', "Site: " . $site_name_to_log);
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_SUBSITE', "Site: " . $site_name_to_log, $snapshot_data);
         $serviceKey = $_SESSION['service_id'] ?? null;
         if (!$subsite_id) {
             echo json_encode(['success' => false, 'message' => 'Sous-site manquant']);
@@ -1359,9 +1361,19 @@ switch ($action) {
         echo json_encode(['success' => true, 'sites' => $sites]);
         break;
     case 'delete_agent':
-        $agent_name_to_log = !empty($data['name']) ? $data['name'] : ($data['agent_id'] ?? 'Inconnu');
-        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_AGENT', "Agent: " . $agent_name_to_log);
         $agent_id = $data['agent_id'] ?? '';
+        $agent_name_to_log = !empty($data['name']) ? $data['name'] : ($agent_id ?: 'Inconnu');
+        $snapshot_data = null;
+        if ($agent_id) {
+            $stmt = getDb()->prepare("SELECT * FROM agents WHERE id = ?");
+            $stmt->execute([$agent_id]);
+            $res = $stmt->fetch();
+            if ($res) {
+                $snapshot_data = json_encode($res, JSON_UNESCAPED_UNICODE);
+                if (empty($data['name']) && !empty($res['name'])) $agent_name_to_log = $res['name'];
+            }
+        }
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_AGENT', "Agent: " . $agent_name_to_log, $snapshot_data);
         $delete_all_sites = !empty($data['delete_all_sites']);
         $agent_name = $data['name'] ?? '';
         

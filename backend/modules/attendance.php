@@ -589,13 +589,17 @@ switch ($action) {
     case 'delete_agent_entrant':
         $agent_id = $data['agent_id'] ?? '';
         $agent_name_to_log = $agent_id;
+        $snapshot_data = null;
         if ($agent_id) {
-            $stmt = getDb()->prepare("SELECT name FROM agents WHERE id = ?");
+            $stmt = getDb()->prepare("SELECT * FROM agents WHERE id = ?");
             $stmt->execute([$agent_id]);
             $res = $stmt->fetch();
-            if ($res && !empty($res['name'])) $agent_name_to_log = $res['name'];
+            if ($res) {
+                $snapshot_data = json_encode($res, JSON_UNESCAPED_UNICODE);
+                if (!empty($res['name'])) $agent_name_to_log = $res['name'];
+            }
         }
-        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_AGENT_ENTRANT', "Agent: " . $agent_name_to_log);
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_AGENT_ENTRANT', "Agent: " . $agent_name_to_log, $snapshot_data);
         $period   = $data['period'] ?? date('Y-m');
 
         if (!$agent_id) {
