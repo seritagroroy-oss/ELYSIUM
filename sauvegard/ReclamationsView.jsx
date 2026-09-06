@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiCall } from '../api';
 import { useAuth } from '../AuthContext';
-import { FileText, CheckCircle, Send, Loader2, Calendar, FileWarning, X, Eye, Settings, LayoutTemplate, Layers, Columns, Grid, FolderOpen, ArrowLeft, Edit3, Share2, Plus, Users, FilePlus, Search, Archive, Clock, FileX, UserCog, PenTool, Upload } from 'lucide-react';
+import { FileText, CheckCircle, Send, Loader2, Calendar, FileWarning, X, Eye, Settings, LayoutTemplate, Layers, Columns, Grid, FolderOpen, ArrowLeft, Edit3, Share2, Plus, Users, FilePlus, Search, Archive, Clock, FileX, UserCog, PenTool, Upload, AlertTriangle } from 'lucide-react';
 import AutocompleteAgentInput from './AutocompleteAgentInput';
 import AutocompleteDeclarantInput from './AutocompleteDeclarantInput';
 
@@ -375,7 +375,9 @@ export default function ReclamationsView() {
   const [submitting, setSubmitting] = useState(false);
   const [companyServices, setCompanyServices] = useState([]);
   
+  
   const [isSyncingPeriod, setIsSyncingPeriod] = useState(true);
+  const [publishError, setPublishError] = useState('');
 
   // Synchro sécurisée du mois avec le backend (survie aux F5 et reconnexions)
   useEffect(() => {
@@ -691,6 +693,15 @@ export default function ReclamationsView() {
     }
     setSubmitting(true);
     try {
+      const pubRes = await apiCall('get_published_periods', { scope: 'company' }, 'GET');
+      if (pubRes && pubRes.published_periods) {
+         if (!pubRes.published_periods.includes(selectedMonth)) {
+            setPublishError(`Impossible d'envoyer les réclamations.\nLe pointage du mois de ${formatMonthName(selectedMonth)} n'a pas encore été publié.\n\nVeuillez publier le pointage avant de transmettre les réclamations.`);
+            setSubmitting(false);
+            return;
+         }
+      }
+
       const res = await apiCall('publish_reclamations', { 
         mois: selectedMonth, 
         services: selectedPublishServices 
@@ -1727,7 +1738,7 @@ export default function ReclamationsView() {
                       <>
                         <button onClick={() => { setActionRec(rec); setMotifRefus(''); }} style={{ flex: 1, background: '#ef4444', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>Refuser</button>
                         <button onClick={async () => {
-                          await apiCall('batch_update_reclamations', { updates: [{ id: rec.id, fields: { statut_final: 'Validé', motif_refus: '', statut: 'Clôturé' } }] }, 'POST');
+                          await apiCall('batch_update_reclamations', { updates: [{ id: rec.id, fields: { statut_final: 'Validé', motif_refus: '' } }] }, 'POST');
                           fetchReclamations();
                         }} style={{ flex: 1, background: '#10b981', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>Valider</button>
                       </>
@@ -1836,32 +1847,10 @@ export default function ReclamationsView() {
             <p style={{ color: '#94a3b8', marginBottom: '30px' }}>À quels services souhaitez-vous envoyer les brouillons de ce mois ?</p>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '30px', maxHeight: '300px', overflowY: 'auto', paddingRight: '10px' }}>
-              <label 
-                style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '15px', borderRadius: '12px', background: selectedPublishServices.includes('Tous') ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${selectedPublishServices.includes('Tous') ? '#38bdf8' : 'rgba(255,255,255,0.05)'}`, cursor: 'pointer', transition: 'all 0.2s' }}
-                onMouseEnter={e => { if(!selectedPublishServices.includes('Tous')) { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; } }}
-                onMouseLeave={e => { if(!selectedPublishServices.includes('Tous')) { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; } }}
-              >
-                <input type="checkbox" checked={selectedPublishServices.includes('Tous')} onChange={() => togglePublishService('Tous')} style={{ transform: 'scale(1.2)' }} />
-                <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'white' }}>Tous les services</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '15px', borderRadius: '12px', background: selectedPublishServices.includes('Secrétariat') ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${selectedPublishServices.includes('Secrétariat') ? '#10b981' : 'rgba(255,255,255,0.05)'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
+                <input type="checkbox" checked={selectedPublishServices.includes('Secrétariat')} onChange={() => togglePublishService('Secrétariat')} style={{ transform: 'scale(1.2)' }} />
+                <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'white' }}>Secrétariat</span>
               </label>
-              
-              {companyServices.map(srv => (
-                <label 
-                  key={srv.id} 
-                  style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '15px', borderRadius: '12px', background: selectedPublishServices.includes(srv.name) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${selectedPublishServices.includes(srv.name) ? '#10b981' : 'rgba(255,255,255,0.05)'}`, cursor: selectedPublishServices.includes('Tous') ? 'not-allowed' : 'pointer', opacity: selectedPublishServices.includes('Tous') ? 0.5 : 1, transition: 'all 0.2s' }}
-                  onMouseEnter={e => { if(!selectedPublishServices.includes(srv.name) && !selectedPublishServices.includes('Tous')) { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; } }}
-                  onMouseLeave={e => { if(!selectedPublishServices.includes(srv.name) && !selectedPublishServices.includes('Tous')) { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; } }}
-                >
-                  <input type="checkbox" checked={selectedPublishServices.includes(srv.name) || selectedPublishServices.includes('Tous')} disabled={selectedPublishServices.includes('Tous')} onChange={() => togglePublishService(srv.name)} style={{ transform: 'scale(1.2)' }} />
-                  <span style={{ fontSize: '1.05rem', color: '#cbd5e1' }}>{srv.name}</span>
-                </label>
-              ))}
-              {companyServices.length === 0 && (
-                 <label style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '15px', borderRadius: '12px', background: selectedPublishServices.includes('Secrétariat') ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${selectedPublishServices.includes('Secrétariat') ? '#10b981' : 'rgba(255,255,255,0.05)'}`, cursor: 'pointer' }}>
-                   <input type="checkbox" checked={selectedPublishServices.includes('Secrétariat')} onChange={() => togglePublishService('Secrétariat')} style={{ transform: 'scale(1.2)' }} />
-                   <span style={{ fontSize: '1.05rem', color: '#cbd5e1' }}>Secrétariat (Défaut)</span>
-                 </label>
-              )}
             </div>
 
             <button 
@@ -1951,7 +1940,7 @@ export default function ReclamationsView() {
             <p style={{ color: '#94a3b8', marginBottom: '20px' }}>Agent: {actionRec.agent_nom}</p>
             <textarea value={motifRefus} onChange={e => setMotifRefus(e.target.value)} placeholder="Motif du refus obligatoire..." style={{ width: '100%', minHeight: '120px', padding: '15px', borderRadius: '12px', background: 'white', border: '1px solid #ef4444', outline: 'none', marginBottom: '20px', fontSize: '1rem' }} />
             <button disabled={!motifRefus.trim()} onClick={async () => {
-              await apiCall('batch_update_reclamations', { updates: [{ id: actionRec.id, fields: { statut_final: 'Refusée', motif_refus: motifRefus, statut: 'Refusé' } }] }, 'POST');
+              await apiCall('batch_update_reclamations', { updates: [{ id: actionRec.id, fields: { statut_final: 'Refusée', motif_refus: motifRefus } }] }, 'POST');
               setActionRec(null);
               fetchReclamations();
             }} style={{ width: '100%', background: '#ef4444', color: 'white', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 'bold', cursor: !motifRefus.trim() ? 'not-allowed' : 'pointer' }}>
@@ -2134,6 +2123,23 @@ export default function ReclamationsView() {
                 ) : 'Confirmer'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL ERREUR PUBLICATION */}
+      {publishError && (
+        <div className="fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
+          <div style={{ background: '#0f172a', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '24px', width: '90%', maxWidth: '450px', padding: '40px', position: 'relative', textAlign: 'center', boxShadow: '0 25px 50px rgba(239,68,68,0.2)' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239, 68, 68, 0.2)', padding: '20px', borderRadius: '50%', marginBottom: '20px' }}>
+              <AlertTriangle size={48} color="#ef4444" />
+            </div>
+            <h2 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '1.5rem' }}>Action Impossible</h2>
+            <p style={{ color: '#cbd5e1', fontSize: '1.05rem', lineHeight: '1.6', marginBottom: '30px', whiteSpace: 'pre-line' }}>
+              {publishError}
+            </p>
+            <button onClick={() => setPublishError('')} style={{ width: '100%', background: '#ef4444', color: 'white', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' }} onMouseEnter={e => e.currentTarget.style.background = '#dc2626'} onMouseLeave={e => e.currentTarget.style.background = '#ef4444'}>
+              J'ai compris
+            </button>
           </div>
         </div>
       )}

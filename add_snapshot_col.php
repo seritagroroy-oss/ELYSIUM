@@ -1,9 +1,13 @@
 <?php
-require __DIR__ . '/backend/database.php';
+require 'backend/database.php';
 $db = getDb();
 try {
-    $db->exec("ALTER TABLE activity_logs ADD COLUMN snapshot_data TEXT");
-    echo "Column added.\n";
-} catch (Exception $e) {
-    echo "Column already exists or error: " . $e->getMessage() . "\n";
+    $db->exec("ALTER TABLE reclamations ADD COLUMN fti_data TEXT");
+    echo "OK";
+} catch(Exception $e) {
+    if (strpos($e->getMessage(), 'duplicate column name') !== false) {
+        echo "OK (already exists)";
+    } else {
+        echo "Error: " . $e->getMessage();
+    }
 }
