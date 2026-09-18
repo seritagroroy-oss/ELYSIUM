@@ -262,8 +262,17 @@ switch ($action) {
             break;
         }
         $sqlite = getDb();
+        // Récupérer les paramètres existants pour faire une fusion (merge)
+        $stmt_user = $sqlite->prepare("SELECT settings FROM users WHERE email = ?");
+        $stmt_user->execute([$email]);
+        $uRow = $stmt_user->fetch();
+        $existing = json_decode($uRow['settings'] ?? '{}', true);
+        if (!is_array($existing)) $existing = [];
+        
+        $merged = array_merge($existing, $settings);
+        
         $stmt = $sqlite->prepare("UPDATE users SET settings = ? WHERE email = ?");
-        $stmt->execute([json_encode($settings), $email]);
+        $stmt->execute([json_encode($merged), $email]);
         echo json_encode(['success' => true]);
         break;
 

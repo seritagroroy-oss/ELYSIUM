@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiCall } from '../api';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { useAuth } from '../AuthContext';
-import { FileText, CheckCircle, Send, Loader2, Calendar, FileWarning, X, Eye, Settings, LayoutTemplate, Layers, Columns, Grid, FolderOpen, ArrowLeft, Edit3, Share2, Plus, Users, FilePlus, Search, Archive, Clock, FileX, UserCog, PenTool, Upload, AlertTriangle } from 'lucide-react';
+import { FileText, CheckCircle, Send, Loader2, Calendar, FileWarning, X, Eye, Settings, LayoutTemplate, Layers, Columns, Grid, FolderOpen, ArrowLeft, Edit3, Share2, Plus, Users, FilePlus, Search, Archive, Clock, FileX, UserCog, PenTool, Upload, AlertTriangle, Trash2 } from 'lucide-react';
 import AutocompleteAgentInput from './AutocompleteAgentInput';
 import AutocompleteDeclarantInput from './AutocompleteDeclarantInput';
 
@@ -13,14 +15,18 @@ const RECLAMATION_CATEGORIES = [
 ];
 
 // Composant d'aperçu visuel façon "FICHE PAPIER PDF"
-const PdfPreview = ({ data }) => {
+const PdfPreview = ({ data, ftiDates, ftiMotifs, ftiSites, ftiTravailExtra, ftiVisas, ftiJourSuppl, ftiJourNuit, ftiRows }) => {
+  const pageStyle = {
+    background: 'white', color: 'black', width: '100%', maxWidth: '800px', margin: '0 auto 30px auto',
+    padding: '40px', fontFamily: '"Times New Roman", Times, serif', fontSize: '14px', lineHeight: '1.5',
+    boxShadow: '0 0 20px rgba(0,0,0,0.4)', position: 'relative'
+  };
+
   return (
-    <div style={{
-      background: 'white', color: 'black', width: '100%', maxWidth: '800px', margin: '0 auto',
-      padding: '40px', fontFamily: '"Times New Roman", Times, serif', fontSize: '14px', lineHeight: '1.5',
-      boxShadow: '0 0 20px rgba(0,0,0,0.1)'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
+    <div id="pdf-print-root" style={{ width: '100%' }}>
+      {/* --- PAGE 1 --- */}
+      <div className="pdf-page" style={pageStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
         <div>
           <div style={{ width: '80px', height: '90px', border: '1px solid black', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <strong>LOGO</strong>
@@ -46,6 +52,72 @@ const PdfPreview = ({ data }) => {
         .pdf-section-title { font-weight: bold; font-style: italic; margin-bottom: 5px; text-decoration: underline; }
         .checkbox { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border: 1.5px solid black; margin-right: 4px; vertical-align: middle; font-size: 11px; font-weight: bold; line-height: 1; }
         .checked::after { content: '✓'; color: black; }
+        
+        @media print {
+          @page { margin: 5mm; }
+          
+          /* 1. DÉVERROUILLER TOUTE L'APPLICATION */
+          * {
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+            min-height: 0 !important;
+            position: static !important;
+            box-sizing: border-box !important;
+          }
+          
+          body {
+            background: white !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          
+          /* 2. CACHER TOUT LE RESTE DU SITE */
+          body * {
+            visibility: hidden;
+          }
+          
+          /* 3. SUPPRIMER L'ESPACE PHYSIQUE DES AUTRES ÉLÉMENTS DU FORMULAIRE */
+          .fade-in > *:not(form), form > *:not(.pdf-modal-container) {
+            display: none !important;
+          }
+          
+          /* 4. AFFICHER NOTRE MODALE ET SON CONTENU */
+          .pdf-modal-container, .pdf-modal-container * {
+            visibility: visible;
+          }
+          
+          /* 5. MASQUER LES BOUTONS DE LA MODALE */
+          .pdf-modal-header, .pdf-modal-footer {
+            display: none !important;
+          }
+          
+          /* 6. RESET DES CONTENEURS PDF */
+          .pdf-modal-container {
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+            width: 100% !important;
+          }
+          
+          #pdf-print-root {
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          
+          /* 7. FORMATAGE DES PAGES PAPIER */
+          .pdf-page {
+            box-shadow: none !important;
+            border: none !important;
+            margin: 0 0 20px 0 !important;
+            padding: 40px !important; /* Garde les marges intérieures du document */
+            width: 100% !important;
+            max-width: none !important; /* Prend toute la largeur de la feuille A4 */
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+          }
+        }
       `}</style>
 
       <div className="pdf-section-title">Concerné</div>
@@ -188,6 +260,98 @@ const PdfPreview = ({ data }) => {
           </tbody>
         </table>
       </div>
+      </div> {/* FIN PAGE 1 */}
+
+      {/* --- PAGE 2 (FTI) --- */}
+      {data.categorie === 'SUPPLEMENTAIRE' && (
+        <div className="pdf-page" style={{ ...pageStyle, pageBreakBefore: 'always' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
+             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
+               <div>
+                 <div style={{ width: '80px', height: '90px', border: '1px solid black', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                   <strong>LOGO</strong>
+                 </div>
+                 <div style={{ fontWeight: 'bold', marginTop: '5px', textAlign: 'center', fontSize: '12px' }}>SECURITEX</div>
+               </div>
+               <div style={{ paddingTop: '20px' }}>
+                 <h2 style={{ margin: 0, color: 'black', fontSize: '20px', textTransform: 'uppercase', textDecoration: 'underline' }}>FICHE DE TRAVAIL INDIVIDUELLE (FTI)</h2>
+                 <p style={{ margin: '5px 0 0 0', color: 'black', fontSize: '14px', fontWeight: 'bold' }}>Jour Supplémentaire & Journalier</p>
+               </div>
+             </div>
+             <div style={{ textAlign: 'right', fontSize: '11px', color: 'black', paddingTop: '20px' }}>
+               <div>Code Fiche : SV07/2021</div>
+               <div>PC : 01 72 49 49 13 | Standard : 01 40 59 46 33</div>
+             </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'black', marginBottom: '4px' }}>NOM DE L'AGENT</div>
+              <div style={{ border: '1px solid black', padding: '8px 12px', fontWeight: 'bold', fontSize: '13px' }}>{data.agent_nom || ''}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'black', marginBottom: '4px' }}>MOIS CONCERNÉ</div>
+              <div style={{ border: '1px solid black', padding: '8px 12px', fontWeight: 'bold', fontSize: '13px' }}>{data.mois_concerne || ''}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'black', marginBottom: '4px' }}>PAGE N°</div>
+              <div style={{ border: '1px solid black', padding: '8px 12px', fontWeight: 'bold', fontSize: '13px' }}>1 / 1</div>
+            </div>
+          </div>
+
+          <table className="pdf-table" style={{ fontSize: '12px', width: '100%', tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th style={{ width: '30px', textAlign: 'center', color: 'black' }}>N°</th>
+                <th style={{ width: '80px', color: 'black', textAlign: 'center' }}>DATE</th>
+                <th style={{ width: '100px', color: 'black', textAlign: 'center' }}>SITE</th>
+                <th style={{ color: 'black', textAlign: 'center' }}>AGENT REMPLACÉ / MOTIF</th>
+                <th style={{ width: '60px', textAlign: 'center', color: 'black', fontSize: '10px' }}>TRAVAIL EXTRA</th>
+                <th style={{ width: '60px', textAlign: 'center', color: 'black', fontSize: '10px' }}>JOUR SUPPL.</th>
+                <th style={{ width: '60px', textAlign: 'center', color: 'black', fontSize: '10px' }}>JOUR NUIT</th>
+                <th style={{ width: '100px', textAlign: 'center', color: 'black', fontSize: '10px' }}>VISA SERVICE POINTAGE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: ftiRows || 6 }, (_, i) => i + 1).map(n => (
+                <tr key={n}>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'black' }}>{n}</td>
+                  <td style={{ textAlign: 'center' }}>{ftiDates && ftiDates[n - 1] ? (ftiDates[n - 1].includes('-') ? new Date(ftiDates[n - 1]).toLocaleDateString('fr-FR') : ftiDates[n - 1]) : ''}</td>
+                  <td style={{ textAlign: 'center' }}>{ftiSites && ftiSites[n - 1] ? ftiSites[n - 1] : ''}</td>
+                  <td style={{ textAlign: 'center' }}>{ftiMotifs && ftiMotifs[n - 1] ? ftiMotifs[n - 1] : ''}</td>
+                  <td style={{ textAlign: 'center' }}>{ftiTravailExtra && ftiTravailExtra[n - 1] ? ftiTravailExtra[n - 1] : ''}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '14px' }}>{ftiJourSuppl && ftiJourSuppl[n - 1] ? 'X' : ''}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '14px' }}>{ftiJourNuit && ftiJourNuit[n - 1] ? 'X' : ''}</td>
+                  <td style={{ textAlign: 'center', height: '40px', padding: '2px' }}>
+                    {ftiVisas && ftiVisas[n - 1] ? (
+                      <img src={ftiVisas[n - 1].image} alt="Visa" style={{ maxHeight: '35px', maxWidth: '100%', objectFit: 'contain', margin: '0 auto' }} />
+                    ) : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ marginTop: '15px', fontSize: '12px', color: 'black' }}>
+            Fait à Abidjan le, <strong>{new Date().toLocaleDateString('fr-FR')}</strong>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px' }}>
+            <div style={{ textAlign: 'center', width: '22%' }}>
+              <div style={{ borderTop: '1px solid black', paddingTop: '8px', fontSize: '11px', fontWeight: 'bold', color: 'black' }}>Agent</div>
+            </div>
+            <div style={{ textAlign: 'center', width: '22%' }}>
+              <div style={{ borderTop: '1px solid black', paddingTop: '8px', fontSize: '11px', fontWeight: 'bold', color: 'black' }}>Chef des Opérations</div>
+            </div>
+            <div style={{ textAlign: 'center', width: '22%' }}>
+              <div style={{ borderTop: '1px solid black', paddingTop: '8px', fontSize: '11px', fontWeight: 'bold', color: 'black' }}>Chef Comptable</div>
+            </div>
+            <div style={{ textAlign: 'center', width: '22%' }}>
+              <div style={{ borderTop: '1px solid black', paddingTop: '8px', fontSize: '11px', fontWeight: 'bold', color: 'black' }}>Directeur Général</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -351,7 +515,7 @@ const SignatureCanvas = ({ onSave }) => {
   );
 };
 
-export default function ReclamationsView() {
+export default function ReclamationsView({ showToast }) {
   const { user, hasPermission } = useAuth();
   
   // Droit d'édition exclusif
@@ -407,6 +571,72 @@ export default function ReclamationsView() {
   const [showSettings, setShowSettings] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [reclamationToDelete, setReclamationToDelete] = useState(null);
+
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloadingPdf(true);
+      const rootElement = document.getElementById('pdf-print-root');
+      if (!rootElement) return;
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pages = rootElement.querySelectorAll('.pdf-page');
+      const pdfPageWidth = pdf.internal.pageSize.getWidth();
+      const pdfPageHeight = pdf.internal.pageSize.getHeight();
+      
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        // Cacher temporairement l'ombre portée pour ne pas l'avoir dans le PDF
+        const originalBoxShadow = page.style.boxShadow;
+        page.style.boxShadow = 'none';
+        
+        const canvas = await html2canvas(page, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+        
+        page.style.boxShadow = originalBoxShadow;
+        
+        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        
+        const canvasRatio = canvas.height / canvas.width;
+        let finalWidth = pdfPageWidth;
+        let finalHeight = finalWidth * canvasRatio;
+        
+        // Si la hauteur de la fiche dépasse la hauteur de la page A4,
+        // on réduit la taille pour tout faire rentrer sans couper
+        if (finalHeight > pdfPageHeight) {
+          finalHeight = pdfPageHeight;
+          finalWidth = finalHeight / canvasRatio;
+        }
+        
+        // Centrer horizontalement si on a réduit la largeur
+        const xOffset = (pdfPageWidth - finalWidth) / 2;
+        
+        if (i > 0) {
+          pdf.addPage();
+        }
+        
+        pdf.addImage(imgData, 'JPEG', xOffset, 0, finalWidth, finalHeight);
+      }
+      
+      const fileName = `Fiche_Reclamation_${previewData?.agent_nom || 'Agent'}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error("Erreur lors de la génération du PDF", error);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [selectedPublishServices, setSelectedPublishServices] = useState([]);
   const [publishSuccess, setPublishSuccess] = useState(null);
@@ -462,7 +692,50 @@ export default function ReclamationsView() {
     radio_code: '', radio_signature: ''
   };
 
-  const [formData, setFormData] = useState(defaultFormData);
+  const loadInitialState = (key, defaultVal) => {
+    try {
+      const saved = localStorage.getItem(`pontage_draft_${key}`);
+      return saved ? JSON.parse(saved) : defaultVal;
+    } catch { return defaultVal; }
+  };
+
+  const [formData, setFormData] = useState(() => loadInitialState('formData', defaultFormData));
+  const [ftiRows, setFtiRows] = useState(() => loadInitialState('ftiRows', 6));
+  const [ftiDates, setFtiDates] = useState(() => loadInitialState('ftiDates', {}));
+  const [ftiMotifs, setFtiMotifs] = useState(() => loadInitialState('ftiMotifs', {}));
+  const [ftiSites, setFtiSites] = useState(() => loadInitialState('ftiSites', {}));
+  const [ftiTravailExtra, setFtiTravailExtra] = useState(() => loadInitialState('ftiTravailExtra', {}));
+  const [ftiVisas, setFtiVisas] = useState(() => loadInitialState('ftiVisas', {}));
+  const [ftiJourSuppl, setFtiJourSuppl] = useState(() => loadInitialState('ftiJourSuppl', {}));
+  const [ftiJourNuit, setFtiJourNuit] = useState(() => loadInitialState('ftiJourNuit', {}));
+  const [activeVisaRow, setActiveVisaRow] = useState(null);
+
+  // Autosave dans le cache local (uniquement pour les nouvelles fiches non sauvegardées en base)
+  useEffect(() => {
+    if (!formData.id) {
+      localStorage.setItem('pontage_draft_formData', JSON.stringify(formData));
+      localStorage.setItem('pontage_draft_ftiRows', JSON.stringify(ftiRows));
+      localStorage.setItem('pontage_draft_ftiDates', JSON.stringify(ftiDates));
+      localStorage.setItem('pontage_draft_ftiMotifs', JSON.stringify(ftiMotifs));
+      localStorage.setItem('pontage_draft_ftiSites', JSON.stringify(ftiSites));
+      localStorage.setItem('pontage_draft_ftiTravailExtra', JSON.stringify(ftiTravailExtra));
+      localStorage.setItem('pontage_draft_ftiVisas', JSON.stringify(ftiVisas));
+      localStorage.setItem('pontage_draft_ftiJourSuppl', JSON.stringify(ftiJourSuppl));
+      localStorage.setItem('pontage_draft_ftiJourNuit', JSON.stringify(ftiJourNuit));
+    } else {
+      localStorage.removeItem('pontage_draft_formData');
+      localStorage.removeItem('pontage_draft_ftiRows');
+      localStorage.removeItem('pontage_draft_ftiDates');
+      localStorage.removeItem('pontage_draft_ftiMotifs');
+      localStorage.removeItem('pontage_draft_ftiSites');
+      localStorage.removeItem('pontage_draft_ftiTravailExtra');
+      localStorage.removeItem('pontage_draft_ftiVisas');
+      localStorage.removeItem('pontage_draft_ftiJourSuppl');
+      localStorage.removeItem('pontage_draft_ftiJourNuit');
+    }
+  }, [formData, ftiRows, ftiDates, ftiMotifs, ftiSites, ftiTravailExtra, ftiVisas, ftiJourSuppl, ftiJourNuit]);
+
+  const lastAutoGeneratedDescription = useRef(null);
 
   // Auto-remplissage des remarques pour "Absence", "Supplementaire" et "Erreur de pointage(s)"
   useEffect(() => {
@@ -507,11 +780,91 @@ export default function ReclamationsView() {
         text = `L'agent a perçu ...................... au lieu de  ..................... alors qu'il a ...................................`;
       }
       
-      if (text && formData.description !== text) {
-        setFormData(prev => ({ ...prev, description: text }));
+      // On n'écrase la description que si elle est vide, OU si elle correspond exactement à ce qu'on avait généré précédemment
+      if (text) {
+        const isCurrentlyEmpty = !formData.description || formData.description.trim() === '';
+        
+        // Initialisation de la référence si c'est le premier montage et que la description ressemble à un auto-remplissage brut
+        if (lastAutoGeneratedDescription.current === null && formData.description) {
+            if (formData.description.includes('..........')) {
+                lastAutoGeneratedDescription.current = formData.description;
+            }
+        }
+
+        const isUnmodified = formData.description === lastAutoGeneratedDescription.current;
+        const hasRawTemplate = formData.description && formData.description.includes("en lieu et place de l'agent ...................");
+        
+        if (isCurrentlyEmpty || isUnmodified || (hasRawTemplate && formData.type_erreur === 'Supplementaire' && !isUnmodified)) {
+           // We allow overwriting if it still has the exact raw 19-dots template for Supplementaire as a fallback
+           setFormData(prev => ({ ...prev, description: text }));
+           lastAutoGeneratedDescription.current = text;
+        }
       }
     }
   }, [formData.type_erreur, formData.jours_concernes, formData.mois_concerne]);
+
+  // Calcul automatique des dates FTI à partir des Jours précis affectés
+  useEffect(() => {
+    if (formData.categorie === 'SUPPLEMENTAIRE' && formData.jours_concernes && formData.mois_concerne) {
+      const days = formData.jours_concernes.match(/\b([1-9]|[12][0-9]|3[01])\b/g);
+      if (days) {
+        const [yyyyStr, mmStr] = formData.mois_concerne.split('-');
+        let baseYear = parseInt(yyyyStr, 10);
+        let baseMonth = parseInt(mmStr, 10);
+        
+        if (!isNaN(baseYear) && !isNaN(baseMonth)) {
+          const newDates = {};
+          days.forEach((dayStr, index) => {
+            const day = parseInt(dayStr, 10);
+            let m = baseMonth;
+            let y = baseYear;
+            
+            if (day >= 21) {
+              m -= 1;
+              if (m === 0) {
+                m = 12;
+                y -= 1;
+              }
+            }
+            newDates[index] = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          });
+          setFtiDates(newDates);
+          setFtiRows(r => days.length > r ? days.length : r);
+        }
+      } else {
+        setFtiDates({});
+      }
+    } else {
+      setFtiDates({});
+    }
+  }, [formData.jours_concernes, formData.mois_concerne, formData.categorie]);
+
+  // Auto-remplissage du Motif / Agent Remplacé à partir de la description
+  useEffect(() => {
+    if (formData.categorie === 'SUPPLEMENTAIRE' && formData.description) {
+      // On cherche tout ce qui suit "en lieu et place de l'agent "
+      const match = formData.description.match(/en lieu et place de l'agent\s+(.+)$/i);
+      if (match && match[1]) {
+        // On nettoie les éventuels points restants ou espaces
+        const extractedName = match[1].replace(/\./g, '').trim();
+        if (extractedName) {
+          setFtiMotifs(prev => {
+            const newMotifs = { ...prev };
+            
+            // Calculer le nombre de jours concernés (pour remplir le bon nombre de lignes)
+            const daysMatch = formData.jours_concernes ? formData.jours_concernes.match(/\b([1-9]|[12][0-9]|3[01])\b/g) : null;
+            const rowsToFill = daysMatch ? daysMatch.length : 1;
+            
+            // On l'applique uniquement sur les lignes pertinentes
+            for (let i = 0; i < rowsToFill; i++) {
+              newMotifs[i] = extractedName;
+            }
+            return newMotifs;
+          });
+        }
+      }
+    }
+  }, [formData.description, formData.categorie, formData.jours_concernes]);
 
   useEffect(() => {
     if (user) {
@@ -579,7 +932,7 @@ export default function ReclamationsView() {
 
   // Grouping by month
   const groupedReclamations = reclamations.reduce((acc, rec) => {
-    const mois = rec.mois_concerne || 'Inconnu';
+    const mois = rec.periode || rec.mois_concerne || 'Inconnu';
     if (!acc[mois]) acc[mois] = [];
     acc[mois].push(rec);
     return acc;
@@ -605,8 +958,60 @@ export default function ReclamationsView() {
     setCurrentView('form');
   };
 
+  const handleDeleteReclamation = (id) => {
+    // On ouvre simplement la modale personnalisée au lieu d'utiliser window.confirm
+    setReclamationToDelete(id);
+  };
+
+  const confirmDeleteReclamation = async () => {
+    try {
+      const res = await apiCall('delete_reclamation', { id: reclamationToDelete }, 'POST');
+      if (res.success) {
+        setReclamations(reclamations.filter(r => r.id !== reclamationToDelete));
+        setReclamationToDelete(null);
+      } else {
+        alert("Erreur: " + res.message);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la suppression");
+    }
+  };
+
   const handleOpenFormEdit = (rec) => {
-    setFormData(rec);
+    const recClone = { ...rec };
+    if (recClone.type_erreur === 'FTI_DATA') recClone.type_erreur = 'Supplementaire'; // Backward compatibility
+
+    setSelectedCategory(recClone.categorie || 'DIVERS');
+    if (recClone.categorie === 'SUPPLEMENTAIRE' && recClone.type_erreur_autre && recClone.type_erreur_autre.startsWith('{')) {
+      try {
+        const fti = JSON.parse(recClone.type_erreur_autre);
+        setFtiJourSuppl(fti.ftiJourSuppl || false);
+        setFtiJourNuit(fti.ftiJourNuit || false);
+        setFtiVisas(fti.ftiVisas || { rh: false, controle: false, terrain: false, direction: false });
+        if (fti.ftiDates) setFtiDates(fti.ftiDates);
+        if (fti.ftiMotifs) setFtiMotifs(fti.ftiMotifs);
+        if (fti.ftiSites) setFtiSites(fti.ftiSites);
+        if (fti.ftiTravailExtra) setFtiTravailExtra(fti.ftiTravailExtra);
+        if (fti.ftiRows) setFtiRows(fti.ftiRows);
+
+        if (recClone.type_erreur === 'Autre') {
+            recClone.type_erreur_autre = fti.originalAutre || '';
+        } else {
+            recClone.type_erreur_autre = ''; 
+        }
+      } catch (e) {}
+    } else {
+      setFtiJourSuppl(false);
+      setFtiJourNuit(false);
+      setFtiVisas({ rh: false, controle: false, terrain: false, direction: false });
+      setFtiDates({});
+      setFtiMotifs({});
+      setFtiSites({});
+      setFtiTravailExtra({});
+      setFtiRows(6);
+    }
+    setFormData(recClone);
     setWizardStep(1);
     setCurrentView('form');
   };
@@ -618,14 +1023,60 @@ export default function ReclamationsView() {
   };
 
   const handleOpenPreviewExisting = (rec) => {
-    setPreviewData(rec);
+    const recClone = { ...rec };
+    if (recClone.type_erreur === 'FTI_DATA') recClone.type_erreur = 'Supplementaire'; // Backward compatibility
+
+    if (recClone.categorie === 'SUPPLEMENTAIRE' && recClone.type_erreur_autre && recClone.type_erreur_autre.startsWith('{')) {
+      try {
+        const fti = JSON.parse(recClone.type_erreur_autre);
+        setFtiJourSuppl(fti.ftiJourSuppl || false);
+        setFtiJourNuit(fti.ftiJourNuit || false);
+        setFtiVisas(fti.ftiVisas || { rh: false, controle: false, terrain: false, direction: false });
+        if (fti.ftiDates) setFtiDates(fti.ftiDates);
+        if (fti.ftiMotifs) setFtiMotifs(fti.ftiMotifs);
+        if (fti.ftiSites) setFtiSites(fti.ftiSites);
+        if (fti.ftiTravailExtra) setFtiTravailExtra(fti.ftiTravailExtra);
+        if (fti.ftiRows) setFtiRows(fti.ftiRows);
+
+        if (recClone.type_erreur === 'Autre') {
+            recClone.type_erreur_autre = fti.originalAutre || '';
+        } else {
+            recClone.type_erreur_autre = ''; 
+        }
+      } catch (e) {}
+    } else {
+      setFtiJourSuppl(false);
+      setFtiJourNuit(false);
+      setFtiVisas({ rh: false, controle: false, terrain: false, direction: false });
+      setFtiDates({});
+      setFtiMotifs({});
+      setFtiSites({});
+      setFtiTravailExtra({});
+      setFtiRows(6);
+    }
+    setPreviewData(recClone);
     setShowPreview(true);
   };
 
   const saveReclamation = async (statut = 'Brouillon') => {
     setSubmitting(true);
     try {
-      const dataToSave = { ...formData, statut };
+      const dataToSave = { ...formData, statut, periode: selectedMonth };
+      
+      if (formData.categorie === 'SUPPLEMENTAIRE' || selectedCategory === 'SUPPLEMENTAIRE') {
+        dataToSave.type_erreur_autre = JSON.stringify({
+          ftiJourSuppl,
+          ftiJourNuit,
+          ftiVisas,
+          ftiDates,
+          ftiMotifs,
+          ftiSites,
+          ftiTravailExtra,
+          ftiRows,
+          originalAutre: formData.type_erreur === 'Autre' ? formData.type_erreur_autre : ''
+        });
+      }
+      
       const res = await apiCall('add_reclamation', dataToSave, 'POST');
       if (res.success) {
         setShowPreview(false);
@@ -646,7 +1097,49 @@ export default function ReclamationsView() {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setNewRadioImage(reader.result);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          // Pass 1: Calculate average luminance (background color)
+          let totalLuminance = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            totalLuminance += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          }
+          const avgLuminance = totalLuminance / (data.length / 4);
+          
+          // Threshold is slightly darker than the average (paper)
+          const threshold = avgLuminance - 25; 
+          
+          // Pass 2: Remove background pixels
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+            
+            if (luminance > threshold) {
+              data[i + 3] = 0; // Transparent
+            } else {
+              // Darken the ink slightly to improve contrast
+              data[i] = Math.max(0, r - 30);
+              data[i+1] = Math.max(0, g - 30);
+              data[i+2] = Math.max(0, b - 30);
+              data[i + 3] = 255;
+            }
+          }
+          
+          ctx.putImageData(imageData, 0, 0);
+          setNewRadioImage(canvas.toDataURL('image/png'));
+        };
+        img.src = reader.result;
       };
       reader.readAsDataURL(file);
     }
@@ -677,12 +1170,37 @@ export default function ReclamationsView() {
         setNewRadioFonction('');
         setNewRadioService('');
         await fetchSignatures();
-        alert('Signature sauvegardée avec succès !');
+        if (showToast) {
+          showToast('Signature sauvegardée avec succès !', 'success');
+        } else {
+          alert('Signature sauvegardée avec succès !');
+        }
       }
     } catch (e) {
-      alert('Erreur lors de la sauvegarde de la signature');
+      console.error(e);
+      if (showToast) {
+        showToast('Erreur lors de la sauvegarde de la signature', 'error');
+      } else {
+        alert('Erreur lors de la sauvegarde de la signature');
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEditOperator = (e, sig) => {
+    e.preventDefault();
+    setNewRadioCode(sig.code || '');
+    setNewRadioNom(sig.nom || '');
+    setNewRadioPrenom(sig.prenom || '');
+    setNewRadioMatricule(sig.matricule || '');
+    setNewRadioFonction(sig.fonction || '');
+    setNewRadioService(sig.service || '');
+    setNewRadioImage(sig.image || null);
+    if (showToast) {
+      showToast(`L'opérateur ${sig.code} a été chargé pour modification.`, 'success');
+    } else {
+      alert(`L'opérateur ${sig.code} a été chargé pour modification. Modifiez les champs et enregistrez.`);
     }
   };
 
@@ -761,7 +1279,7 @@ export default function ReclamationsView() {
       <AutocompleteDeclarantInput label="Nom" field="declarant_nom" placeholder="Ex: Martin" required formData={formData} onChange={handleFieldChange} radioSignatures={radioSignatures} />
       <InputClean label="Prénom(s)" field="declarant_prenom" placeholder="Ex: Paul" required formData={formData} onChange={handleFieldChange} />
       <InputClean label="Matricule" field="declarant_matricule" placeholder="Ex: 54321" formData={formData} onChange={handleFieldChange} />
-      <InputClean label="Fonction" field="declarant_fonction" placeholder="Ex: Chef d'équipe" required formData={formData} onChange={handleFieldChange} />
+      <InputClean label="Fonction" field="declarant_fonction" placeholder="Ex: Chef d'équipe" formData={formData} onChange={handleFieldChange} />
       <InputClean label="Service" field="declarant_service" placeholder="Ex: Comptabilité" formData={formData} onChange={handleFieldChange} />
     </div>
   );
@@ -1090,17 +1608,37 @@ export default function ReclamationsView() {
               <button 
                 title="Mois Suivant"
                 onClick={() => {
-                  const [y, m] = selectedPeriod.split('-');
-                  const d = new Date(y, parseInt(m) - 1, 1);
-                  d.setMonth(d.getMonth() + 1);
-                  setPendingNextPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-                  setShowNextMonthModal(true);
+                  const allPeriods = Object.keys(groupedReclamations).sort().reverse();
+                  const latestMonth = allPeriods.length > 0 ? allPeriods[0] : selectedPeriod;
+                  
+                  if (selectedPeriod < latestMonth) {
+                    // Navigate to the next chronological month
+                    const [y, m] = selectedPeriod.split('-');
+                    const d = new Date(y, parseInt(m) - 1, 1);
+                    d.setMonth(d.getMonth() + 1);
+                    setSelectedPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                  } else {
+                    // We are at the latest month, create a new one
+                    if (totalDraftsForPeriod > 0) {
+                      if (showToast) {
+                        showToast('Veuillez d\'abord publier toutes les fiches du mois en cours.', 'error');
+                      } else {
+                        alert('Veuillez d\'abord publier toutes les fiches du mois en cours.');
+                      }
+                      return;
+                    }
+                    const [y, m] = selectedPeriod.split('-');
+                    const d = new Date(y, parseInt(m) - 1, 1);
+                    d.setMonth(d.getMonth() + 1);
+                    setPendingNextPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                    setShowNextMonthModal(true);
+                  }
                 }}
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '5px' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
               >
-                Mois Suiv. &gt;
+                {selectedPeriod < (Object.keys(groupedReclamations).sort().reverse()[0] || selectedPeriod) ? 'Suivant >' : 'Mois Suiv. >'}
               </button>
             </div>
 
@@ -1638,7 +2176,7 @@ export default function ReclamationsView() {
                 }}
               >
                 <div style={{ background: 'white', flex: 1, padding: '15px', borderRadius: '5px', fontFamily: '"Times New Roman", serif', position: 'relative' }}>
-                  <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: '#f59e0b', color: 'white', fontSize: '0.7rem', fontWeight: 'bold', padding: '4px 8px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', zIndex: 10 }}>BROUILLON</div>
+                  <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: '#f59e0b', color: 'white', fontSize: '0.7rem', fontWeight: 'bold', padding: '4px 8px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', zIndex: 10, zIndex: 10 }}>BROUILLON</div>
                   {rec.numero_fiche && (
                     <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '5px' }}>N° {rec.numero_fiche}</div>
                   )}
@@ -1654,9 +2192,14 @@ export default function ReclamationsView() {
                   
                   <div style={{ display: 'flex', gap: '10px', marginTop: 'auto', borderTop: '1px dashed #cbd5e1', paddingTop: '10px' }}>
                     {canEdit && (
-                      <button onClick={() => handleOpenFormEdit(rec)} style={{ flex: 1, background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.85rem', fontWeight: 'bold', transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = 0.9} onMouseLeave={e => e.currentTarget.style.opacity = 1}>
-                        <Edit3 size={14} /> Modifier
-                      </button>
+                      <>
+                        <button onClick={() => handleOpenFormEdit(rec)} style={{ flex: 1, background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.85rem', fontWeight: 'bold', transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = 0.9} onMouseLeave={e => e.currentTarget.style.opacity = 1}>
+                          <Edit3 size={14} /> Modifier
+                        </button>
+                        <button onClick={() => handleDeleteReclamation(rec.id)} style={{ flex: 0.3, background: '#fee2e2', color: '#ef4444', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }} title="Supprimer la réclamation" onMouseEnter={e => e.currentTarget.style.background = '#fecaca'} onMouseLeave={e => e.currentTarget.style.background = '#fee2e2'}>
+                          <Trash2 size={16} />
+                        </button>
+                      </>
                     )}
                     <button onClick={() => handleOpenPreviewExisting(rec)} style={{ flex: 1, background: '#64748b', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.85rem', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#475569'} onMouseLeave={e => e.currentTarget.style.background = '#64748b'}>
                       <Eye size={14} /> Voir
@@ -1797,6 +2340,184 @@ export default function ReclamationsView() {
               </div>
             </div>
 
+            {/* ============ FICHE DE TRAVAIL INDIVIDUELLE (FTI) — JOUR SUPPLÉMENTAIRE ============ */}
+            {formData.categorie === 'SUPPLEMENTAIRE' && (
+              <div style={{ marginTop: '30px', background: 'rgba(15, 23, 42, 0.9)', border: '2px solid rgba(56, 189, 248, 0.4)', borderRadius: '20px', padding: '28px', boxShadow: '0 0 30px rgba(56, 189, 248, 0.08)' }}>
+                {/* En-tête FTI */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '1px solid rgba(56,189,248,0.2)', paddingBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ background: 'rgba(56,189,248,0.15)', borderRadius: '12px', padding: '10px' }}>
+                      <FileText size={24} color="#38bdf8" />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, color: 'white', fontSize: '1.05rem', fontWeight: 700, letterSpacing: '0.5px' }}>FICHE DE TRAVAIL INDIVIDUELLE (FTI)</h3>
+                      <p style={{ margin: '2px 0 0 0', color: '#38bdf8', fontSize: '0.85rem', fontWeight: 600 }}>Jour Supplémentaire &amp; Journalier</p>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.3)', borderRadius: '8px', padding: '4px 10px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>Code Fiche : SV07/2021</span>
+                    <p style={{ margin: '6px 0 0 0', color: '#64748b', fontSize: '0.72rem' }}>
+                      PC : <strong style={{ color: '#94a3b8' }}>01 72 49 49 13</strong> &nbsp;|&nbsp; Standard : <strong style={{ color: '#94a3b8' }}>01 40 59 46 33</strong>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Champs en-tête */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Nom de l'Agent</label>
+                    <input
+                      type="text"
+                      value={formData.agent_nom || ''}
+                      readOnly
+                      style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'white', color: '#1e293b', fontSize: '0.95rem', fontWeight: 600, cursor: 'default' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Mois concerné</label>
+                    <input
+                      type="text"
+                      value={formData.mois_concerne || ''}
+                      readOnly
+                      style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'white', color: '#1e293b', fontSize: '0.95rem', fontWeight: 600, cursor: 'default' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Page N°</label>
+                    <input
+                      type="text"
+                      defaultValue="1 / 1"
+                      style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', background: 'white', color: '#1e293b', fontSize: '0.95rem' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Tableau FTI */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px' }}>
+                  <button type="button" onClick={() => setFtiRows(r => Math.max(1, r - 1))} style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(239, 68, 68, 0.2)'} onMouseLeave={e => e.currentTarget.style.background='rgba(239, 68, 68, 0.1)'} title="Supprimer une ligne">
+                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>-</span>
+                  </button>
+                  <button type="button" onClick={() => setFtiRows(r => r + 1)} style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(16, 185, 129, 0.2)'} onMouseLeave={e => e.currentTarget.style.background='rgba(16, 185, 129, 0.1)'} title="Ajouter une ligne">
+                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>+</span>
+                  </button>
+                </div>
+                <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid rgba(56,189,248,0.2)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(56,189,248,0.12)' }}>
+                        {[
+                          { label: 'N°', width: '40px' },
+                          { label: 'Date', width: '110px' },
+                          { label: 'Site', width: '160px' },
+                          { label: 'Agent Remplacé / Motif', width: '' },
+                          { label: 'Travail Extra', width: '90px' },
+                          { label: 'Jour Suppl.', width: '90px' },
+                          { label: 'Jour Nuit', width: '90px' },
+                          { label: 'VISA Service Pointage ou Superviseur', width: '150px' },
+                        ].map((col, i) => (
+                          <th key={i} style={{ padding: '10px 12px', textAlign: 'center', color: '#38bdf8', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '1px solid rgba(56,189,248,0.25)', borderRight: i < 7 ? '1px solid rgba(56,189,248,0.15)' : 'none', whiteSpace: 'nowrap', width: col.width || 'auto' }}>
+                            {col.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: ftiRows }, (_, i) => i + 1).map((n) => (
+                        <tr key={n} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.15s' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.04)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <td style={{ padding: '10px', textAlign: 'center', color: '#94a3b8', fontWeight: 700, borderRight: '1px solid rgba(56,189,248,0.1)', fontSize: '0.8rem' }}>{n}</td>
+                          {['date', 'site', 'motif', 'travailExtra', 'jourSuppl', 'jourNuit', 'visa'].map((field) => (
+                            <td key={field} style={{ padding: '4px 6px', borderRight: field !== 'visa' ? '1px solid rgba(56,189,248,0.1)' : 'none', verticalAlign: 'middle', textAlign: (field === 'jourSuppl' || field === 'jourNuit' || field === 'visa') ? 'center' : 'left' }}>
+                              {(field === 'jourSuppl' || field === 'jourNuit') ? (
+                                <input 
+                                  type="checkbox" 
+                                  checked={field === 'jourSuppl' ? !!ftiJourSuppl[n - 1] : !!ftiJourNuit[n - 1]}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    if (field === 'jourSuppl') {
+                                      setFtiJourSuppl(prev => ({ ...prev, [n - 1]: checked }));
+                                    } else {
+                                      setFtiJourNuit(prev => ({ ...prev, [n - 1]: checked }));
+                                    }
+                                  }}
+                                  style={{ width: '20px', height: '20px', cursor: 'pointer', margin: '0 auto', display: 'block', accentColor: '#38bdf8' }} 
+                                />
+                              ) : field === 'visa' ? (
+                                ftiVisas[n - 1] ? (
+                                  <div onClick={() => setActiveVisaRow(n - 1)} style={{ cursor: 'pointer', display: 'inline-block', background: 'white', padding: '2px', borderRadius: '6px', height: '36px', transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = 0.8} onMouseLeave={e => e.currentTarget.style.opacity = 1} title="Modifier le VISA">
+                                    <img src={ftiVisas[n - 1].image} alt="Visa" style={{ height: '100%', objectFit: 'contain' }} />
+                                  </div>
+                                ) : (
+                                  <button type="button" onClick={() => setActiveVisaRow(n - 1)} style={{ background: 'rgba(255,255,255,0.05)', color: '#38bdf8', border: '1px dashed rgba(56,189,248,0.4)', padding: '6px 10px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s', width: '100%' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.1)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}>
+                                    Apposer VISA
+                                  </button>
+                                )
+                              ) : (
+                                <input
+                                  type={field === 'date' ? 'date' : 'text'}
+                                  value={
+                                    field === 'date' ? (ftiDates[n - 1] || '') :
+                                    field === 'motif' ? (ftiMotifs[n - 1] || '') :
+                                    field === 'site' ? (ftiSites[n - 1] || '') :
+                                    field === 'travailExtra' ? (ftiTravailExtra[n - 1] || '') :
+                                    undefined
+                                  }
+                                  onChange={
+                                    field === 'date' ? (e) => setFtiDates(prev => ({ ...prev, [n - 1]: e.target.value })) :
+                                    field === 'motif' ? (e) => setFtiMotifs(prev => ({ ...prev, [n - 1]: e.target.value })) :
+                                    field === 'site' ? (e) => setFtiSites(prev => ({ ...prev, [n - 1]: e.target.value })) :
+                                    field === 'travailExtra' ? (e) => setFtiTravailExtra(prev => ({ ...prev, [n - 1]: e.target.value })) :
+                                    undefined
+                                  }
+                                  style={{ width: '100%', padding: '7px 10px', background: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '7px', color: '#1e293b', fontSize: '0.82rem', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
+                                  onFocus={e => e.target.style.borderColor = '#38bdf8'}
+                                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                                />
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Fait à Abidjan le */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '18px' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '0.88rem', whiteSpace: 'nowrap' }}>Fait à Abidjan le,</span>
+                  <input
+                    type="date"
+                    defaultValue={new Date().toISOString().slice(0, 10)}
+                    style={{ flex: '0 0 180px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'white', color: '#1e293b', fontSize: '0.9rem', outline: 'none' }}
+                    onFocus={e => e.target.style.borderColor = '#38bdf8'}
+                    onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                  />
+                </div>
+
+                {/* Signatures */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginTop: '22px' }}>
+                  {['Agent', 'Chef des Opérations', 'Chef Comptable', 'Directeur Général'].map((sigLabel) => (
+                    <div key={sigLabel} style={{ textAlign: 'center' }}>
+                      <div style={{ height: '60px', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#475569', fontSize: '0.7rem', fontStyle: 'italic' }}>Signature</span>
+                      </div>
+                      <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.3px' }}>{sigLabel}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Note de bas de page */}
+                <div style={{ marginTop: '20px', padding: '12px 16px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <AlertTriangle size={15} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.75rem', lineHeight: 1.6 }}>
+                    <strong style={{ color: '#f59e0b' }}>NOTE :</strong> L'agent journalier ou en jour supplémentaire est responsable du suivi de sa fiche de jour de travail. Elle doit être déposée <strong style={{ color: 'white' }}>AU PLUS TARD le 20 du mois</strong> et jointe à une fiche de réclamation pour validation. Passée ce délai, les jours seront pris en compte le mois suivant. L'agent <strong style={{ color: 'white' }}>DOIT</strong> garder une copie jusqu'au paiement de ses jours.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Boutons d'action finaux */}
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', marginTop: '20px', marginBottom: '40px', background: 'rgba(0,0,0,0.3)', padding: '20px', borderRadius: '16px', border: '3px solid white' }}>
               <button type="button" onClick={() => saveReclamation('Brouillon')} disabled={submitting} style={{ background: 'transparent', color: '#38bdf8', border: '2px solid #38bdf8', padding: '16px 32px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 'bold', cursor: submitting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.background = 'rgba(56, 189, 248, 0.15)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(56, 189, 248, 0.3)'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
@@ -1830,6 +2551,23 @@ export default function ReclamationsView() {
               <button onClick={() => { setFormLayout('cards'); setShowSettings(false); }} style={{ background: 'white', color: '#1e293b', padding: '20px', borderRadius: '16px', textAlign: 'left', border: formLayout === 'cards' ? '2px solid #38bdf8' : 'none', transition: 'all 0.2s ease', cursor: 'pointer' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 10px 20px rgba(56, 189, 248, 0.2)'; e.currentTarget.style.background = '#f0f9ff'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.background = 'white'; }}>Cartes (Premium)</button>
               <button onClick={() => { setFormLayout('wizard'); setShowSettings(false); }} style={{ background: 'white', color: '#1e293b', padding: '20px', borderRadius: '16px', textAlign: 'left', border: formLayout === 'wizard' ? '2px solid #38bdf8' : 'none', transition: 'all 0.2s ease', cursor: 'pointer' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 10px 20px rgba(56, 189, 248, 0.2)'; e.currentTarget.style.background = '#f0f9ff'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.background = 'white'; }}>Multi-étapes</button>
               <button onClick={() => { setFormLayout('split'); setShowSettings(false); }} style={{ background: 'white', color: '#1e293b', padding: '20px', borderRadius: '16px', textAlign: 'left', border: formLayout === 'split' ? '2px solid #38bdf8' : 'none', transition: 'all 0.2s ease', cursor: 'pointer' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 10px 20px rgba(56, 189, 248, 0.2)'; e.currentTarget.style.background = '#f0f9ff'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.background = 'white'; }}>Split Screen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SUPPRESSION */}
+      {reclamationToDelete && (
+        <div className="fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
+          <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '90%', maxWidth: '400px', padding: '30px', position: 'relative', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', textAlign: 'center' }}>
+            <div style={{ background: 'rgba(239, 68, 68, 0.2)', padding: '15px', borderRadius: '50%', display: 'inline-block', marginBottom: '20px' }}>
+              <Trash2 size={36} color="#ef4444" />
+            </div>
+            <h2 style={{ margin: '0 0 10px 0', fontSize: '1.4rem', color: 'white' }}>Confirmer la suppression</h2>
+            <p style={{ color: '#94a3b8', marginBottom: '30px', fontSize: '0.95rem' }}>Êtes-vous sûr de vouloir supprimer cette fiche ? Cette action est irréversible.</p>
+            <div style={{ display: 'flex', gap: '15px' }}>
+              <button onClick={() => setReclamationToDelete(null)} style={{ flex: 1, padding: '12px', background: '#334155', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#475569'} onMouseLeave={e => e.currentTarget.style.background = '#334155'}>Annuler</button>
+              <button onClick={confirmDeleteReclamation} style={{ flex: 1, padding: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#dc2626'} onMouseLeave={e => e.currentTarget.style.background = '#ef4444'}>Supprimer</button>
             </div>
           </div>
         </div>
@@ -1880,14 +2618,24 @@ export default function ReclamationsView() {
 
       {/* MODAL APERCU PDF */}
       {showPreview && previewData && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, background: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', padding: '40px 20px' }}>
-          <div style={{ width: '100%', maxWidth: '800px', display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div className="pdf-modal-container" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, background: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', padding: '40px 20px' }}>
+          <div className="pdf-modal-header" style={{ width: '100%', maxWidth: '800px', display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
             <h2 style={{ color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}><FileText size={24} /> Aperçu de la fiche</h2>
-            <button onClick={() => setShowPreview(false)} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', transition: 'all 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.transform = 'scale(1.2) rotate(90deg)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'white'; e.currentTarget.style.transform = 'scale(1) rotate(0deg)'; }}><X size={32} /></button>
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+              <button 
+                onClick={handleDownloadPDF} 
+                disabled={isDownloadingPdf}
+                style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: isDownloadingPdf ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}
+              >
+                {isDownloadingPdf ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />} 
+                {isDownloadingPdf ? 'Génération...' : 'Télécharger PDF'}
+              </button>
+              <button onClick={() => setShowPreview(false)} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', transition: 'all 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.transform = 'scale(1.2) rotate(90deg)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'white'; e.currentTarget.style.transform = 'scale(1) rotate(0deg)'; }}><X size={32} /></button>
+            </div>
           </div>
-          <PdfPreview data={previewData} />
+          <PdfPreview data={previewData} ftiDates={ftiDates} ftiMotifs={ftiMotifs} ftiSites={ftiSites} ftiTravailExtra={ftiTravailExtra} ftiVisas={ftiVisas} ftiJourSuppl={ftiJourSuppl} ftiJourNuit={ftiJourNuit} ftiRows={ftiRows} />
           {/* Note: Il n'y a plus de bouton d'envoi ici. C'est juste un aperçu comme demandé. */}
-          <div style={{ marginTop: '20px' }}>
+          <div className="pdf-modal-footer" style={{ marginTop: '20px' }}>
             <button onClick={() => setShowPreview(false)} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', padding: '12px 30px', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>Fermer l'aperçu</button>
           </div>
         </div>
@@ -2016,16 +2764,29 @@ export default function ReclamationsView() {
                 {radioSignatures.length === 0 ? (
                   <p style={{ color: '#94a3b8' }}>Aucune signature enregistrée.</p>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                    {radioSignatures.map(sig => (
-                      <div key={sig.code} style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ color: 'white', fontWeight: 'bold', marginBottom: '10px' }}>{sig.code}</span>
-                        <div style={{ background: 'white', padding: '5px', borderRadius: '8px', width: '100%' }}>
-                          <img src={sig.image} alt={`Signature ${sig.code}`} style={{ width: '100%', height: 'auto', maxHeight: '60px', objectFit: 'contain' }} />
+                  <>
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '15px' }}>💡 Astuce : Faites un clic droit sur un opérateur pour le modifier.</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                      {radioSignatures.map(sig => (
+                        <div 
+                          key={sig.code} 
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, radio_code: sig.code, radio_signature: sig.image }));
+                            setShowSignatureModal(false);
+                          }}
+                          onContextMenu={(e) => handleEditOperator(e, sig)}
+                          style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '15px', border: '2px solid transparent', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center' }}
+                          onMouseEnter={e => e.currentTarget.style.border = '2px solid rgba(255,255,255,0.2)'}
+                          onMouseLeave={e => e.currentTarget.style.border = '2px solid transparent'}
+                        >
+                          <h4 style={{ color: 'white', margin: '0 0 10px 0', fontSize: '0.95rem' }}>{sig.code}</h4>
+                          <div style={{ background: 'white', padding: '10px', borderRadius: '8px' }}>
+                            <img src={sig.image} alt={sig.code} style={{ width: '100%', maxHeight: '60px', objectFit: 'contain' }} />
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -2061,6 +2822,48 @@ export default function ReclamationsView() {
               ))}
               {radioSignatures.length === 0 && <p style={{ color: '#ef4444' }}>Aucune signature configurée.</p>}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SELECTION SIGNATURE POUR LIGNE FTI */}
+      {activeVisaRow !== null && (
+        <div className="fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
+          <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '90%', maxWidth: '400px', padding: '40px', position: 'relative' }}>
+            <button onClick={() => setActiveVisaRow(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}><X size={28} /></button>
+            <h2 style={{ color: 'white', margin: '0 0 20px 0' }}>VISA Ligne {activeVisaRow + 1}</h2>
+            <p style={{ color: '#94a3b8', marginBottom: '20px' }}>Sélectionnez le signataire :</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '300px', overflowY: 'auto' }}>
+              {radioSignatures.map(sig => (
+                <button 
+                  key={sig.code} 
+                  onClick={() => {
+                    setFtiVisas(prev => ({ ...prev, [activeVisaRow]: { code: sig.code, image: sig.image } }));
+                    setActiveVisaRow(null);
+                  }}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '15px', borderRadius: '12px', color: 'white', cursor: 'pointer', textAlign: 'left', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.1)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                >
+                  {sig.code}
+                  <div style={{ background: 'white', padding: '2px', borderRadius: '4px', height: '30px' }}>
+                     <img src={sig.image} style={{ height: '100%' }} alt="sig" />
+                  </div>
+                </button>
+              ))}
+              {radioSignatures.length === 0 && <p style={{ color: '#ef4444' }}>Aucune signature configurée.</p>}
+            </div>
+            <button onClick={() => {
+              setFtiVisas(prev => {
+                const next = { ...prev };
+                delete next[activeVisaRow];
+                return next;
+              });
+              setActiveVisaRow(null);
+            }} style={{ marginTop: '20px', width: '100%', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '10px', borderRadius: '10px', cursor: 'pointer' }}>
+              Retirer le VISA
+            </button>
           </div>
         </div>
       )}

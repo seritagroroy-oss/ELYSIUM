@@ -3,7 +3,7 @@ import { apiCall } from '../api';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../AuthContext';
-import { FileText, CheckCircle, Send, Loader2, Calendar, FileWarning, X, Eye, Settings, LayoutTemplate, Layers, Columns, Grid, FolderOpen, ArrowLeft, Edit3, Share2, Plus, Users, FilePlus, Search, Archive, Clock, FileX, UserCog, PenTool, Upload, AlertTriangle } from 'lucide-react';
+import { FileText, CheckCircle, Send, Loader2, Calendar, FileWarning, X, Eye, Settings, LayoutTemplate, Layers, Columns, Grid, FolderOpen, ArrowLeft, Edit3, Share2, Plus, Users, FilePlus, Search, Archive, Clock, FileX, UserCog, PenTool, Upload, AlertTriangle, Trash2, Download } from 'lucide-react';
 import AutocompleteAgentInput from './AutocompleteAgentInput';
 import AutocompleteDeclarantInput from './AutocompleteDeclarantInput';
 
@@ -15,7 +15,7 @@ const RECLAMATION_CATEGORIES = [
 ];
 
 // Composant d'aperçu visuel façon "FICHE PAPIER PDF"
-const PdfPreview = ({ data, ftiDates, ftiMotifs, ftiSites, ftiTravailExtra, ftiVisas, ftiJourSuppl, ftiJourNuit, ftiRows }) => {
+const PdfPreview = ({ data, pdfFont, pdfColor, ftiDates, ftiMotifs, ftiSites, ftiTravailExtra, ftiVisas, ftiJourSuppl, ftiJourNuit, ftiRows }) => {
   const pageStyle = {
     background: 'white', color: 'black', width: '100%', maxWidth: '800px', margin: '0 auto 30px auto',
     padding: '40px', fontFamily: '"Times New Roman", Times, serif', fontSize: '14px', lineHeight: '1.5',
@@ -42,11 +42,25 @@ const PdfPreview = ({ data, ftiDates, ftiMotifs, ftiSites, ftiTravailExtra, ftiV
         <div style={{ textAlign: 'right', fontSize: '12px' }}>
           <div>Crée-le : 31/12/2018</div>
           <div>Révisée le 16/06/2019</div>
-          <div style={{ marginTop: '10px' }}>N° .........................</div>
+          <div style={{ marginTop: '10px' }}>
+            N° {data.numero_fiche ? (
+              <span style={{ 
+                fontFamily: pdfFont || "'Caveat', cursive", 
+                color: pdfColor || '#ef4444', 
+                fontSize: '22px', 
+                fontWeight: 'bold',
+                display: 'inline-block',
+                marginLeft: '10px'
+              }}>
+                {data.numero_fiche}
+              </span>
+            ) : '.........................'}
+          </div>
         </div>
       </div>
 
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Dancing+Script:wght@400..700&family=Permanent+Marker&family=Shadows+Into+Light&display=swap');
         .pdf-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
         .pdf-table th, .pdf-table td { border: 1px solid black; padding: 6px 8px; text-align: left; }
         .pdf-section-title { font-weight: bold; font-style: italic; margin-bottom: 5px; text-decoration: underline; }
@@ -382,6 +396,112 @@ const InputClean = ({ label, type="text", field, required=false, placeholder="",
   </div>
 );
 
+const FONTS_OPTIONS = [
+  // Classiques / Systèmes (Informatique)
+  { label: 'Times New Roman (Standard)', value: '"Times New Roman", Times, serif' },
+  { label: 'Arial (Classique sans-serif)', value: 'Arial, sans-serif' },
+  { label: 'Courier New (Machine à écrire)', value: '"Courier New", Courier, monospace' },
+  { label: 'Georgia (Élégant)', value: 'Georgia, serif' },
+  { label: 'Verdana (Lisible)', value: 'Verdana, sans-serif' },
+  { label: 'Garamond (Livre ancien)', value: 'Garamond, serif' },
+  { label: 'Trebuchet MS (Moderne)', value: '"Trebuchet MS", sans-serif' },
+  { label: 'Comic Sans MS (Décontracté)', value: '"Comic Sans MS", cursive' },
+  { label: 'Impact (Gras)', value: 'Impact, sans-serif' },
+  
+  // Google Fonts (Manuscrites / Humaines)
+  { label: 'Caveat (Stylo à bille fin)', value: "'Caveat', cursive" },
+  { label: 'Dancing Script (Plume cursive)', value: "'Dancing Script', cursive" },
+  { label: 'Shadows Into Light (Feutre fin)', value: "'Shadows Into Light', cursive" },
+  { label: 'Permanent Marker (Marqueur épais)', value: "'Permanent Marker', cursive" },
+  { label: 'Pacifico (Épaisse américaine)', value: "'Pacifico', cursive" },
+  { label: 'Amatic SC (Mince et haute)', value: "'Amatic SC', cursive" },
+  { label: 'Indie Flower (Manuscrit détendu)', value: "'Indie Flower', cursive" },
+  { label: 'Satisfy (Cursive penchée)', value: "'Satisfy', cursive" },
+  { label: 'Great Vibes (Très calligraphique)', value: "'Great Vibes', cursive" },
+  { label: 'Sacramento (Fine et fluide)', value: "'Sacramento', cursive" },
+  { label: 'Yellowtail (Calligraphie vintage)', value: "'Yellowtail', cursive" },
+  { label: 'Kaushan Script (Pinceau expressif)', value: "'Kaushan Script', cursive" },
+  { label: 'Courgette (Arrondie et joyeuse)', value: "'Courgette', cursive" },
+  { label: 'Cookie (Décorative classique)', value: "'Cookie', cursive" },
+  { label: 'Homemade Apple (Écriture rapide)', value: "'Homemade Apple', cursive" },
+  { label: 'Nothing You Could Do (Notes griffonnées)', value: "'Nothing You Could Do', cursive" },
+  { label: 'Reenie Beanie (Feutre rapide)', value: "'Reenie Beanie', cursive" },
+  { label: 'Just Another Hand (Manuscrit très serré)', value: "'Just Another Hand', cursive" },
+  { label: 'Rock Salt (Feutre usé)', value: "'Rock Salt', cursive" },
+  { label: 'Cedarville Cursive (Écriture de docteur)', value: "'Cedarville Cursive', cursive" },
+  { label: 'La Belle Aurore (Cursive fine)', value: "'La Belle Aurore', cursive" },
+  { label: 'Allura (Invitation mariage)', value: "'Allura', cursive" },
+  { label: 'Tangerine (Calligraphie géante)', value: "'Tangerine', cursive" },
+  { label: 'Bad Script (Maladroite)', value: "'Bad Script', cursive" },
+  { label: 'Covered By Your Grace (Notes d\'étudiant)', value: "'Covered By Your Grace', cursive" },
+  { label: 'Gochi Hand (Bande dessinée adolescente)', value: "'Gochi Hand', cursive" },
+  { label: 'Patrick Hand (Lettrage BD clair)', value: "'Patrick Hand', cursive" },
+  { label: 'Handlee (Lettres séparées fluides)', value: "'Handlee', cursive" },
+  { label: 'Neucha (Original et lisible)', value: "'Neucha', cursive" },
+  { label: 'Qwigley (Signature complexe)', value: "'Qwigley', cursive" },
+  { label: 'Over the Rainbow (Écriture joyeuse)', value: "'Over the Rainbow', cursive" },
+  { label: 'Waiting for the Sunrise (Fine et ronde)', value: "'Waiting for the Sunrise', cursive" },
+  { label: 'The Girl Next Door (Manuscrit féminin)', value: "'The Girl Next Door', cursive" },
+  { label: 'Swanky and Moo Moo (Grandes boucles)', value: "'Swanky and Moo Moo', cursive" },
+  { label: 'Schoolbell (Écriture d\'école)', value: "'Schoolbell', cursive" },
+  { label: 'Coming Soon (Feutre régulier)', value: "'Coming Soon', cursive" },
+  { label: 'Delius (Cursive droite)', value: "'Delius', cursive" },
+  { label: 'Meddon (Plume hachurée)', value: "'Meddon', cursive" },
+  { label: 'League Script (Cursive des années 20)', value: "'League Script', cursive" },
+  { label: 'Mr Dafoe (Signature vintage)', value: "'Mr Dafoe', cursive" },
+  { label: 'Marck Script (Plume russe élégante)', value: "'Marck Script', cursive" },
+  { label: 'Alex Brush (Plume pointue)', value: "'Alex Brush', cursive" },
+  { label: 'Rouge Script (Douce et chic)', value: "'Rouge Script', cursive" },
+  { label: 'Petit Formal Script (Strict et chic)', value: "'Petit Formal Script', cursive" },
+  { label: 'Arizonia (Signatures gracieuses)', value: "'Arizonia', cursive" },
+  { label: 'Berkshire Swash (Majuscules ornées)', value: "'Berkshire Swash', cursive" },
+  { label: 'Leckerli One (Grosse boucle brush)', value: "'Leckerli One', cursive" },
+  { label: 'Norican (Brush script)', value: "'Norican', cursive" },
+  { label: 'Oleo Script (Gras et rond)', value: "'Oleo Script', cursive" },
+  { label: 'Parisienne (Léger et classique)', value: "'Parisienne', cursive" },
+  { label: 'Rochester (Art déco manuscrit)', value: "'Rochester', cursive" },
+  { label: 'Kristi (Tracé rapide)', value: "'Kristi', cursive" },
+  { label: 'Condiment (Très serré gras)', value: "'Condiment', cursive" },
+  { label: 'Herr Von Muellerhoff (Calligraphie bavaroise)', value: "'Herr Von Muellerhoff', cursive" },
+  { label: 'Euphoria Script (Informel élégant)', value: "'Euphoria Script', cursive" },
+  { label: 'Aguafina Script (Svelte)', value: "'Aguafina Script', cursive" },
+  { label: 'Italianno (Fin et délicat)', value: "'Italianno', cursive" },
+  { label: 'Loved by the King (Manuscrit masculin)', value: "'Loved by the King', cursive" },
+  
+  // Google Fonts (Informatique/Technique)
+  { label: 'Roboto (Digital Android)', value: "'Roboto', sans-serif" },
+  { label: 'Open Sans (Internet classique)', value: "'Open Sans', sans-serif" },
+  { label: 'Inter (UI moderne)', value: "'Inter', sans-serif" },
+  { label: 'Montserrat (Géométrique)', value: "'Montserrat', sans-serif" },
+  { label: 'Oswald (Titrage gras)', value: "'Oswald', sans-serif" },
+  { label: 'Raleway (Très fin élégant)', value: "'Raleway', sans-serif" },
+  { label: 'Poppins (Rond moderne)', value: "'Poppins', sans-serif" },
+  { label: 'Nunito (Très arrondi)', value: "'Nunito', sans-serif" },
+  { label: 'Playfair Display (Serif de luxe)', value: "'Playfair Display', serif" },
+  { label: 'Lora (Serif moderne textuel)', value: "'Lora', serif" },
+  { label: 'Merriweather (Serif épais web)', value: "'Merriweather', serif" },
+  { label: 'Fira Code (Codeur avec ligatures)', value: "'Fira Code', monospace" },
+  { label: 'Inconsolata (Terminal élégant)', value: "'Inconsolata', monospace" },
+  { label: 'Source Code Pro (Adobe Terminal)', value: "'Source Code Pro', monospace" },
+  { label: 'Space Mono (Futuriste rétro)', value: "'Space Mono', monospace" },
+  { label: 'VT323 (Terminal vintage 8-bit)', value: "'VT323', monospace" },
+  { label: 'Press Start 2P (Arcade 8-bit)', value: "'Press Start 2P', cursive" },
+  { label: 'Special Elite (Machine à écrire usée)', value: "'Special Elite', cursive" },
+  { label: 'Bebas Neue (Titrage ultra serré)', value: "'Bebas Neue', sans-serif" },
+  { label: 'Righteous (Rétro-futur)', value: "'Righteous', cursive" },
+  { label: 'Lobster (Épicerie US)', value: "'Lobster', cursive" },
+  { label: 'Abril Fatface (Pub des années 1900)', value: "'Abril Fatface', cursive" },
+  { label: 'Cinzel (Majuscules Romaines)', value: "'Cinzel', serif" },
+  { label: 'Josefin Sans (Art déco filaire)', value: "'Josefin Sans', sans-serif" },
+  { label: 'Amethysta (Serif mystique)', value: "'Amethysta', serif" },
+  { label: 'EB Garamond (Garamond open source)', value: "'EB Garamond', serif" },
+  { label: 'Creepster (Horreur)', value: "'Creepster', cursive" },
+  { label: 'Orbitron (S-F digitale)', value: "'Orbitron', sans-serif" },
+  { label: 'Teko (Technique indien serré)', value: "'Teko', sans-serif" },
+  { label: 'Audiowide (Course auto futurisite)', value: "'Audiowide', cursive" },
+  { label: 'Bungee (Lettrage de rue urbain)', value: "'Bungee', cursive" }
+];
+
 const SelectClean = ({ label, field, options, half=false, formData, onChange }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: half ? 'span 1' : 'span 2' }}>
     <label style={{ color: 'white', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</label>
@@ -515,7 +635,7 @@ const SignatureCanvas = ({ onSave }) => {
   );
 };
 
-export default function ReclamationsView() {
+export default function ReclamationsView({ showToast }) {
   const { user, hasPermission } = useAuth();
   
   // Droit d'édition exclusif
@@ -530,13 +650,14 @@ export default function ReclamationsView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [globalSearchTerm, setGlobalSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('actuel'); // 'actuel' | 'archives'
-  const [selectedPeriod, setSelectedPeriod] = useState(() => localStorage.getItem('pontage_period') || new Date().toISOString().slice(0, 7)); // ex: '2026-06'
+  const [selectedPeriod, setSelectedPeriod] = useState(() => localStorage.getItem('reclamation_period') || new Date().toISOString().slice(0, 7)); // ex: '2026-06'
   const [archivedMonthView, setArchivedMonthView] = useState(null); // month key being viewed in archives
   const [selectedCategory, setSelectedCategory] = useState(null);
   
   const [reclamations, setReclamations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isTransmittingCompta, setIsTransmittingCompta] = useState(false);
   const [companyServices, setCompanyServices] = useState([]);
   
   
@@ -548,12 +669,19 @@ export default function ReclamationsView() {
     const syncPeriodWithBackend = async () => {
       try {
         const res = await apiCall('get_published_periods', { scope: 'company' }, 'GET');
-        if (res && res.max_initialized_period) {
-          const currentStored = localStorage.getItem('pontage_period');
+        if (res && res.max_initialized_reclamation_period) {
+          const currentStored = localStorage.getItem('reclamation_period');
           // Si on n'a rien (reconnexion) ou si le backend est plus avancé que notre affichage local, on s'aligne
-          if (!currentStored || currentStored !== res.max_initialized_period) {
+          if (!currentStored || currentStored !== res.max_initialized_reclamation_period) {
+            setSelectedPeriod(res.max_initialized_reclamation_period);
+            localStorage.setItem('reclamation_period', res.max_initialized_reclamation_period);
+          }
+        } else if (res && res.max_initialized_period) {
+          // Fallback pour la toute première fois (rétrocompatibilité)
+          const currentStored = localStorage.getItem('reclamation_period');
+          if (!currentStored) {
             setSelectedPeriod(res.max_initialized_period);
-            localStorage.setItem('pontage_period', res.max_initialized_period);
+            localStorage.setItem('reclamation_period', res.max_initialized_period);
           }
         }
       } catch (e) {
@@ -572,6 +700,34 @@ export default function ReclamationsView() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [reclamationToDelete, setReclamationToDelete] = useState(null);
+  const [pdfFont, setPdfFont] = useState(() => { return localStorage.getItem('pdfFont') || "'Caveat', cursive"; });
+  const [pdfColor, setPdfColor] = useState(() => { return localStorage.getItem('pdfColor') || '#ef4444'; });
+
+  useEffect(() => {
+    localStorage.setItem('pdfFont', pdfFont);
+  }, [pdfFont]);
+
+  useEffect(() => {
+    localStorage.setItem('pdfColor', pdfColor);
+  }, [pdfColor]);
+
+  useEffect(() => {
+    if (pdfFont && pdfFont.includes("'")) {
+      const familyMatch = pdfFont.match(/'([^']+)'/);
+      if (familyMatch) {
+        const family = familyMatch[1].replace(/ /g, '+');
+        const linkId = `font-${family.toLowerCase().replace(/ /g, '-')}`;
+        if (!document.getElementById(linkId)) {
+          const link = document.createElement('link');
+          link.id = linkId;
+          link.href = `https://fonts.googleapis.com/css2?family=${family}&display=swap`;
+          link.rel = 'stylesheet';
+          document.head.appendChild(link);
+        }
+      }
+    }
+  }, [pdfFont]);
 
   const handleDownloadPDF = async () => {
     try {
@@ -642,7 +798,9 @@ export default function ReclamationsView() {
 
   // Nouveaux Modals pour Circuit de Validation
   const [showNumberingModal, setShowNumberingModal] = useState(false);
+  const [editingSingleReclamation, setEditingSingleReclamation] = useState(null);
   const [numberingStart, setNumberingStart] = useState('');
+  const [applyToAllCategories, setApplyToAllCategories] = useState(false);
   const [manualNumbers, setManualNumbers] = useState({});
   const [showCloseMonthModal, setShowCloseMonthModal] = useState(false);
   const [actionRec, setActionRec] = useState(null); // Pour Valider/Refuser une fiche
@@ -668,13 +826,15 @@ export default function ReclamationsView() {
         setSelectedPeriod(e.detail);
       }
     };
-    window.addEventListener('pontage_period_changed', handleGlobalPeriodChange);
-    return () => window.removeEventListener('pontage_period_changed', handleGlobalPeriodChange);
+    window.addEventListener('reclamation_period_changed', handleGlobalPeriodChange);
+    return () => window.removeEventListener('reclamation_period_changed', handleGlobalPeriodChange);
   }, [selectedPeriod]);
 
   useEffect(() => {
-    localStorage.setItem('pontage_period', selectedPeriod);
-    window.dispatchEvent(new CustomEvent('pontage_period_changed', { detail: selectedPeriod })); // informer les autres onglets
+    if (selectedPeriod) {
+      localStorage.setItem('reclamation_period', selectedPeriod);
+      window.dispatchEvent(new CustomEvent('reclamation_period_changed', { detail: selectedPeriod })); // informer les autres onglets
+    }
   }, [selectedPeriod]);
 
   // Mois Suivant Modal
@@ -874,8 +1034,8 @@ export default function ReclamationsView() {
   }, [user?.permissions?.reclamation_view, user?.permissions?.reclamation_edit, user?.role]);
 
   useEffect(() => {
-    localStorage.setItem('pontage_period', selectedPeriod);
-    window.dispatchEvent(new Event('pontage_period_changed')); // Optionnel, pour informer les autres onglets ou composants si besoin
+    localStorage.setItem('reclamation_period', selectedPeriod);
+    window.dispatchEvent(new Event('reclamation_period_changed')); // Optionnel, pour informer les autres onglets ou composants si besoin
   }, [selectedPeriod]);
 
   const fetchSignatures = async () => {
@@ -931,7 +1091,7 @@ export default function ReclamationsView() {
 
   // Grouping by month
   const groupedReclamations = reclamations.reduce((acc, rec) => {
-    const mois = rec.mois_concerne || 'Inconnu';
+    const mois = rec.periode || rec.mois_concerne || 'Inconnu';
     if (!acc[mois]) acc[mois] = [];
     acc[mois].push(rec);
     return acc;
@@ -944,6 +1104,23 @@ export default function ReclamationsView() {
     groupedReclamations[currentMonthStr] = [];
   }
 
+  useEffect(() => {
+    if (!loading && user) {
+      const userPermsRec = user?.permissions?.reclamation_view;
+      const isModifierNo = userPermsRec === 'modifier_no';
+      const isApprobateur = userPermsRec === 'approver_3';
+      
+      if (!canEdit && (isModifierNo || isApprobateur)) {
+        if (!groupedReclamations[selectedPeriod]) {
+          const availableMonths = Object.keys(groupedReclamations).sort().reverse();
+          if (availableMonths.length > 0) {
+            setSelectedPeriod(availableMonths[0]);
+          }
+        }
+      }
+    }
+  }, [loading, groupedReclamations, selectedPeriod, user, canEdit]);
+
   // --- Actions ---
   const handleOpenFormNew = () => {
     setFormData({ 
@@ -955,6 +1132,26 @@ export default function ReclamationsView() {
     });
     setWizardStep(1);
     setCurrentView('form');
+  };
+
+  const handleDeleteReclamation = (id) => {
+    // On ouvre simplement la modale personnalisée au lieu d'utiliser window.confirm
+    setReclamationToDelete(id);
+  };
+
+  const confirmDeleteReclamation = async () => {
+    try {
+      const res = await apiCall('delete_reclamation', { id: reclamationToDelete }, 'POST');
+      if (res.success) {
+        setReclamations(reclamations.filter(r => r.id !== reclamationToDelete));
+        setReclamationToDelete(null);
+      } else {
+        alert("Erreur: " + res.message);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la suppression");
+    }
   };
 
   const handleOpenFormEdit = (rec) => {
@@ -1040,7 +1237,7 @@ export default function ReclamationsView() {
   const saveReclamation = async (statut = 'Brouillon') => {
     setSubmitting(true);
     try {
-      const dataToSave = { ...formData, statut };
+      const dataToSave = { ...formData, statut, periode: selectedMonth };
       
       if (formData.categorie === 'SUPPLEMENTAIRE' || selectedCategory === 'SUPPLEMENTAIRE') {
         dataToSave.type_erreur_autre = JSON.stringify({
@@ -1076,7 +1273,49 @@ export default function ReclamationsView() {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setNewRadioImage(reader.result);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          // Pass 1: Calculate average luminance (background color)
+          let totalLuminance = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            totalLuminance += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          }
+          const avgLuminance = totalLuminance / (data.length / 4);
+          
+          // Threshold is slightly darker than the average (paper)
+          const threshold = avgLuminance - 25; 
+          
+          // Pass 2: Remove background pixels
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+            
+            if (luminance > threshold) {
+              data[i + 3] = 0; // Transparent
+            } else {
+              // Darken the ink slightly to improve contrast
+              data[i] = Math.max(0, r - 30);
+              data[i+1] = Math.max(0, g - 30);
+              data[i+2] = Math.max(0, b - 30);
+              data[i + 3] = 255;
+            }
+          }
+          
+          ctx.putImageData(imageData, 0, 0);
+          setNewRadioImage(canvas.toDataURL('image/png'));
+        };
+        img.src = reader.result;
       };
       reader.readAsDataURL(file);
     }
@@ -1107,12 +1346,37 @@ export default function ReclamationsView() {
         setNewRadioFonction('');
         setNewRadioService('');
         await fetchSignatures();
-        alert('Signature sauvegardée avec succès !');
+        if (showToast) {
+          showToast('Signature sauvegardée avec succès !', 'success');
+        } else {
+          alert('Signature sauvegardée avec succès !');
+        }
       }
     } catch (e) {
-      alert('Erreur lors de la sauvegarde de la signature');
+      console.error(e);
+      if (showToast) {
+        showToast('Erreur lors de la sauvegarde de la signature', 'error');
+      } else {
+        alert('Erreur lors de la sauvegarde de la signature');
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEditOperator = (e, sig) => {
+    e.preventDefault();
+    setNewRadioCode(sig.code || '');
+    setNewRadioNom(sig.nom || '');
+    setNewRadioPrenom(sig.prenom || '');
+    setNewRadioMatricule(sig.matricule || '');
+    setNewRadioFonction(sig.fonction || '');
+    setNewRadioService(sig.service || '');
+    setNewRadioImage(sig.image || null);
+    if (showToast) {
+      showToast(`L'opérateur ${sig.code} a été chargé pour modification.`, 'success');
+    } else {
+      alert(`L'opérateur ${sig.code} a été chargé pour modification. Modifiez les champs et enregistrez.`);
     }
   };
 
@@ -1191,7 +1455,7 @@ export default function ReclamationsView() {
       <AutocompleteDeclarantInput label="Nom" field="declarant_nom" placeholder="Ex: Martin" required formData={formData} onChange={handleFieldChange} radioSignatures={radioSignatures} />
       <InputClean label="Prénom(s)" field="declarant_prenom" placeholder="Ex: Paul" required formData={formData} onChange={handleFieldChange} />
       <InputClean label="Matricule" field="declarant_matricule" placeholder="Ex: 54321" formData={formData} onChange={handleFieldChange} />
-      <InputClean label="Fonction" field="declarant_fonction" placeholder="Ex: Chef d'équipe" required formData={formData} onChange={handleFieldChange} />
+      <InputClean label="Fonction" field="declarant_fonction" placeholder="Ex: Chef d'équipe" formData={formData} onChange={handleFieldChange} />
       <InputClean label="Service" field="declarant_service" placeholder="Ex: Comptabilité" formData={formData} onChange={handleFieldChange} />
     </div>
   );
@@ -1228,36 +1492,199 @@ export default function ReclamationsView() {
   );
 
 
+  const handleExportExcel = async () => {
+    try {
+      const monthToExport = activeTab === 'archives' && archivedMonthView ? archivedMonthView : selectedPeriod;
+      const recs = groupedReclamations[monthToExport] || [];
+      const allMonthExport = recs.filter(r => 
+        r.statut === 'En attente' || 
+        r.statut === 'Clôturé' || 
+        r.statut === 'Refusé' || 
+        r.statut_final === 'Refusée'
+      );
+      if (allMonthExport.length === 0) {
+        if (showToast) showToast("Aucune réclamation à exporter.", "warning");
+        return;
+      }
+
+      // Import ExcelJS & saveAs dynamiquement
+      const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+      const { saveAs } = await import('file-saver');
+
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('RECLAMATIONS', {
+        pageSetup: { paperSize: 9, orientation: 'landscape' }
+      });
+
+      sheet.columns = [
+        { key: 'numero', width: 15 },
+        { key: 'nom', width: 35 },
+        { key: 'site', width: 30 },
+        { key: 'statut', width: 20 },
+        { key: 'observations', width: 55 }
+      ];
+
+      const categoryOrder = { 'SUPPLEMENTAIRE': 1, 'ABSENCES': 2, 'STATUT': 3, 'DIVERS': 4 };
+      const categoriesLabel = {
+        'SUPPLEMENTAIRE': 'HEURES SUPPLEMENTAIRES',
+        'ABSENCES': 'JUSTIFICATIF D ABSENCES',
+        'STATUT': 'CHANGEMENTS DE STATUT',
+        'DIVERS': 'REMBOURSEMENT / RELIQUAT / DEDUCTION / SUSPENSION DE PRIME'
+      };
+
+      const sortedAllMonthPending = [...allMonthExport].sort((a, b) => {
+        const catA = categoryOrder[a.categorie || 'DIVERS'] || 99;
+        const catB = categoryOrder[b.categorie || 'DIVERS'] || 99;
+        if (catA !== catB) return catA - catB;
+        const numA = parseInt(a.numero_fiche, 10) || 0;
+        const numB = parseInt(b.numero_fiche, 10) || 0;
+        return numA - numB;
+      });
+
+      let currentCategory = null;
+
+      sortedAllMonthPending.forEach(r => {
+        const cat = r.categorie || 'DIVERS';
+        if (cat !== currentCategory) {
+          currentCategory = cat;
+          const monthText = formatMonthName(selectedPeriod).toUpperCase();
+          const titleText = `${categoriesLabel[cat]} DE ${monthText}`;
+          
+          const headerRow = sheet.addRow([titleText, '', '', '', '']);
+          sheet.mergeCells(`A${headerRow.number}:E${headerRow.number}`);
+          
+          headerRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; // Deep Blue
+          headerRow.getCell(1).font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 12 };
+          headerRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+          headerRow.height = 25;
+          
+          const subHeaderRow = sheet.addRow(['N° RECLAM', 'NOM & PRENOMS', 'SITE', 'STATUT', 'OBSERVATIONS']);
+          subHeaderRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+            cell.font = { bold: true };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            cell.border = {
+              top: { style: 'thin' }, left: { style: 'thin' },
+              bottom: { style: 'thin' }, right: { style: 'thin' }
+            };
+          });
+        }
+        
+        let observations = '';
+        const monthYearStr = formatMonthName(monthToExport).toUpperCase();
+        
+        if (cat === 'SUPPLEMENTAIRE') {
+           let extraText = '';
+           if (r.jours_concernes) {
+              extraText = ` LE ${r.jours_concernes}`;
+           } else if (r.description) {
+              try {
+                const desc = JSON.parse(r.description);
+                if (desc.ftiDates && Object.keys(desc.ftiDates).length > 0) {
+                   const dates = Object.values(desc.ftiDates).map(d => d.includes('-') ? (d.split('-')[2] || d) : d).join(',');
+                   if (dates) extraText = ` LE ${dates}`;
+                }
+              } catch(e) {}
+           }
+           observations = `SUPPLEMENTAIRE${extraText} ${monthYearStr}`;
+        } else if (cat === 'ABSENCES') {
+           let extraText = '';
+           if (r.description) {
+              try {
+                const desc = JSON.parse(r.description);
+                if (desc.ftiDates && Object.keys(desc.ftiDates).length > 0) {
+                   const dates = Object.values(desc.ftiDates).map(d => d.includes('-') ? (d.split('-')[2] || d) : d).join(',');
+                   if (dates) extraText = ` LE ${dates}`;
+                }
+              } catch(e) {}
+           }
+           observations = `JUSTIFICATIF D ABSENCE${extraText} ${monthYearStr} EN P.J.`;
+        } else if (cat === 'STATUT') {
+           observations = `PRIME DE ${r.agent_fonction || ''} ${monthYearStr}`;
+        } else {
+           observations = `${r.type_erreur || r.reclamation_categorie || ''} ${r.type_erreur_autre || ''} ${r.montant_estime ? r.montant_estime + ' FRANCS' : ''}`;
+        }
+        observations = observations.trim().toUpperCase();
+        
+        const row = sheet.addRow([
+          r.numero_fiche || '',
+          r.agent_nom || '',
+          r.agent_site || '',
+          r.agent_fonction || 'AGENT SIMPLE',
+          observations
+        ]);
+        
+        row.eachCell(cell => {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.border = {
+            top: { style: 'thin' }, left: { style: 'thin' },
+            bottom: { style: 'thin' }, right: { style: 'thin' }
+          };
+        });
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const fileName = `RECLAMATION DE ${formatMonthName(monthToExport).toUpperCase()}.xlsx`;
+      saveAs(new Blob([buffer]), fileName);
+
+      if (showToast) showToast("Fichier Excel généré avec succès.", "success");
+    } catch (e) {
+      console.error(e);
+      if (showToast) showToast("Erreur lors de la génération de l'Excel.", "error");
+    }
+  };
+
+
   const handleAssignNumbersAndForward = async () => {
     setSubmitting(true);
     try {
       // Préparer les numéros
-      const toNumber = groupedReclamations[selectedMonth].filter(r => r.statut === 'En attente');
-      let currentNo = numberingStart ? parseInt(numberingStart, 10) : null;
-      const updates = toNumber.map(r => {
-        let n = manualNumbers[r.id];
-        if (!n && currentNo) {
-          n = currentNo.toString();
-          currentNo++;
-        }
-        return { id: r.id, fields: { numero_fiche: n } };
+      const allMonthPending = groupedReclamations[selectedMonth]?.filter(r => r.statut === 'En attente') || [];
+      const currentCategoryPending = allMonthPending.filter(r => (r.categorie || 'DIVERS') === selectedCategory);
+      
+      const categoryOrder = { 'SUPPLEMENTAIRE': 1, 'ABSENCES': 2, 'STATUT': 3, 'DIVERS': 4 };
+      const sortedAllMonthPending = [...allMonthPending].sort((a, b) => {
+        const catA = categoryOrder[a.categorie || 'DIVERS'] || 99;
+        const catB = categoryOrder[b.categorie || 'DIVERS'] || 99;
+        return catA - catB;
       });
       
-      // Assigner les N°
-      await apiCall('batch_update_reclamations', { updates }, 'POST');
+      const toNumber = editingSingleReclamation 
+        ? [editingSingleReclamation] 
+        : (applyToAllCategories ? sortedAllMonthPending : currentCategoryPending);
+      let currentNo = numberingStart && !editingSingleReclamation ? parseInt(numberingStart, 10) : null;
+      const padLength = numberingStart ? numberingStart.length : 0;
+      let hasAssignedNumbers = false;
+      const updates = toNumber.map(r => {
+        let n = manualNumbers[r.id];
+        if (!n && currentNo !== null) {
+          n = currentNo.toString().padStart(padLength, '0');
+          currentNo++;
+        }
+        if (n) hasAssignedNumbers = true;
+        return { id: r.id, fields: { numero_fiche: n } };
+      }).filter(u => u.fields.numero_fiche);
       
-      // Publier au service suivant (Transmis)
-      const res = await apiCall('publish_reclamations', {
-        mois: selectedMonth,
-        services: selectedPublishServices,
-        from_status: 'En attente',
-        to_status: 'Transmis'
-      }, 'POST');
-
-      if (res.success) {
-        setShowNumberingModal(false);
-        fetchReclamations();
+      // Assigner les N°
+      if (updates.length > 0) {
+        await apiCall('batch_update_reclamations', { updates }, 'POST');
       }
+      
+      setShowNumberingModal(false);
+      setEditingSingleReclamation(null);
+      if (showToast) {
+        if (hasAssignedNumbers) {
+          showToast(
+            editingSingleReclamation 
+              ? 'Le numéro de fiche a été enregistré avec succès !' 
+              : 'Les numéros de fiche ont été enregistrés avec succès !', 
+            'success'
+          );
+        } else {
+          showToast('Paramètres d\'affichage enregistrés avec succès !', 'success');
+        }
+      }
+      fetchReclamations();
     } catch(e) {}
     setSubmitting(false);
   };
@@ -1271,21 +1698,33 @@ export default function ReclamationsView() {
       const refuseesIds = transmisRecs.filter(r => r.statut_final === 'Refusée').map(r => r.id);
       const valideesIds = transmisRecs.filter(r => r.statut_final !== 'Refusée').map(r => r.id);
 
-      // Passer les refusées en statut 'Refusé'
+      // Mise à jour optimiste pour débloquer l'interface 2 instantanément
+      setReclamations(prev => prev.map(p => {
+        if (refuseesIds.includes(p.id)) return { ...p, statut: 'Refusé' };
+        if (valideesIds.includes(p.id)) return { ...p, statut: 'Clôturé' };
+        return p;
+      }));
+
+      // Regrouper toutes les mises à jour en un seul appel
+      const allUpdates = [];
       if (refuseesIds.length > 0) {
-        await apiCall('batch_update_reclamations', {
-          updates: refuseesIds.map(id => ({ id, fields: { statut: 'Refusé' } }))
-        }, 'POST');
+        allUpdates.push(...refuseesIds.map(id => ({ id, fields: { statut: 'Refusé' } })));
       }
-      // Passer les validées en statut 'Clôturé'
       if (valideesIds.length > 0) {
-        await apiCall('batch_update_reclamations', {
-          updates: valideesIds.map(id => ({ id, fields: { statut: 'Clôturé' } }))
-        }, 'POST');
+        allUpdates.push(...valideesIds.map(id => ({ id, fields: { statut: 'Clôturé' } })));
       }
+
+      if (allUpdates.length > 0) {
+        await apiCall('batch_update_reclamations', { updates: allUpdates }, 'POST');
+      }
+
       setShowCloseMonthModal(false);
+      if (showToast) showToast('Le mois a été validé avec succès !', 'success');
       await fetchReclamations();
-    } catch(e) { console.error(e); }
+    } catch(e) { 
+      if (showToast) showToast('Erreur serveur lors de la validation', 'error');
+      console.error(e); 
+    }
     setSubmitting(false);
   };
 
@@ -1301,6 +1740,38 @@ export default function ReclamationsView() {
       setManualNumbers({});
     }
   }, [showNumberingModal]);
+
+  // Autocomplete manualNumbers based on numberingStart
+  useEffect(() => {
+    if (showNumberingModal && !editingSingleReclamation && numberingStart) {
+      const allMonthPending = groupedReclamations[selectedMonth]?.filter(r => r.statut === 'En attente') || [];
+      const currentCategoryPending = allMonthPending.filter(r => (r.categorie || 'DIVERS') === selectedCategory);
+      
+      const categoryOrder = { 'SUPPLEMENTAIRE': 1, 'ABSENCES': 2, 'STATUT': 3, 'DIVERS': 4 };
+      const sortedAllMonthPending = [...allMonthPending].sort((a, b) => {
+        const catA = categoryOrder[a.categorie || 'DIVERS'] || 99;
+        const catB = categoryOrder[b.categorie || 'DIVERS'] || 99;
+        return catA - catB;
+      });
+      
+      const listToRender = applyToAllCategories ? sortedAllMonthPending : currentCategoryPending;
+      
+      const startNo = parseInt(numberingStart, 10);
+      if (!isNaN(startNo)) {
+        let currentNo = startNo;
+        const padLength = numberingStart.length;
+        const newManuals = { ...manualNumbers };
+        
+        listToRender.forEach(r => {
+          newManuals[r.id] = currentNo.toString().padStart(padLength, '0');
+          currentNo++;
+        });
+        
+        setManualNumbers(newManuals);
+      }
+    }
+  }, [numberingStart, applyToAllCategories, showNumberingModal, selectedMonth, groupedReclamations, selectedCategory, editingSingleReclamation]);
+
 
   // Si on est en train de synchroniser la période avec le backend, on ne montre rien (évite le flash)
   if (isSyncingPeriod) {
@@ -1356,6 +1827,10 @@ export default function ReclamationsView() {
     
     // Pour Secrétariat, ils ont des fiches 'En attente'
     const secPending = isModifierNo ? recsForPeriod.filter(r => r.statut === 'En attente') : [];
+    
+    // Vérifier si le mois est clôturé (pour tout le monde)
+    const anyPendingGlobal = recsForPeriod.some(r => r.statut === 'Brouillon' || r.statut === 'En attente' || r.statut === 'Transmis');
+    const isUnlockedGlobal = !anyPendingGlobal && recsForPeriod.length > 0;
 
     const ModeTabs = () => (
       <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
@@ -1380,32 +1855,67 @@ export default function ReclamationsView() {
             <Share2 size={18} /> Publier les fiches ({totalDraftsForPeriod})
           </button>
         )}
+        {((isModifierNo && activeTab === 'actuel' && secPending.length > 0) || (activeTab === 'actuel' && isUnlockedGlobal) || (activeTab === 'archives' && archivedMonthView)) && (
+          <button 
+            onClick={handleExportExcel}
+            style={{ background: '#0284c7', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, fontSize: '1rem', boxShadow: '0 4px 15px rgba(2, 132, 199, 0.4)', minWidth: '180px', justifyContent: 'center', transition: 'all 0.3s ease' }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(2, 132, 199, 0.6)';
+              e.currentTarget.style.background = '#0369a1';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 15px rgba(2, 132, 199, 0.4)';
+              e.currentTarget.style.background = '#0284c7';
+            }}
+          >
+            <Download size={18} /> Télécharger le point
+          </button>
+        )}
         {isModifierNo && activeTab === 'actuel' && secPending.length > 0 && (
           <button 
+            disabled={isTransmittingCompta}
             onClick={async () => {
+              setIsTransmittingCompta(true);
               // Transmettre toutes les fiches "En attente" à la comptabilité
               const toPublishIds = secPending.map(r => r.id);
               try {
                 const updates = toPublishIds.map(id => ({ id, fields: { statut: 'Transmis', services_cibles: ['Comptabilité'] } }));
                 const res = await apiCall('batch_update_reclamations', { updates }, 'POST');
                 if (res.success) {
+                  if (showToast) showToast('Les fiches ont été transmises avec succès à la comptabilité !', 'success');
                   await fetchReclamations();
+                } else {
+                  if (showToast) showToast('Erreur: ' + res.message, 'error');
+                  else alert('Erreur: ' + res.message);
                 }
-              } catch(e) {}
+              } catch(e) {
+                if (showToast) showToast('Erreur serveur', 'error');
+              } finally {
+                setIsTransmittingCompta(false);
+              }
             }} 
-            style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, fontSize: '1rem', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)', minWidth: '180px', justifyContent: 'center', transition: 'all 0.3s ease' }}
+            style={{ background: isTransmittingCompta ? '#93c5fd' : '#3b82f6', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '8px', cursor: isTransmittingCompta ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, fontSize: '1rem', boxShadow: isTransmittingCompta ? 'none' : '0 4px 15px rgba(59, 130, 246, 0.4)', minWidth: '180px', justifyContent: 'center', transition: 'all 0.3s ease' }}
             onMouseEnter={e => {
+              if (isTransmittingCompta) return;
               e.currentTarget.style.transform = 'translateY(-2px)';
               e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.6)';
               e.currentTarget.style.background = '#2563eb';
             }}
             onMouseLeave={e => {
+              if (isTransmittingCompta) return;
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.4)';
               e.currentTarget.style.background = '#3b82f6';
             }}
           >
-            <Share2 size={18} /> Transmettre Comptabilité ({secPending.length})
+            {isTransmittingCompta ? (
+              <span style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            ) : (
+              <Share2 size={18} />
+            )}
+            {isTransmittingCompta ? 'Transmission...' : `Transmettre Comptabilité (${secPending.length})`}
           </button>
         )}
         {canEdit && (
@@ -1481,57 +1991,82 @@ export default function ReclamationsView() {
                 <div style={{ position: 'absolute', left: '14px', pointerEvents: 'none', color: '#a855f7', zIndex: 1 }}>
                   <Calendar size={16} />
                 </div>
-                <select
-                  value={selectedPeriod}
-                  onChange={e => setSelectedPeriod(e.target.value)}
+                <div
                   style={{
-                    appearance: 'none',
-                    WebkitAppearance: 'none',
                     background: 'linear-gradient(135deg, rgba(168,85,247,0.15) 0%, rgba(99,102,241,0.1) 100%)',
                     border: '1px solid rgba(168,85,247,0.4)',
                     borderRadius: '12px',
-                    padding: '10px 42px 10px 38px',
+                    padding: '10px 24px 10px 38px',
                     color: 'white',
                     fontWeight: '700',
                     fontSize: '0.95rem',
                     minWidth: '200px',
-                    cursor: 'pointer',
-                    outline: 'none',
+                    textAlign: 'center',
                     textTransform: 'capitalize',
                     boxShadow: '0 0 16px rgba(168,85,247,0.2)',
-                    transition: 'all 0.2s'
                   }}
-                  onFocus={e => { e.target.style.borderColor = 'rgba(168,85,247,0.8)'; e.target.style.boxShadow = '0 0 24px rgba(168,85,247,0.35)'; }}
-                  onBlur={e => { e.target.style.borderColor = 'rgba(168,85,247,0.4)'; e.target.style.boxShadow = '0 0 16px rgba(168,85,247,0.2)'; }}
                 >
-                  {getPeriodsList().map(p => (
-                    <option key={p.value} value={p.value} style={{ background: '#1e293b', color: 'white' }}>{p.label}</option>
-                  ))}
-                  {/* Ajouter dynamiquement le selectedPeriod au cas où il n'est pas dans getPeriodsList() */}
-                  {!getPeriodsList().find(p => p.value === selectedPeriod) && (
-                    <option value={selectedPeriod} style={{ background: '#1e293b', color: 'white' }}>{formatMonthName(selectedPeriod)}</option>
-                  )}
-                </select>
-                <div style={{ position: 'absolute', right: '14px', pointerEvents: 'none', color: '#a855f7' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  {formatMonthName(selectedPeriod)}
                 </div>
               </div>
 
-              <button 
-                title="Mois Suivant"
-                onClick={() => {
-                  const [y, m] = selectedPeriod.split('-');
-                  const d = new Date(y, parseInt(m) - 1, 1);
-                  d.setMonth(d.getMonth() + 1);
-                  setPendingNextPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-                  setShowNextMonthModal(true);
-                }}
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '5px' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-              >
-                Mois Suiv. &gt;
-              </button>
+              {((!isModifierNo && !isApprobateur) || selectedPeriod < (Object.keys(groupedReclamations).sort().reverse()[0] || selectedPeriod)) && (
+                <button 
+                  title="Mois Suivant"
+                  onClick={() => {
+                    const allPeriods = Object.keys(groupedReclamations).sort().reverse();
+                    const latestMonth = allPeriods.length > 0 ? allPeriods[0] : selectedPeriod;
+                    
+                    if (selectedPeriod < latestMonth) {
+                      // Navigate to the next chronological month
+                      const [y, m] = selectedPeriod.split('-');
+                      const d = new Date(y, parseInt(m) - 1, 1);
+                      d.setMonth(d.getMonth() + 1);
+                      setSelectedPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                    } else {
+                      // We are at the latest month, create a new one
+                      const currentRecs = groupedReclamations[selectedPeriod] || [];
+                      const pendingProcessing = currentRecs.filter(r => r.statut === 'En attente' || r.statut === 'Transmis');
+                      
+                      if (totalDraftsForPeriod > 0) {
+                        if (showToast) {
+                          showToast('Veuillez d\'abord publier toutes les fiches du mois en cours.', 'error');
+                        } else {
+                          alert('Veuillez d\'abord publier toutes les fiches du mois en cours.');
+                        }
+                        return;
+                      }
+                      
+                      if (pendingProcessing.length > 0) {
+                        if (showToast) {
+                          showToast('Le mois en cours est encore en cours de traitement. Impossible de passer au mois suivant.', 'warning');
+                        } else {
+                          alert('Le mois en cours est encore en cours de traitement. Impossible de passer au mois suivant.');
+                        }
+                        return;
+                      }
+                      const [y, m] = selectedPeriod.split('-');
+                      const d = new Date(y, parseInt(m) - 1, 1);
+                      d.setMonth(d.getMonth() + 1);
+                      setPendingNextPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                      setShowNextMonthModal(true);
+                    }
+                  }}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                >
+                  {selectedPeriod < (Object.keys(groupedReclamations).sort().reverse()[0] || selectedPeriod) ? 'Suivant >' : 'Mois Suiv. >'}
+                </button>
+              )}
+              {isApprobateur && (groupedReclamations[selectedPeriod] || []).some(r => r.statut === 'Transmis') && (
+                <button onClick={() => {
+                  setSelectedMonth(selectedPeriod);
+                  setShowCloseMonthModal(true);
+                }} style={{ background: '#10b981', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)', marginLeft: '15px' }}>
+                  <CheckCircle size={18} /> Valider pour ce mois
+                </button>
+              )}
             </div>
 
           ) : (
@@ -1558,9 +2093,11 @@ export default function ReclamationsView() {
 
         {/* ─── CONTENU ─────────────────────────────────────────────────────── */}
         {(() => {
-          const draftsForPeriod = canEdit ? recsForPeriod.filter(r => r.statut === 'Brouillon') : [];
-          
+          const draftsForPeriod = recsForPeriod.filter(r => r.statut === 'Brouillon');
           const pendingForPeriodPC = canEdit ? recsForPeriod.filter(r => r.statut === 'En attente' || r.statut === 'Transmis') : [];
+          
+          // Filtrer 'Transmis'
+          const secPending = isModifierNo ? recsForPeriod.filter(r => r.statut === 'En attente') : []; // PC doit soumettre
           const transmittedForPeriodSec = isModifierNo ? recsForPeriod.filter(r => r.statut === 'Transmis') : [];
           const finishedForPeriod = recsForPeriod.filter(r => r.statut === 'Clôturé' || r.statut === 'Refusé' || r.statut_final === 'Refusée');
 
@@ -1570,12 +2107,9 @@ export default function ReclamationsView() {
           const awaitingProcessing = pcAwaiting || secAwaiting;
           const pendingForDisplay = pcAwaiting ? pendingForPeriodPC : (secAwaiting ? transmittedForPeriodSec : []);
 
-          const isUnlocked = (canEdit || isModifierNo || isApprobateur) 
-                             && draftsForPeriod.length === 0 
-                             && pendingForPeriodPC.length === 0 
-                             && secPending.length === 0 
-                             && transmittedForPeriodSec.length === 0 
-                             && finishedForPeriod.length > 0;
+          // Déverrouillage correct : il ne doit rester AUCUN brouillon, aucune fiche en attente ni transmise, pour TOUS les rôles.
+          const anyPending = recsForPeriod.some(r => r.statut === 'Brouillon' || r.statut === 'En attente' || r.statut === 'Transmis');
+          const isUnlocked = !anyPending && recsForPeriod.length > 0;
 
           if (loading) return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '80px' }}>
@@ -1968,7 +2502,10 @@ export default function ReclamationsView() {
 
           {/* Titre (plus petit) et Actions à droite */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '30px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+              <div style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '6px 14px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: '600', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                {filteredRecs.length} fiche(s)
+              </div>
               <div style={{ position: 'relative' }}>
                 <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input 
@@ -2009,6 +2546,7 @@ export default function ReclamationsView() {
               )}
               {canModifyNo && published.some(r => r.statut === 'En attente') && (
                 <button onClick={() => {
+                  setApplyToAllCategories(false);
                   const toNumber = published.filter(r => r.statut === 'En attente');
                   const initNums = {};
                   toNumber.forEach(r => initNums[r.id] = r.numero_fiche || '');
@@ -2016,11 +2554,6 @@ export default function ReclamationsView() {
                   setShowNumberingModal(true);
                 }} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)' }}>
                   <Edit3 size={18} /> Attribuer N° & Transmettre
-                </button>
-              )}
-              {canApprove && published.some(r => r.statut === 'Transmis') && (
-                <button onClick={() => setShowCloseMonthModal(true)} style={{ background: '#10b981', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)' }}>
-                  <CheckCircle size={18} /> Valider pour ce mois
                 </button>
               )}
             </div>
@@ -2068,9 +2601,24 @@ export default function ReclamationsView() {
                 }}
               >
                 <div style={{ background: 'white', flex: 1, padding: '15px', borderRadius: '5px', fontFamily: '"Times New Roman", serif', position: 'relative' }}>
-                  <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: '#f59e0b', color: 'white', fontSize: '0.7rem', fontWeight: 'bold', padding: '4px 8px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', zIndex: 10, zIndex: 10 }}>BROUILLON</div>
+                  <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: '#f59e0b', color: 'white', fontSize: '0.7rem', fontWeight: 'bold', padding: '4px 8px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', zIndex: 10 }}>BROUILLON</div>
                   {rec.numero_fiche && (
-                    <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '5px' }}>N° {rec.numero_fiche}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                      <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '1.2rem' }}>N° {rec.numero_fiche}</div>
+                      {canModifyNo && (
+                        <button 
+                          onClick={async () => {
+                            setManualNumbers(prev => ({...prev, [rec.id]: rec.numero_fiche || ''}));
+                            setEditingSingleReclamation(rec);
+                            setShowNumberingModal(true);
+                          }}
+                          style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                          title="Modifier le numéro"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                      )}
+                    </div>
                   )}
                   <h4 style={{ margin: '0 0 10px 0', fontSize: '1.1rem', color: '#0f172a' }}>{rec.agent_nom || 'Agent Non Renseigné'}</h4>
                   <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#475569' }}>Site: <strong>{rec.agent_site || 'N/A'}</strong></p>
@@ -2084,9 +2632,14 @@ export default function ReclamationsView() {
                   
                   <div style={{ display: 'flex', gap: '10px', marginTop: 'auto', borderTop: '1px dashed #cbd5e1', paddingTop: '10px' }}>
                     {canEdit && (
-                      <button onClick={() => handleOpenFormEdit(rec)} style={{ flex: 1, background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.85rem', fontWeight: 'bold', transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = 0.9} onMouseLeave={e => e.currentTarget.style.opacity = 1}>
-                        <Edit3 size={14} /> Modifier
-                      </button>
+                      <>
+                        <button onClick={() => handleOpenFormEdit(rec)} style={{ flex: 1, background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.85rem', fontWeight: 'bold', transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = 0.9} onMouseLeave={e => e.currentTarget.style.opacity = 1}>
+                          <Edit3 size={14} /> Modifier
+                        </button>
+                        <button onClick={() => handleDeleteReclamation(rec.id)} style={{ flex: 0.3, background: '#fee2e2', color: '#ef4444', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }} title="Supprimer la réclamation" onMouseEnter={e => e.currentTarget.style.background = '#fecaca'} onMouseLeave={e => e.currentTarget.style.background = '#fee2e2'}>
+                          <Trash2 size={16} />
+                        </button>
+                      </>
                     )}
                     <button onClick={() => handleOpenPreviewExisting(rec)} style={{ flex: 1, background: '#64748b', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.85rem', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#475569'} onMouseLeave={e => e.currentTarget.style.background = '#64748b'}>
                       <Eye size={14} /> Voir
@@ -2128,7 +2681,22 @@ export default function ReclamationsView() {
                     {rec.statut}
                   </div>
                   {rec.numero_fiche && (
-                    <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '5px' }}>N° {rec.numero_fiche}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                      <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '1.2rem' }}>N° {rec.numero_fiche}</div>
+                      {canModifyNo && (
+                        <button 
+                          onClick={async () => {
+                            setManualNumbers(prev => ({...prev, [rec.id]: rec.numero_fiche || ''}));
+                            setEditingSingleReclamation(rec);
+                            setShowNumberingModal(true);
+                          }}
+                          style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                          title="Modifier le numéro"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                      )}
+                    </div>
                   )}
                   <h4 style={{ margin: '0 0 10px 0', fontSize: '1.1rem', color: '#0f172a' }}>{rec.agent_nom || 'Agent Non Renseigné'}</h4>
                   <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#475569' }}>Matricule: {rec.agent_matricule} | Site: <strong>{rec.agent_site || 'N/A'}</strong></p>
@@ -2168,6 +2736,7 @@ export default function ReclamationsView() {
                       <>
                         <button onClick={() => { setActionRec(rec); setMotifRefus(''); }} style={{ flex: 1, background: '#ef4444', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>Refuser</button>
                         <button onClick={async () => {
+                          setReclamations(prev => prev.map(p => p.id === rec.id ? { ...p, statut_final: 'Validé', motif_refus: '' } : p));
                           await apiCall('batch_update_reclamations', { updates: [{ id: rec.id, fields: { statut_final: 'Validé', motif_refus: '' } }] }, 'POST');
                           fetchReclamations();
                         }} style={{ flex: 1, background: '#10b981', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>Valider</button>
@@ -2443,6 +3012,23 @@ export default function ReclamationsView() {
         </div>
       )}
 
+      {/* MODAL SUPPRESSION */}
+      {reclamationToDelete && (
+        <div className="fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
+          <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '90%', maxWidth: '400px', padding: '30px', position: 'relative', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', textAlign: 'center' }}>
+            <div style={{ background: 'rgba(239, 68, 68, 0.2)', padding: '15px', borderRadius: '50%', display: 'inline-block', marginBottom: '20px' }}>
+              <Trash2 size={36} color="#ef4444" />
+            </div>
+            <h2 style={{ margin: '0 0 10px 0', fontSize: '1.4rem', color: 'white' }}>Confirmer la suppression</h2>
+            <p style={{ color: '#94a3b8', marginBottom: '30px', fontSize: '0.95rem' }}>Êtes-vous sûr de vouloir supprimer cette fiche ? Cette action est irréversible.</p>
+            <div style={{ display: 'flex', gap: '15px' }}>
+              <button onClick={() => setReclamationToDelete(null)} style={{ flex: 1, padding: '12px', background: '#334155', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#475569'} onMouseLeave={e => e.currentTarget.style.background = '#334155'}>Annuler</button>
+              <button onClick={confirmDeleteReclamation} style={{ flex: 1, padding: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#dc2626'} onMouseLeave={e => e.currentTarget.style.background = '#ef4444'}>Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL PUBLICATION */}
       {showPublishModal && (
         <div className="fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
@@ -2503,7 +3089,7 @@ export default function ReclamationsView() {
               <button onClick={() => setShowPreview(false)} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', transition: 'all 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.transform = 'scale(1.2) rotate(90deg)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'white'; e.currentTarget.style.transform = 'scale(1) rotate(0deg)'; }}><X size={32} /></button>
             </div>
           </div>
-          <PdfPreview data={previewData} ftiDates={ftiDates} ftiMotifs={ftiMotifs} ftiSites={ftiSites} ftiTravailExtra={ftiTravailExtra} ftiVisas={ftiVisas} ftiJourSuppl={ftiJourSuppl} ftiJourNuit={ftiJourNuit} ftiRows={ftiRows} />
+          <PdfPreview data={previewData} pdfFont={pdfFont} pdfColor={pdfColor} ftiDates={ftiDates} ftiMotifs={ftiMotifs} ftiSites={ftiSites} ftiTravailExtra={ftiTravailExtra} ftiVisas={ftiVisas} ftiJourSuppl={ftiJourSuppl} ftiJourNuit={ftiJourNuit} ftiRows={ftiRows} />
           {/* Note: Il n'y a plus de bouton d'envoi ici. C'est juste un aperçu comme demandé. */}
           <div className="pdf-modal-footer" style={{ marginTop: '20px' }}>
             <button onClick={() => setShowPreview(false)} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', padding: '12px 30px', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>Fermer l'aperçu</button>
@@ -2514,36 +3100,120 @@ export default function ReclamationsView() {
       {showNumberingModal && (
         <div className="fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
           <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '90%', maxWidth: '600px', padding: '40px', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
-            <button onClick={() => setShowNumberingModal(false)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}><X size={28} /></button>
-            <h2 style={{ color: 'white', margin: '0 0 20px 0' }}>Attribuer Numéros et Transmettre</h2>
+            <button onClick={() => { setShowNumberingModal(false); setEditingSingleReclamation(null); }} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}><X size={28} /></button>
+            <h2 style={{ color: 'white', margin: '0 0 20px 0' }}>{editingSingleReclamation ? "Modifier Numéro Fiche" : "Attribuer Numéros"}</h2>
+
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
+              <label style={{ color: '#cbd5e1', display: 'block', marginBottom: '10px' }}>Police d'écriture sur le PDF</label>
+              <select 
+                value={pdfFont} 
+                onChange={e => setPdfFont(e.target.value)}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'white', color: '#1e293b', fontSize: '1rem', outline: 'none' }}
+              >
+                {FONTS_OPTIONS.map(font => (
+                  <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                    {font.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             
             <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
-              <label style={{ color: '#cbd5e1', display: 'block', marginBottom: '10px' }}>Numérotation Automatique (N° de départ)</label>
-              <input type="number" value={numberingStart} onChange={e => setNumberingStart(e.target.value)} placeholder="Ex: 100" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'white', fontSize: '1rem', outline: 'none' }} />
+              <label style={{ color: '#cbd5e1', display: 'block', marginBottom: '10px' }}>Couleur du numéro sur le PDF</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <input 
+                  type="color" 
+                  value={pdfColor} 
+                  onInput={e => setPdfColor(e.target.value)}
+                  onChange={e => setPdfColor(e.target.value)}
+                  style={{ width: '50px', height: '50px', border: 'none', borderRadius: '8px', cursor: 'pointer', background: 'transparent' }}
+                />
+                <span style={{ color: 'white', fontSize: '1rem', background: pdfColor, padding: '5px 15px', borderRadius: '20px', fontWeight: 'bold' }}>
+                  Aperçu couleur
+                </span>
+              </div>
             </div>
+            
+            
+            {!editingSingleReclamation && (
+              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
+                <label style={{ color: '#cbd5e1', display: 'block', marginBottom: '10px' }}>Numérotation Automatique (N° de départ)</label>
+                <input type="text" value={numberingStart} onChange={e => setNumberingStart(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Ex: 00100" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'white', fontSize: '1rem', outline: 'none' }} />
+              </div>
+            )}
+            
+            {!editingSingleReclamation && (() => {
+               const allMonthPending = groupedReclamations[selectedMonth]?.filter(r => r.statut === 'En attente') || [];
+               const currentCategoryPending = allMonthPending.filter(r => (r.categorie || 'DIVERS') === selectedCategory);
+               const hasOtherCategories = allMonthPending.length > currentCategoryPending.length;
+               
+               if (hasOtherCategories) {
+                  return (
+                    <div style={{ marginBottom: '20px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '12px 15px', borderRadius: '8px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'white', cursor: 'pointer', fontWeight: '600' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={applyToAllCategories} 
+                          onChange={e => {
+                            const isChecked = e.target.checked;
+                            setApplyToAllCategories(isChecked);
+                            
+                            const categoryOrder = { 'SUPPLEMENTAIRE': 1, 'ABSENCES': 2, 'STATUT': 3, 'DIVERS': 4 };
+                            const sortedAllMonthPending = [...allMonthPending].sort((a, b) => {
+                              const catA = categoryOrder[a.categorie || 'DIVERS'] || 99;
+                              const catB = categoryOrder[b.categorie || 'DIVERS'] || 99;
+                              return catA - catB;
+                            });
+                            
+                            const newList = isChecked ? sortedAllMonthPending : currentCategoryPending;
+                            const initNums = {};
+                            newList.forEach(r => initNums[r.id] = manualNumbers[r.id] || r.numero_fiche || '');
+                            setManualNumbers(initNums);
+                          }}
+                          style={{ width: '18px', height: '18px', accentColor: '#38bdf8' }}
+                        />
+                        Appliquer à toutes les catégories ({allMonthPending.length} fiches en attente au total)
+                      </label>
+                    </div>
+                  );
+               }
+               return null;
+            })()}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '30px' }}>
-              <h4 style={{ color: '#94a3b8', margin: '0 0 10px 0' }}>Ou numérotation manuelle par agent :</h4>
-              {groupedReclamations[selectedMonth].filter(r => r.statut === 'En attente').map(r => (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', padding: '10px 15px', borderRadius: '8px' }}>
-                  <span style={{ color: 'white' }}>{r.agent_nom}</span>
-                  <input type="text" value={manualNumbers[r.id] || ''} onChange={e => setManualNumbers(prev => ({...prev, [r.id]: e.target.value}))} placeholder="N°" style={{ width: '80px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', textAlign: 'center', color: '#ef4444', fontWeight: 'bold' }} />
+              <h4 style={{ color: '#94a3b8', margin: '0 0 10px 0' }}>{editingSingleReclamation ? "Numéro :" : "Ou numérotation manuelle par agent :"}</h4>
+              
+              {editingSingleReclamation ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', padding: '10px 15px', borderRadius: '8px' }}>
+                  <span style={{ color: 'white' }}>{editingSingleReclamation.agent_nom}</span>
+                  <input type="text" value={manualNumbers[editingSingleReclamation.id] || ''} onChange={e => setManualNumbers(prev => ({...prev, [editingSingleReclamation.id]: e.target.value}))} placeholder="N°" style={{ width: '80px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', textAlign: 'center', color: '#ef4444', fontWeight: 'bold' }} />
                 </div>
-              ))}
+              ) : (
+                (() => {
+                  const allMonthPending = groupedReclamations[selectedMonth]?.filter(r => r.statut === 'En attente') || [];
+                  const currentCategoryPending = allMonthPending.filter(r => (r.categorie || 'DIVERS') === selectedCategory);
+                  
+                  const categoryOrder = { 'SUPPLEMENTAIRE': 1, 'ABSENCES': 2, 'STATUT': 3, 'DIVERS': 4 };
+                  const sortedAllMonthPending = [...allMonthPending].sort((a, b) => {
+                    const catA = categoryOrder[a.categorie || 'DIVERS'] || 99;
+                    const catB = categoryOrder[b.categorie || 'DIVERS'] || 99;
+                    return catA - catB;
+                  });
+                  
+                  const listToRender = applyToAllCategories ? sortedAllMonthPending : currentCategoryPending;
+                  
+                  return listToRender.map(r => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', padding: '10px 15px', borderRadius: '8px' }}>
+                      <span style={{ color: 'white' }}>{r.agent_nom} {applyToAllCategories && <small style={{ color: '#94a3b8', marginLeft: '8px' }}>({r.categorie || 'DIVERS'})</small>}</span>
+                      <input type="text" value={manualNumbers[r.id] || ''} onChange={e => setManualNumbers(prev => ({...prev, [r.id]: e.target.value}))} placeholder="N°" style={{ width: '80px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', textAlign: 'center', color: '#ef4444', fontWeight: 'bold' }} />
+                    </div>
+                  ));
+                })()
+              )}
             </div>
 
-            <h4 style={{ color: '#94a3b8', margin: '0 0 10px 0' }}>Service Destinataire :</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '30px', maxHeight: '150px', overflowY: 'auto' }}>
-              {companyServices.map(srv => (
-                <label key={srv.id} style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '10px', borderRadius: '8px', background: selectedPublishServices.includes(srv.name) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={selectedPublishServices.includes(srv.name)} onChange={() => togglePublishService(srv.name)} />
-                  <span style={{ color: '#cbd5e1' }}>{srv.name}</span>
-                </label>
-              ))}
-            </div>
-
-            <button disabled={submitting || selectedPublishServices.length === 0} onClick={handleAssignNumbersAndForward} style={{ width: '100%', background: '#ef4444', color: 'white', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 'bold', cursor: (submitting || selectedPublishServices.length === 0) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-              {submitting ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />} Enregistrer N° et Transmettre
+            <button disabled={submitting} onClick={handleAssignNumbersAndForward} style={{ width: '100%', background: '#ef4444', color: 'white', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 'bold', cursor: submitting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+              {submitting ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />} Enregistrer
             </button>
           </div>
         </div>
@@ -2634,16 +3304,29 @@ export default function ReclamationsView() {
                 {radioSignatures.length === 0 ? (
                   <p style={{ color: '#94a3b8' }}>Aucune signature enregistrée.</p>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                    {radioSignatures.map(sig => (
-                      <div key={sig.code} style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ color: 'white', fontWeight: 'bold', marginBottom: '10px' }}>{sig.code}</span>
-                        <div style={{ background: 'white', padding: '5px', borderRadius: '8px', width: '100%' }}>
-                          <img src={sig.image} alt={`Signature ${sig.code}`} style={{ width: '100%', height: 'auto', maxHeight: '60px', objectFit: 'contain' }} />
+                  <>
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '15px' }}>💡 Astuce : Faites un clic droit sur un opérateur pour le modifier.</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                      {radioSignatures.map(sig => (
+                        <div 
+                          key={sig.code} 
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, radio_code: sig.code, radio_signature: sig.image }));
+                            setShowSignatureModal(false);
+                          }}
+                          onContextMenu={(e) => handleEditOperator(e, sig)}
+                          style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '15px', border: '2px solid transparent', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center' }}
+                          onMouseEnter={e => e.currentTarget.style.border = '2px solid rgba(255,255,255,0.2)'}
+                          onMouseLeave={e => e.currentTarget.style.border = '2px solid transparent'}
+                        >
+                          <h4 style={{ color: 'white', margin: '0 0 10px 0', fontSize: '0.95rem' }}>{sig.code}</h4>
+                          <div style={{ background: 'white', padding: '10px', borderRadius: '8px' }}>
+                            <img src={sig.image} alt={sig.code} style={{ width: '100%', maxHeight: '60px', objectFit: 'contain' }} />
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -2748,25 +3431,20 @@ export default function ReclamationsView() {
                 onClick={async () => {
                   setIsInitializing(true);
                   try {
-                    // Force l'initialisation du mois suivant dans la base de données (comme le module Pointage)
-                    const res = await apiCall('init_next_period', { current_period: selectedPeriod, next_period: pendingNextPeriod, sites_to_keep_hs: {} }, 'POST');
+                    // Force l'initialisation du mois suivant spécifique aux réclamations
+                    const res = await apiCall('init_next_reclamation_period', { next_period: pendingNextPeriod }, 'POST');
                     
                     if (!res || !res.success) {
                        alert("Impossible d'initialiser le mois suivant : " + (res?.message || "Erreur serveur non spécifiée."));
                        return;
                     }
-
-                    // On force la mise à jour de max_initialized_period dans le backend au cas où la fonction précédente aurait sauté l'étape (ex: s'il n'y a aucun agent actif détecté)
-                    await apiCall('set_first_visit_period', { period: pendingNextPeriod }, 'POST');
-
-                    setSelectedPeriod(pendingNextPeriod);
-                    localStorage.setItem('pontage_period', pendingNextPeriod);
-                    window.dispatchEvent(new CustomEvent('pontage_period_changed', { detail: pendingNextPeriod }));
                     
+                    setSelectedPeriod(pendingNextPeriod);
+                    localStorage.setItem('reclamation_period', pendingNextPeriod);
                     setShowNextMonthModal(false);
-                  } catch (error) {
-                    console.error("Erreur lors de l'initialisation du mois :", error);
-                    alert("Une erreur de réseau s'est produite lors de la création du nouveau mois.");
+                  } catch (e) {
+                    console.error("Erreur init next period:", e);
+                    alert("Erreur réseau ou serveur lors de la bascule du mois.");
                   } finally {
                     setIsInitializing(false);
                   }

@@ -120,10 +120,21 @@ export function restoreSettingsFromBackend(settings) {
       continue;
     }
     // Si la valeur existe déjà et est identique, pas besoin de réécrire
-    if (localStorage.getItem(k) !== v) {
+    const localVal = localStorage.getItem(k);
+    
+    // Règle spéciale pour les layouts : ne pas écraser si le navigateur a déjà une valeur
+    // Cela évite qu'un rechargement rapide n'écrase le layout local avec une donnée serveur obsolète
+    if (k.startsWith('elysium_') && localVal !== null) {
+      continue;
+    }
+
+    if (localVal !== v) {
       localStorage.setItem(k, v);
       if (k === 'pontage_theme') {
         window.dispatchEvent(new Event('pontage_theme_updated'));
+      }
+      if (k.startsWith('elysium_')) {
+        window.dispatchEvent(new Event('elysium_layout_updated'));
       }
     }
   }

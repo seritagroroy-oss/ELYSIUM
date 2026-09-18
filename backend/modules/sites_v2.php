@@ -1978,9 +1978,6 @@ switch ($action) {
         $stmt->execute([$company_id, $serviceKey]);
         $subsites = $stmt->fetchAll();
         
-        $period_received = $data['period'] ?? 'MISSING';
-        error_log("DEBUG get_closure_alerts: period received from JS = '$period_received'");
-        
         $alerts = [];
         $period = !empty($data['period']) ? $data['period'] : date('Y-m');
         $physical_now = time();

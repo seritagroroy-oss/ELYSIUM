@@ -155,6 +155,49 @@ switch ($action) {
             $sites = [];
         }
 
+        // --- LOGIQUE DE DÉLÉGATION ---
+        $current_user = $_SESSION['user_id'] ?? '';
+        $is_controller_only = false;
+        
+        try {
+            if ($current_user) {
+                // Dans auth.php, $_SESSION['user_id'] stocke l'EMAIL de l'utilisateur, pas son ID !
+                $uEmail = $current_user;
+                require_once __DIR__ . '/../../utils.php';
+                $userPerms = getUserPermissionsByEmail($uEmail);
+                $is_controller_only = !empty($userPerms['is_controller_only']);
+            }
+            
+            // 1. Délégations reçues (le contrôleur ne voit QUE ces sites)
+            $stmtDelTo = $sqlite->prepare("SELECT site_id FROM pointage_delegations WHERE company_id = ? AND delegated_to = ? AND period = ? AND status = 'active'");
+            $stmtDelTo->execute([$company_id, $current_user, $period]);
+            $delegatedToMe = $stmtDelTo->fetchAll(PDO::FETCH_COLUMN);
+
+            // 2. Délégations envoyées (le service traitant ne voit PAS ces sites)
+            $stmtDelBy = $sqlite->prepare("SELECT site_id FROM pointage_delegations WHERE company_id = ? AND delegated_by = ? AND period = ? AND status = 'active'");
+            $stmtDelBy->execute([$company_id, $current_user, $period]);
+            $delegatedByMe = $stmtDelBy->fetchAll(PDO::FETCH_COLUMN);
+
+            if ($is_controller_only || !empty($delegatedToMe)) {
+                $filteredSites = [];
+                foreach ($sites as $s) {
+                    if (in_array($s['id'], $delegatedToMe)) {
+                        $s['is_controller_mode'] = true; // Flag for frontend
+                        $filteredSites[] = $s;
+                    }
+                }
+                $sites = $filteredSites;
+            } else if (!empty($delegatedByMe)) {
+                $filteredSites = [];
+                foreach ($sites as $s) {
+                    if (!in_array($s['id'], $delegatedByMe)) {
+                        $filteredSites[] = $s;
+                    }
+                }
+                $sites = $filteredSites;
+            }
+        } catch (Exception $e) {}
+
 
         // Inject default sites
         $has_releves = false;
@@ -162,8 +205,7 @@ switch ($action) {
             if ($s['id'] === 'site_releves') $has_releves = true;
         }
 
-
-        if (!$has_releves) {
+        if (!$has_releves && empty($delegatedToMe) && !$is_controller_only) {
             $sites[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves'];
         }
 
@@ -1388,6 +1430,263 @@ switch ($action) {
             } else {
                 echo json_encode(['success' => false, 'message' => 'Archive introuvable']);
             }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DÉLÉGATION DE POINTAGE — Actions liées au système de délégation de sites
+    // ─────────────────────────────────────────────────────────────────────────
+
+    case 'get_company_users':
+        // Retourne tous les utilisateurs de la même company_id (pour le sélecteur de contrôleur)
+        $sqlite = getDb();
+        $company_id = resolveCurrentCompanyIdSql();
+        $current_user = $_SESSION['user_id'] ?? '';
+        try {
+            $stmt = $sqlite->prepare("SELECT id, name, email, role, role_display_name, service_id FROM users WHERE company_id = ? AND email != ? ORDER BY name ASC");
+            $stmt->execute([$company_id, $current_user]);
+            $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // Ne pas exposer de données sensibles
+            $safeUsers = array_map(function($u) {
+                return [
+                    'id'           => $u['id'],
+                    'name'         => $u['name'],
+                    'email'        => $u['email'],
+                    'role'         => $u['role'] ?? '',
+                    'role_display' => $u['role_display_name'] ?? $u['role'] ?? '',
+                    'service_id'   => $u['service_id'] ?? '',
+                ];
+            }, $users);
+            echo json_encode(['success' => true, 'users' => $safeUsers]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'delegate_site':
+        // Délègue un site à un contrôleur pour la période active
+        $sqlite = getDb();
+        $company_id = resolveCurrentCompanyIdSql();
+        $delegated_by = $_SESSION['user_id'] ?? '';
+        $delegated_to = $data['delegated_to'] ?? '';
+        $site_id      = $data['site_id'] ?? '';
+        $site_name    = $data['site_name'] ?? '';
+        $period       = $data['period'] ?? date('Y-m');
+        $notes        = $data['notes'] ?? '';
+
+        if (empty($delegated_to) || empty($site_id)) {
+            echo json_encode(['success' => false, 'message' => 'Paramètres manquants : contrôleur ou site non spécifié.']);
+            break;
+        }
+
+        try {
+            // Vérifier qu'une délégation active n'existe pas déjà pour ce site/période
+            $stmtCheck = $sqlite->prepare("SELECT id FROM pointage_delegations WHERE company_id = ? AND site_id = ? AND period = ? AND status = 'active'");
+            $stmtCheck->execute([$company_id, $site_id, $period]);
+            if ($stmtCheck->fetch()) {
+                echo json_encode(['success' => false, 'message' => 'Ce site est déjà délégué pour cette période.']);
+                break;
+            }
+
+            // Créer la délégation
+            $stmtIns = $sqlite->prepare("INSERT INTO pointage_delegations (company_id, period, site_id, site_name, delegated_by, delegated_to, status, notes) VALUES (?,?,?,?,?,?,'active',?)");
+            $stmtIns->execute([$company_id, $period, $site_id, $site_name, $delegated_by, $delegated_to, $notes]);
+            $delegation_id = $sqlite->lastInsertId();
+
+            // Récupérer le nom du délégant
+            $stmtUser = $sqlite->prepare("SELECT name FROM users WHERE email = ?");
+            $stmtUser->execute([$delegated_by]);
+            $delegant = $stmtUser->fetch(PDO::FETCH_ASSOC);
+            $delegant_name = $delegant['name'] ?? $delegated_by;
+
+            // Créer la notification pour le contrôleur
+            $notifData = json_encode([
+                'delegation_id' => $delegation_id,
+                'site_id'       => $site_id,
+                'site_name'     => $site_name,
+                'period'        => $period,
+                'delegated_by'  => $delegated_by,
+            ]);
+            $stmtNotif = $sqlite->prepare("INSERT INTO system_notifications (user_email, company_id, type, title, message, data) VALUES (?,?,?,?,?,?)");
+            $stmtNotif->execute([
+                $delegated_to,
+                $company_id,
+                'delegation_received',
+                '🤝 Site de pointage délégué',
+                "Le service « $delegant_name » vous a délégué le site « $site_name » pour la période $period. Vous pouvez maintenant y accéder via le module Pointage du Mois.",
+                $notifData
+            ]);
+
+            echo json_encode(['success' => true, 'delegation_id' => $delegation_id, 'message' => "Site « $site_name » délégué avec succès."]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'get_delegations':
+        // Retourne les délégations actives : envoyées par moi et reçues par moi
+        $sqlite = getDb();
+        $company_id  = resolveCurrentCompanyIdSql();
+        $current_user = $_SESSION['user_id'] ?? '';
+        $period       = $_GET['period'] ?? date('Y-m');
+        try {
+            // Délégations envoyées (sites que j'ai délégués)
+            $stmtSent = $sqlite->prepare("SELECT pd.*, u.name as controller_name FROM pointage_delegations pd LEFT JOIN users u ON pd.delegated_to = u.email WHERE pd.company_id = ? AND pd.delegated_by = ? AND pd.period = ? ORDER BY pd.delegated_at DESC");
+            $stmtSent->execute([$company_id, $current_user, $period]);
+            $sent = $stmtSent->fetchAll(PDO::FETCH_ASSOC);
+
+            // Délégations reçues (sites délégués à moi)
+            $stmtReceived = $sqlite->prepare("SELECT pd.*, u.name as delegant_name FROM pointage_delegations pd LEFT JOIN users u ON pd.delegated_by = u.email WHERE pd.company_id = ? AND pd.delegated_to = ? AND pd.period = ? AND pd.status = 'active' ORDER BY pd.delegated_at DESC");
+            $stmtReceived->execute([$company_id, $current_user, $period]);
+            $received = $stmtReceived->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'success'  => true,
+                'sent'     => $sent,
+                'received' => $received,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'return_delegated_site':
+        // Le contrôleur retourne le site au service traitant
+        $sqlite = getDb();
+        $company_id   = resolveCurrentCompanyIdSql();
+        $current_user = $_SESSION['user_id'] ?? '';
+        $site_id = $data['site_id'] ?? '';
+        $period = $data['period'] ?? '';
+
+        if (empty($site_id) || empty($period)) {
+            echo json_encode(['success' => false, 'message' => 'site_id ou period manquant.']);
+            break;
+        }
+
+        try {
+            // Vérifier que la délégation appartient bien au contrôleur courant
+            $stmtCheck = $sqlite->prepare("SELECT * FROM pointage_delegations WHERE site_id = ? AND period = ? AND delegated_to = ? AND company_id = ? AND status = 'active'");
+            $stmtCheck->execute([$site_id, $period, $current_user, $company_id]);
+            $delegation = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
+            if (!$delegation) {
+                file_put_contents(__DIR__ . '/../../debug_restitution.log', date('Y-m-d H:i:s') . " - Restitution échouée: Délégation introuvable. site_id=$site_id, period=$period, user=$current_user, company=$company_id\n", FILE_APPEND);
+                echo json_encode(['success' => false, 'message' => 'Délégation introuvable ou déjà terminée.']);
+                break;
+            }
+
+            // Marquer la délégation comme retournée
+            $delegation_id = $delegation['id'];
+            $stmtUpd = $sqlite->prepare("UPDATE pointage_delegations SET status = 'returned', returned_at = NOW() WHERE id = ?");
+            $stmtUpd->execute([$delegation_id]);
+
+            // Récupérer le nom du contrôleur
+            $stmtCtrl = $sqlite->prepare("SELECT name FROM users WHERE email = ?");
+            $stmtCtrl->execute([$current_user]);
+            $ctrl = $stmtCtrl->fetch(PDO::FETCH_ASSOC);
+            $ctrl_name = $ctrl['name'] ?? $current_user;
+
+            // Créer la notification pour le service traitant
+            $notifData = json_encode([
+                'delegation_id' => $delegation_id,
+                'site_id'       => $delegation['site_id'],
+                'site_name'     => $delegation['site_name'],
+                'period'        => $delegation['period'],
+                'returned_by'   => $current_user,
+            ]);
+            $stmtNotif = $sqlite->prepare("INSERT INTO system_notifications (user_email, company_id, type, title, message, data) VALUES (?,?,?,?,?,?)");
+            $stmtNotif->execute([
+                $delegation['delegated_by'],
+                $company_id,
+                'site_returned',
+                '✅ Site de pointage retourné',
+                "Le contrôleur « $ctrl_name » a terminé son travail sur le site « {$delegation['site_name']} » (période {$delegation['period']}). Le site est maintenant de nouveau disponible pour publication.",
+                $notifData
+            ]);
+
+            file_put_contents(__DIR__ . '/../../debug_restitution.log', date('Y-m-d H:i:s') . " - Restitution réussie pour $site_id\n", FILE_APPEND);
+            echo json_encode(['success' => true, 'message' => "Site « {$delegation['site_name']} » retourné avec succès au service traitant."]);
+        } catch (Exception $e) {
+            file_put_contents(__DIR__ . '/../../debug_restitution.log', date('Y-m-d H:i:s') . " - Exception lors de la restitution: " . $e->getMessage() . "\n", FILE_APPEND);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'cancel_delegation':
+        // Le service traitant annule une délégation active
+        $sqlite = getDb();
+        $company_id    = resolveCurrentCompanyIdSql();
+        $current_user  = $_SESSION['user_id'] ?? '';
+        $delegation_id = $data['delegation_id'] ?? 0;
+
+        if (empty($delegation_id)) {
+            echo json_encode(['success' => false, 'message' => 'delegation_id manquant.']);
+            break;
+        }
+
+        try {
+            $stmtCheck = $sqlite->prepare("SELECT * FROM pointage_delegations WHERE id = ? AND delegated_by = ? AND company_id = ? AND status = 'active'");
+            $stmtCheck->execute([$delegation_id, $current_user, $company_id]);
+            $delegation = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
+            if (!$delegation) {
+                echo json_encode(['success' => false, 'message' => 'Délégation introuvable ou vous n\'êtes pas autorisé.']);
+                break;
+            }
+
+            $stmtUpd = $sqlite->prepare("UPDATE pointage_delegations SET status = 'cancelled' WHERE id = ?");
+            $stmtUpd->execute([$delegation_id]);
+
+            // Notifier le contrôleur que la délégation est annulée
+            $stmtNotif = $sqlite->prepare("INSERT INTO system_notifications (user_email, company_id, type, title, message, data) VALUES (?,?,?,?,?,?)");
+            $stmtNotif->execute([
+                $delegation['delegated_to'],
+                $company_id,
+                'delegation_cancelled',
+                '❌ Délégation annulée',
+                "La délégation pour le site « {$delegation['site_name']} » (période {$delegation['period']}) a été annulée par le service traitant.",
+                json_encode(['delegation_id' => $delegation_id, 'site_id' => $delegation['site_id']])
+            ]);
+
+            echo json_encode(['success' => true, 'message' => "Délégation annulée avec succès."]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'get_notifications':
+        // Retourne les notifications non lues (et les 20 dernières lues) de l'utilisateur courant
+        $sqlite = getDb();
+        $company_id   = resolveCurrentCompanyIdSql();
+        $current_user = $_SESSION['user_id'] ?? '';
+        try {
+            $stmt = $sqlite->prepare("SELECT * FROM system_notifications WHERE user_email = ? AND company_id = ? ORDER BY created_at DESC LIMIT 30");
+            $stmt->execute([$current_user, $company_id]);
+            $notifs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $unread_count = count(array_filter($notifs, fn($n) => !$n['is_read']));
+            echo json_encode(['success' => true, 'notifications' => $notifs, 'unread_count' => $unread_count]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage(), 'notifications' => [], 'unread_count' => 0]);
+        }
+        break;
+
+    case 'mark_notification_read':
+        // Marque une (ou toutes) les notifications comme lues
+        $sqlite = getDb();
+        $company_id   = resolveCurrentCompanyIdSql();
+        $current_user = $_SESSION['user_id'] ?? '';
+        $notif_id     = $data['notif_id'] ?? 'all';
+        try {
+            if ($notif_id === 'all') {
+                $stmt = $sqlite->prepare("UPDATE system_notifications SET is_read = 1 WHERE user_email = ? AND company_id = ?");
+                $stmt->execute([$current_user, $company_id]);
+            } else {
+                $stmt = $sqlite->prepare("UPDATE system_notifications SET is_read = 1 WHERE id = ? AND user_email = ? AND company_id = ?");
+                $stmt->execute([$notif_id, $current_user, $company_id]);
+            }
+            echo json_encode(['success' => true]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }

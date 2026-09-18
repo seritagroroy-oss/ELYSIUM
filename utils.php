@@ -661,10 +661,35 @@ function getUserPermissionsByEmail($email)
                 $explicitPerms[$k] = $v;
             }
         }
-        return $explicitPerms;
+        $finalPerms = $explicitPerms;
+    } else {
+        $finalPerms = $basePerms;
     }
-    
-    return $basePerms;
+
+    $hasNativeDashboard = false;
+    if (isset($finalPerms['dashboard']) && $finalPerms['dashboard'] !== 'none' && $finalPerms['dashboard'] !== false) {
+        $hasNativeDashboard = true;
+    }
+
+    try {
+        $compCondition = "";
+        $params = [$email];
+        // Ne donner accès au module Pointage que si l'agent a une délégation dans l'entreprise COURANTE.
+        if (!empty($_SESSION['company_id'])) {
+            $compCondition = " AND company_id = ?";
+            $params[] = $_SESSION['company_id'];
+        }
+        $stmtDel = $sqlite->prepare("SELECT id FROM pointage_delegations WHERE delegated_to = ? AND status = 'active' $compCondition LIMIT 1");
+        $stmtDel->execute($params);
+        if ($stmtDel->fetch()) {
+            $finalPerms['dashboard'] = true;
+            if (!$hasNativeDashboard) {
+                $finalPerms['is_controller_only'] = true;
+            }
+        }
+    } catch (Exception $e) {}
+
+    return $finalPerms;
 }
 
 // (Old JSON functions removed)

@@ -35,6 +35,6 @@ scratch/
 *.db
 *.sql
 backend/elysium.db
-sauvegard/*.sql
-sauvegard/*.db
-sauvegard/*.sqlite
+sauvegard/
+uploads/
+A SUPPRIMER PLUS TARD/

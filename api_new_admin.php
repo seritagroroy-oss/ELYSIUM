@@ -5,9 +5,11 @@ if (isset($_GET['jarvis_db_test'])) {
     echo "<pre>"; print_r($stmt->fetchAll(PDO::FETCH_ASSOC)); echo "</pre>";
     die('TEST_OK');
 }
-if (function_exists('opcache_reset')) {
-    opcache_reset();
-}
+// opcache_reset() désactivé — trop coûteux à chaque requête.
+// Utilisez /clear_opcache.php manuellement si nécessaire après un déploiement.
+// if (function_exists('opcache_reset')) {
+//     opcache_reset();
+// }
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/php_errors_custom.log');
 // Configuration des cookies de session (avant session_start)
@@ -92,7 +94,7 @@ if (!function_exists('getReclamations')) {
             'declarant_nom','declarant_prenom','declarant_matricule','declarant_fonction','declarant_service',
             'type_erreur','type_erreur_autre','mois_concerne','jours_concernes',
             'premiere_reclamation','ponction_precedente_correcte','montant_estime','action_demandee',
-            'description','radio_code','radio_signature','statut','statut_final','motif_refus','services_cibles','avis_secretariat','avis_comptabilite'];
+            'description','radio_code','radio_signature','statut','statut_final','motif_refus','services_cibles','avis_secretariat','avis_comptabilite','numero_fiche'];
         foreach ($updates as $k => $v) {
             if (!in_array($k, $allowed)) continue;
             if ($k === 'services_cibles' && is_array($v)) $v = json_encode($v);
@@ -2471,6 +2473,7 @@ switch ($action) {
     case 'change_agent_shift':
     case 'get_messages':
     case 'init_next_period':
+    case 'init_next_reclamation_period':
     case 'reset_year_attendance':
     case 'archive_all_sites':
     case 'get_archives':

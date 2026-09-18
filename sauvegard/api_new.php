@@ -25,20 +25,11 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-if (isset($_GET['action']) && $_GET['action'] === 'my_mysql_check') {
-    require_once __DIR__ . '/backend/database.php';
-    $db = getDb();
-    try {
-        $res = $db->query("SHOW CREATE TABLE service_data");
-        echo json_encode($res);
-    } catch (Exception $e) {
-        echo json_encode(['error' => $e->getMessage()]);
-    }
-    exit;
-}
+
+
 
 session_start();
-file_put_contents('debug_session.txt', print_r($_SESSION, true));
+// file_put_contents('debug_session.txt', print_r($_SESSION, true));
 $action = $_GET['action'] ?? ($_POST['action'] ?? '');
 
 
@@ -125,6 +116,13 @@ if ($action === 'debug_dddd') {
     exit;
 }
 
+if ($action === 'test_dump') {
+    $sqlite = getDb();
+    $stmt = $sqlite->query("SELECT * FROM site_contracts");
+    echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+    exit;
+}
+
 $data   = json_decode(file_get_contents('php://input'), true);
 $data   = is_array($data) ? $data : [];
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -134,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 // ─── Middleware d'authentification global ────────────────────────────────────
 // Routes accessibles sans session (connexion, inscription, réinitialisation mot de passe)
 $public_actions = ['login', 'logout', 'register', 'request_password_reset', 'login_agent_portal', 'register_agent_portal', 'cinetpay_notify', 'get_user_info', 'debug_dddd'];
+
 if (!in_array($action, $public_actions) && !isset($_SESSION['user_id'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Non authentifié', 'code' => 401]);
@@ -150,7 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($action, $public_actions)
     }
 }
 
-// ─── Routeur principal ────────────────────────────────────────────────────────
+// ─── Middleware ────────────────────────────────────────────────────────
+
 // Utilise if/elseif pour éviter les switch imbriqués (incompatibles avec require_once
 // dans un switch quand le module inclus a lui-même un switch)
 
@@ -162,7 +162,7 @@ if (in_array($action, [
     'update_agent_info','update_agent_salary','get_functions','save_functions',
     'archive_all_sites','get_archives','get_archive_detail','delete_archive',
     'clear_site_mutations','clear_agent_site_mutations','delete_agent_mutations','get_agent_schedules','update_agent_schedules','update_subsite_config',
-    'get_lost_sites', 'toggle_blacklist', 'get_closure_alerts', 'ack_closure_alert', 'get_site_agents', 'move_agent_zone', 'toggle_permanent_supplement', 'check_agent_multisite'
+    'get_lost_sites', 'toggle_blacklist', 'get_closure_alerts', 'ack_closure_alert', 'get_site_agents', 'move_agent_zone', 'toggle_permanent_supplement', 'check_agent_multisite', 'get_blackbox_logs'
 ])) {
     require_once __DIR__ . '/backend/modules/sites_v2.php';
 
@@ -207,7 +207,8 @@ if (in_array($action, [
     'update_agent_contract','get_leaves','dump_leaves','save_leave','delete_leave',
     'dev_unpublish_period','publish_period','unpublish_period','get_published_periods',
     'get_latest_publication','get_messages','set_first_visit_period','save_reclamation','delete_reclamation',
-    'update_payment_status','save_payroll_status','get_payroll_statuses','bulk_save_payroll_status'
+    'update_payment_status','save_payroll_status','get_payroll_statuses','bulk_save_payroll_status',
+    'get_column_prefs','save_column_prefs','save_period_total'
 ])) {
     require_once __DIR__ . '/backend/modules/salaries.php';
 

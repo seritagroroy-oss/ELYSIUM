@@ -660,8 +660,10 @@ switch ($action) {
         }
 
         // Supprimer les donnÃ©es dÃ©jÃ  existantes du next_period pour repartir propre
-        $stmtDel = $sqlite->prepare("DELETE FROM attendance WHERE period = ? AND service_id = ?");
-        $stmtDel->execute([$next_period, $serviceKey]);
+        $sqlite->beginTransaction();
+        try {
+            $stmtDel = $sqlite->prepare("DELETE FROM attendance WHERE period = ? AND service_id = ?");
+            $stmtDel->execute([$next_period, $serviceKey]);
 
         // PrÃ©parer le INSERT
         $stmtIns = $sqlite->prepare("
@@ -1096,7 +1098,12 @@ switch ($action) {
         // â”€â”€ Sauvegarder le dernier mois initialisÃ© dans la base (utilisÃ© pour le verrou des mois futurs) â”€â”€
         setServiceDataSql($company_id, 'max_initialized_period', $next_period);
 
+        $sqlite->commit();
         echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            $sqlite->rollBack();
+            echo json_encode(['success' => false, 'message' => 'Erreur SQLite: ' . $e->getMessage()]);
+        }
         break;
 
     case 'reset_year_attendance':
@@ -1792,11 +1799,22 @@ switch ($action) {
                         $agNameKey = strtolower(trim($agent_snap['name'] ?? ''));
                         if (isset($special_salary_map[$agNameKey])) {
                             $fixed_salary = $special_salary_map[$agNameKey];
+                            
+                            $old_base_full = (int)($agent_snap['base_full'] ?? 0);
+                            $old_base = (int)($agent_snap['base'] ?? 0);
+                            if ($old_base_full === 0) {
+                                $old_base_full = $old_base > 0 ? $old_base : $fixed_salary;
+                            }
+                            $ratio = ($old_base_full > 0) ? ($old_base / $old_base_full) : 1;
+                            
+                            $new_base = (int) round($fixed_salary * $ratio);
+
                             $agent_snap['is_special_salary'] = true;
-                            $agent_snap['base'] = $fixed_salary;
+                            $agent_snap['base'] = $new_base;
                             $agent_snap['base_full'] = $fixed_salary;
+                            
                             // On ajuste le total théorique (bien que le vrai net soit calculé par le frontend)
-                            $agent_snap['total'] = $fixed_salary 
+                            $agent_snap['total'] = $new_base 
                                                  - (int)($agent_snap['deductions'] ?? 0) 
                                                  + (int)($agent_snap['gains'] ?? 0) 
                                                  + (int)($agent_snap['prime_site'] ?? 0);
@@ -1870,9 +1888,21 @@ switch ($action) {
                         $agent_snap['total'] = ($agent_snap['total'] ?? 0) - $old_prime + $agent_snap['prime_site'];
                         unset($agent_snap['_original_prime_site']);
 
-                        // Synchroniser le profile_data avec la version live
+                        // Synchroniser le profile_data avec la version live (pour les infos de paiement etc.)
+                        // tout en préservant les champs générés dynamiquement (historique sites, mutations)
                         if (!empty($liveProf)) {
-                            $agent_snap['profile_data'] = $liveProf;
+                            $current_prof = (isset($agent_snap['profile_data']) && is_array($agent_snap['profile_data'])) ? $agent_snap['profile_data'] : [];
+                            $old_deployments = $current_prof['multi_site_deployments'] ?? null;
+                            $old_mutated = $current_prof['mutated_from_function'] ?? null;
+                            
+                            $agent_snap['profile_data'] = array_merge($current_prof, is_array($liveProf) ? $liveProf : []);
+                            
+                            if ($old_deployments !== null) {
+                                $agent_snap['profile_data']['multi_site_deployments'] = $old_deployments;
+                            }
+                            if ($old_mutated !== null) {
+                                $agent_snap['profile_data']['mutated_from_function'] = $old_mutated;
+                            }
                         }
                     }
                     unset($agent_snap);
@@ -2865,7 +2895,6 @@ switch ($action) {
             'latest_publication_reclamations' => $latestPubRecs,
             'max_initialized_period' => $maxInitPeriod
         ];
-        file_put_contents('c:/laragon/www/pontage/api_log.txt', print_r($response, true) . "\n", FILE_APPEND);
         echo json_encode($response);
         break;
 
@@ -3008,8 +3037,6 @@ switch ($action) {
         $companyKey = resolveCurrentCompanyIdSql();
         $period = $data['period'] ?? '';
         $totalNet = $data['totalNet'] ?? 0;
-        
-        file_put_contents('c:/laragon/www/pontage/api_log.txt', "save_period_total called: period=$period, totalNet=$totalNet, company=$companyKey\n", FILE_APPEND);
         
         if ($period && $totalNet > 0) {
             $cached_totals = getServiceDataSql($companyKey, 'period_totals', []);

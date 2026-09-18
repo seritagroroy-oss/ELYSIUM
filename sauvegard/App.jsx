@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { apiCall } from './api';
 import { ShieldAlert, Shield, UserPlus, Calendar, DollarSign, Archive, Settings, LogOut, Clock, Loader2, Sparkles, Menu, X, CheckCircle, Home as HomeIcon, ReceiptText, TrendingUp, MessageSquare, Camera, Bell, Search, BarChart3, Bot, FileWarning, Fingerprint, Contact, Plane, Briefcase, Database, Users, Printer, FileText, MapPin, PlusCircle, Package, MessageSquareWarning, MessageCircle, AlertTriangle, Inbox, Building2, Sun, Moon, User, Mail, Phone, Lock, Monitor, Eye, EyeOff, RefreshCw } from 'lucide-react';
@@ -15,6 +15,7 @@ import CommandPalette from './components/CommandPalette';
 import JarvisseChat from './components/JarvisseChat';
 import StandalonePayslip from './components/StandalonePayslip';
 import ServiceManagement, { WORKSPACE_PRESETS } from './components/ServiceManagement';
+import { MASTER_MODULES, DEFAULT_SIDEBAR_IDS, DEFAULT_HOME_IDS } from './modulesConfig';
 
 // ─── Lazy loading (chargés uniquement quand l'utilisateur y accède) ──────────
 const ContratsClientsModule  = lazy(() => import('./components/ContratsClientsModule'));
@@ -43,52 +44,18 @@ const PermissionsAbsence     = lazy(() => import('./components/PermissionsAbsenc
 const ContractsView          = lazy(() => import('./components/ContractsView'));
 const PersonnelRegistry      = lazy(() => import('./components/PersonnelRegistry'));
 const RegistreVisiteurs      = lazy(() => import('./components/RegistreVisiteurs'));
-const AnnuaireStatut         = lazy(() => import('./components/AnnuaireStatut'));
 const PointageCourriers      = lazy(() => import('./components/PointageCourriers'));
-const GestionSalles          = lazy(() => import('./components/GestionSalles'));
-const ReflexeSecurite        = lazy(() => import('./components/ReflexeSecurite'));
-const GestionAppels          = lazy(() => import('./components/GestionAppels'));
+const LeaveCalculator        = lazy(() => import('./components/LeaveCalculator'));
 
-const BadgesProvisoires      = lazy(() => import('./components/BadgesProvisoires'));
-const FournituresBureau      = lazy(() => import('./components/FournituresBureau'));
-const AccueilVIP             = lazy(() => import('./components/AccueilVIP'));
 
-const DGVision               = lazy(() => import('./components/DGVision'));
-const DGRapports             = lazy(() => import('./components/DGRapports'));
-const DGValidations          = lazy(() => import('./components/DGValidations'));
 const DGAudit                = lazy(() => import('./components/DGAudit'));
-const DGMegaphone            = lazy(() => import('./components/DGMegaphone'));
-const DGPredictive           = lazy(() => import('./components/DGPredictive'));
-const DGOKR                  = lazy(() => import('./components/DGOKR'));
-const DGLitiges              = lazy(() => import('./components/DGLitiges'));
-const DGOrganigramme         = lazy(() => import('./components/DGOrganigramme'));
-const DGAgenda               = lazy(() => import('./components/DGAgenda'));
-const DGPV                   = lazy(() => import('./components/DGPV'));
-const DGVeille               = lazy(() => import('./components/DGVeille'));
-const PDGSouverain           = lazy(() => import('./components/PDGSouverain'));
-const PDGBilan               = lazy(() => import('./components/PDGBilan'));
-const PDGSignature           = lazy(() => import('./components/PDGSignature'));
-const PDGSites               = lazy(() => import('./components/PDGSites'));
-const PDGAccesMaitre         = lazy(() => import('./components/PDGAccesMaitre'));
-const PDGBenchmark           = lazy(() => import('./components/PDGBenchmark'));
-const PDGCoffre              = lazy(() => import('./components/PDGCoffre'));
-const PDGExpansion           = lazy(() => import('./components/PDGExpansion'));
-const PDGActionnaires        = lazy(() => import('./components/PDGActionnaires'));
-const PDGMenaces             = lazy(() => import('./components/PDGMenaces'));
-const PCRadar                = lazy(() => import('./components/PCRadar'));
-const PCAlertes              = lazy(() => import('./components/PCAlertes'));
 
 const PCMainCourante         = lazy(() => import('./components/PCMainCourante'));
 
-const CtrlFeuille            = lazy(() => import('./components/CtrlFeuille'));
-const CtrlAudit              = lazy(() => import('./components/CtrlAudit'));
 
-const CtrlDashboard          = lazy(() => import('./components/CtrlDashboard'));
 
-const CtrlCarnet             = lazy(() => import('./components/CtrlCarnet'));
+const CtrlRapport            = lazy(() => import('./components/CtrlRapport'));
 
-const CtrlRondes             = lazy(() => import('./components/CtrlRondes'));
-const CtrlNotation           = lazy(() => import('./components/CtrlNotation'));
 const BoiteReceptionAdmin    = lazy(() => import('./components/BoiteReceptionAdmin'));
 
 // ─── Fallback de chargement pour Suspense ─────────────────────────────────────
@@ -680,6 +647,79 @@ function MainAppContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isJarvisseOpen, setIsJarvisseOpen] = useState(false);
   const [isJarvisseVisible, setIsJarvisseVisible] = useState(false);
+
+  const [homeLayout, setHomeLayout] = useState(() => Array.from(new Set(DEFAULT_HOME_IDS)));
+  const [sidebarLayout, setSidebarLayout] = useState(() => Array.from(new Set(DEFAULT_SIDEBAR_IDS)));
+
+  // Initialisation à partir des paramètres du backend avec filtre anti-doublon strict
+  useEffect(() => {
+    if (user && user.settings) {
+      if (user.settings.elysium_home_layout) {
+        try { setHomeLayout(Array.from(new Set(JSON.parse(user.settings.elysium_home_layout)))); } catch(e){}
+      }
+      if (user.settings.elysium_sidebar_layout) {
+        try { setSidebarLayout(Array.from(new Set(JSON.parse(user.settings.elysium_sidebar_layout)))); } catch(e){}
+      }
+    }
+  }, [user]);
+
+  const [contextMenu, setContextMenu] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 4000);
+  }, []);
+
+  const handleContextMenuSidebar = (e, moduleId) => {
+    e.preventDefault();
+    setContextMenu({
+      type: 'sidebar',
+      moduleId,
+      x: e.clientX,
+      y: e.clientY
+    });
+  };
+
+  const closeContextMenu = () => setContextMenu(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => closeContextMenu();
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  const moveModule = async (moduleId, from) => {
+    let newSidebar, newHome;
+    if (from === 'sidebar') {
+      newSidebar = Array.from(new Set(sidebarLayout.filter(id => id !== moduleId)));
+      newHome = Array.from(new Set([...homeLayout, moduleId]));
+    } else if (from === 'home') {
+      newHome = Array.from(new Set(homeLayout.filter(id => id !== moduleId)));
+      newSidebar = Array.from(new Set([...sidebarLayout, moduleId]));
+    }
+
+    if (newSidebar && newHome) {
+      // Optimistic update pour l'interface
+      setSidebarLayout(newSidebar);
+      setHomeLayout(newHome);
+      
+      // Affichage de la notification de succès immédiat (Optimistic UI)
+      const directionText = from === 'home' ? 'le menu' : "l'accueil";
+      showToast(`Module déplacé avec succès vers ${directionText} !`, 'success');
+
+      // Sauvegarde en arrière-plan sans bloquer l'interface
+      apiCall('save_user_settings', {
+        settings: {
+          elysium_sidebar_layout: JSON.stringify(newSidebar),
+          elysium_home_layout: JSON.stringify(newHome)
+        }
+      }).catch(e => {
+        console.error("Erreur lors de la sauvegarde sur le serveur :", e);
+        showToast("Erreur de connexion. La disposition n'a pas pu être sauvegardée.", 'error');
+      });
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem('pontage_active_view', view);
@@ -1357,6 +1397,20 @@ function MainAppContent() {
   // Rendu de l'application connectée avec Sidebar
   return (
     <div className="app-layout" style={{ paddingTop: user?.is_impersonated ? '45px' : 0 }}>
+      {toastMessage && (
+        <div style={{
+          position: 'fixed', bottom: '40px', right: '40px', zIndex: 99999999,
+          background: toastMessage.type === 'success' ? '#10b981' : (toastMessage.type === 'info' ? '#3b82f6' : '#ef4444'),
+          color: 'white', padding: '16px 24px', borderRadius: '12px',
+          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2)',
+          display: 'flex', alignItems: 'center', gap: '14px',
+          animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+          {toastMessage.type === 'success' ? <CheckCircle size={26} /> : <AlertTriangle size={26} />}
+          <span style={{ fontWeight: '600', fontSize: '1.05rem', letterSpacing: '0.3px' }}>{toastMessage.message}</span>
+          <button onClick={() => setToastMessage(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'flex', padding: 0, marginLeft: '8px', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color='white'} onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.7)'}><X size={20}/></button>
+        </div>
+      )}
       {user?.is_impersonated && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '45px', zIndex: 9999999, background: '#ef4444', color: 'white', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700 }}>
@@ -1545,46 +1599,25 @@ function MainAppContent() {
             <span>Accueil</span>
           </div>
 
-          {[
-                { id: 'dashboard', icon: Calendar, label: 'Plannings & Pointage' },
-                { id: 'company_config', icon: Building2, label: 'Configuration Entreprise' },
-                { id: 'verification', icon: CheckCircle, label: 'Traitement du pointage' },
-                { id: 'payroll', icon: ReceiptText, label: 'État de Paie' },
-                { id: 'facturation', icon: ReceiptText, label: 'Facturation Clients' },
-                { id: 'kiosk', icon: Clock, label: 'Mode Kiosque' },
-                { id: 'salaries', icon: DollarSign, label: 'Grille Salariale' },
-                { id: 'calcul_salaires', icon: DollarSign, label: 'Calcul des Salaires' },
-                { id: 'fluctuation', icon: TrendingUp, label: 'Fluctuation Salariale' },
-                { id: 'archives', icon: Archive, label: 'Archives Pointage' },
-                { id: 'services', icon: ShieldAlert, label: 'Gestion des Services' },
-                { id: 'employees', icon: Contact, label: 'Gestion des Employés' },
-                { id: 'leave', icon: Plane, label: 'Gestion des Congés' },
-                { id: 'permissions', icon: Clock, label: 'Gestion des Permissions' },
-                { id: 'contracts', icon: Briefcase, label: 'Gestion des Contrats' },
-                { id: 'registry', icon: Database, label: 'Registre Général' },
-                { id: 'recrutement', icon: Users, label: 'Espace e-Recrutement' },
-                { id: 'print_payroll', icon: FileText, label: 'Imprimer Fiche de Paie' },
-                { id: 'gps', icon: MapPin, label: 'Pointage GPS' },
-                { id: 'reclamation_view', icon: MessageSquareWarning, label: 'Réclamation Paie' },
-                // --- Modules Secrétariat ---
-                { id: 'registre_visiteurs', icon: Users, label: 'Registre des Visiteurs' },
-                { id: 'annuaire_statut', icon: Contact, label: 'Annuaire & Statut' },
-                { id: 'pointage_courriers', icon: Package, label: 'Courriers & Colis' },
-                { id: 'gestion_salles', icon: Calendar, label: 'Gestion des Salles' },
-                { id: 'reflexe_securite', icon: ShieldAlert, label: 'Réflexe Sécurité' },
-              ].map(mod => {
-                const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-                if (hasPermission(mod.id)) {
-                  const Icon = mod.icon;
-                  return (
-                    <div data-tour={mod.id === 'verification' || mod.id === 'payroll' ? mod.id : undefined} key={mod.id} className={`nav-link ${view === mod.id ? 'active' : ''}`} onClick={() => { setView(mod.id); setIsSidebarOpen(false); }}>
-                      <Icon size={18} />
-                      <span>{mod.label}</span>
-                    </div>
-                  );
-                }
-                return null;
-              })}
+          {sidebarLayout.map(moduleId => {
+            const mod = MASTER_MODULES.find(m => m.id === moduleId);
+            if (!mod) return null;
+            if (hasPermission(mod.perm)) {
+              const Icon = mod.icon;
+              return (
+                <div 
+                  key={mod.id} 
+                  className={`nav-link ${view === mod.viewId ? 'active' : ''}`} 
+                  onClick={() => { setView(mod.viewId); setIsSidebarOpen(false); }}
+                  onContextMenu={(e) => handleContextMenuSidebar(e, mod.id)}
+                >
+                  <Icon size={18} />
+                  <span>{mod.title}</span>
+                </div>
+              );
+            }
+            return null;
+          })}
 
           {(user?.role === 'admin' || user?.role === 'super_admin') && (
           <div className={`nav-link ${view === 'settings' ? 'active' : ''}`} onClick={() => { setView('settings'); setIsSidebarOpen(false); }}>
@@ -1627,7 +1660,7 @@ function MainAppContent() {
 
       </aside>
 
-      <main className="main-content" style={(view === 'fluctuation' || view === 'payslip_print' || view === 'communication') ? { padding: 0 } : {}}>
+      <main className="main-content">
         {view === 'home' && (
           <header style={{ 
             position: 'sticky',
@@ -1958,7 +1991,7 @@ function MainAppContent() {
         )}
 
         {/* Global floating Close Button for sections */}
-        {view !== 'home' && view !== 'fluctuation' && view !== 'payslip_print' && view !== 'communication' && view !== 'company_config' && (
+        {view !== 'home' && view !== 'fluctuation' && view !== 'payslip_print' && view !== 'communication' && view !== 'company_config' && view !== 'leave_calculator' && (
           <button
             onClick={() => {
               if (view === 'verification') {
@@ -2000,7 +2033,7 @@ function MainAppContent() {
           </button>
         )}
 
-        {view === 'home' && <Home setView={setView} hasPermission={hasPermission} user={user} />}
+        {view === 'home' && <Home setView={setView} hasPermission={hasPermission} user={user} homeLayout={homeLayout} moveModule={moveModule} />}
         {view === 'dashboard' && <Dashboard />}
         {view === 'verification' && <Dashboard isVerificationMode={true} onBack={() => { 
           const sName = (user?.service || '').toLowerCase();
@@ -2023,7 +2056,7 @@ function MainAppContent() {
         {view === 'company_config' && <CompanyConfigView onClose={() => setView('home')} />}
         {view === 'archives' && <ArchivesPointage setView={setView} />}
         {view === 'communication' && <Communication onClose={() => setView('home')} />}
-        {view === 'reclamations' && <ReclamationsView />}
+        {view === 'reclamations' && <ReclamationsView showToast={showToast} />}
         {view === 'settings' && (user?.role === 'admin' || user?.role === 'super_admin') && <SettingsView />}
         {view === 'services' && <ServiceManagement />}
         {view === 'private_inbox' && <BoiteReceptionAdmin />}
@@ -2033,56 +2066,20 @@ function MainAppContent() {
         {view === 'portal_admin' && <PortalAdminView />}
         {view === 'correction_admin' && <CorrectionAdminView />}
         {view === 'leave_admin' && <LeaveManagement />}
+        {view === 'leave_calculator' && <LeaveCalculator onClose={() => setView('home')} />}
         {view === 'permissions_absence' && <PermissionsAbsence />}
         {view === 'contracts' && <ContractsView />}
         {view === 'registry' && <PersonnelRegistry />}
         {view === 'registre_visiteurs' && <RegistreVisiteurs />}
-        {view === 'annuaire_statut' && <AnnuaireStatut />}
         {view === 'pointage_courriers' && <PointageCourriers />}
-        {view === 'gestion_salles' && <GestionSalles />}
-        {view === 'reflexe_securite' && <ReflexeSecurite setView={setView} />}
-        {view === 'gestion_appels' && <GestionAppels />}
         {view === 'gestion_flotte' && <GestionFlotte />}
-        {view === 'badges_provisoires' && <BadgesProvisoires />}
-        {view === 'fournitures_bureau' && <FournituresBureau />}
-        {view === 'accueil_vip' && <AccueilVIP />}
         {view === 'alertes_securite' && <AlertesSecurite />}
-        {view === 'dg_vision' && <DGVision />}
-        {view === 'dg_rapports' && <DGRapports />}
-        {view === 'dg_validation' && <DGValidations />}
         {view === 'dg_audit' && <DGAudit />}
-        {view === 'dg_megaphone' && <DGMegaphone />}
-        {view === 'dg_predictive' && <DGPredictive />}
-        {view === 'dg_okr' && <DGOKR />}
-        {view === 'dg_litiges' && <DGLitiges />}
-        {view === 'dg_organigramme' && <DGOrganigramme />}
-        {view === 'dg_agenda' && <DGAgenda />}
-        {view === 'dg_pv' && <DGPV />}
-        {view === 'dg_veille' && <DGVeille />}
-        {view === 'pdg_souverain' && <PDGSouverain />}
-        {view === 'pdg_bilan' && <PDGBilan />}
-        {view === 'pdg_signature' && <PDGSignature />}
-        {view === 'pdg_sites' && <PDGSites />}
-        {view === 'pdg_acces_maitre' && <PDGAccesMaitre />}
-        {view === 'pdg_benchmark' && <PDGBenchmark />}
-        {view === 'pdg_coffre' && <PDGCoffre />}
-        {view === 'pdg_expansion' && <PDGExpansion />}
-        {view === 'pdg_actionnaires' && <PDGActionnaires />}
-        {view === 'pdg_menaces' && <PDGMenaces />}
-        {view === 'pc_radar' && <PCRadar />}
-        {view === 'pc_alertes' && <PCAlertes />}
 
         {view === 'pc_main_courante' && <PCMainCourante />}
 
-        {view === 'ctrl_feuille' && <CtrlFeuille />}
-        {view === 'ctrl_audit' && <CtrlAudit />}
         {view === 'ctrl_rapport' && <CtrlRapport />}
-        {view === 'ctrl_dashboard' && <CtrlDashboard />}
 
-        {view === 'ctrl_carnet' && <CtrlCarnet />}
-
-        {view === 'ctrl_rondes' && <CtrlRondes onClose={() => setView('home')} />}
-        {view === 'ctrl_notation' && <CtrlNotation onClose={() => setView('home')} />}
       </main>
 
       {showProfileModal && (
@@ -2413,12 +2410,37 @@ function MainAppContent() {
       {/* NOTIFICATIONS DE FERMETURE DE SITES */}
       <SiteClosureNotifier />
 
+      {/* Menu contextuel pour la barre latérale */}
+      {contextMenu && contextMenu.type === 'sidebar' && (
+        <div 
+          style={{ 
+            position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 100000,
+            background: '#1e293b', border: '1px solid #475569', borderRadius: '12px',
+            padding: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', minWidth: '220px'
+          }}
+          onMouseLeave={closeContextMenu}
+        >
+          <button 
+            onClick={() => { moveModule(contextMenu.moduleId, 'sidebar'); closeContextMenu(); }}
+            style={{ 
+              width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', 
+              color: 'white', textAlign: 'left', cursor: 'pointer', borderRadius: '8px', fontSize: '0.95rem'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            Déplacer vers l'Accueil
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }
 
 
 const ThemeToggle = () => {
+
   const [theme, setTheme] = useState(() => localStorage.getItem('pontage_theme') || 'modern');
   const [showResetMenu, setShowResetMenu] = useState(false);
   const menuRef = useRef(null);

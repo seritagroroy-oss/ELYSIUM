@@ -1,4 +1,6 @@
 <?php
+// opcache_reset() désactivé — trop coûteux à chaque requête.
+// Utilisez /clear_opcache.php manuellement si nécessaire après un déploiement.
 if (function_exists('opcache_reset')) {
     opcache_reset();
 }
@@ -31,6 +33,18 @@ header('Expires: 0');
 session_start();
 // file_put_contents('debug_session.txt', print_r($_SESSION, true));
 $action = $_GET['action'] ?? ($_POST['action'] ?? '');
+
+if ($action === 'patch_db') {
+    require_once __DIR__ . '/backend/database.php';
+    $db = getDb();
+    try {
+        $db->exec("ALTER TABLE reclamations ADD COLUMN numero_fiche TEXT");
+        echo json_encode(["status" => "Column added successfully."]);
+    } catch (Exception $e) {
+        echo json_encode(["status" => "Error or column already exists: " . $e->getMessage()]);
+    }
+    exit;
+}
 
 
 if ($action === 'debug_dddd') {
@@ -190,14 +204,15 @@ if (in_array($action, [
 } elseif (in_array($action, [
     'get_dashboard_init','get_analytics','get_pointage_agents_for_reclamation',
     'archive_pointage','get_archives_pointage_list','get_archive_pointage_detail',
-    'get_pointage_for_archive'
+    'get_pointage_for_archive','delegate_site','get_delegations','return_delegated_site',
+    'get_company_users','get_notifications','mark_notification_read'
 ])) {
     require_once __DIR__ . '/backend/modules/pointage.php';
 
 } elseif (in_array($action, [
     'get_salary_config','update_salary_config','save_settings','save_manual_adjustment',
     'delete_manual_adjustment','save_payroll_archive','delete_payroll_archive',
-    'save_site_revenue','change_agent_shift','delete_shift_change','init_next_period','reset_year_attendance',
+    'save_site_revenue','change_agent_shift','delete_shift_change','init_next_period','init_next_reclamation_period','reset_year_attendance',
     'get_sanctions','save_sanction','delete_sanction','register_agent_portal',
     'login_agent_portal','get_portal_registrations','update_portal_registration',
     'get_payroll_archives','get_payroll_archive_detail','get_settings','get_salaries',

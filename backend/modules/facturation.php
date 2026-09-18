@@ -762,6 +762,7 @@ switch ($action) {
             'type_erreur' => $data['type_erreur'] ?? '',
             'type_erreur_autre' => $data['type_erreur_autre'] ?? '',
             'mois_concerne' => $data['mois_concerne'] ?? '',
+            'periode' => $data['periode'] ?? '',
             'jours_concernes' => $data['jours_concernes'] ?? '',
             
             'premiere_reclamation' => $data['premiere_reclamation'] ?? 'Oui',

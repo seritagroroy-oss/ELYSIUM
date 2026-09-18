@@ -575,6 +575,16 @@ switch ($action) {
         $db = getScopedData($serviceKey);
         echo json_encode(array_slice($db['messages'] ?? [], 0, 20));
         break;
+    case 'init_next_reclamation_period':
+        $next_period = $data['next_period'] ?? '';
+        if (!$next_period) {
+            echo json_encode(['success' => false, 'message' => 'Période manquante']);
+            break;
+        }
+        $company_id = $_SESSION['company_id'] ?? resolveCurrentServiceKeySql();
+        setServiceDataSql($company_id, 'max_initialized_reclamation_period', $next_period);
+        echo json_encode(['success' => true]);
+        break;
 
     case 'init_next_period':
         $current_period = $data['current_period'] ?? '';
@@ -660,8 +670,10 @@ switch ($action) {
         }
 
         // Supprimer les donnÃ©es dÃ©jÃ  existantes du next_period pour repartir propre
-        $stmtDel = $sqlite->prepare("DELETE FROM attendance WHERE period = ? AND service_id = ?");
-        $stmtDel->execute([$next_period, $serviceKey]);
+        $sqlite->beginTransaction();
+        try {
+            $stmtDel = $sqlite->prepare("DELETE FROM attendance WHERE period = ? AND service_id = ?");
+            $stmtDel->execute([$next_period, $serviceKey]);
 
         // PrÃ©parer le INSERT
         $stmtIns = $sqlite->prepare("
@@ -1096,7 +1108,12 @@ switch ($action) {
         // â”€â”€ Sauvegarder le dernier mois initialisÃ© dans la base (utilisÃ© pour le verrou des mois futurs) â”€â”€
         setServiceDataSql($company_id, 'max_initialized_period', $next_period);
 
+        $sqlite->commit();
         echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            $sqlite->rollBack();
+            echo json_encode(['success' => false, 'message' => 'Erreur SQLite: ' . $e->getMessage()]);
+        }
         break;
 
     case 'reset_year_attendance':
@@ -2878,6 +2895,7 @@ switch ($action) {
         $latestPub = getServiceDataSql($companyKey, 'latest_publication', null);
         $latestPubRecs = getServiceDataSql($companyKey, 'latest_publication_reclamations', null);
         $maxInitPeriod = getServiceDataSql($companyKey, 'max_initialized_period', null);
+        $maxInitReclamationPeriod = getServiceDataSql($companyKey, 'max_initialized_reclamation_period', null);
 
         $response = [
             'success' => true,
@@ -2886,9 +2904,9 @@ switch ($action) {
             'cloture_periods' => $cloture_periods,
             'latest_publication' => $latestPub,
             'latest_publication_reclamations' => $latestPubRecs,
-            'max_initialized_period' => $maxInitPeriod
+            'max_initialized_period' => $maxInitPeriod,
+            'max_initialized_reclamation_period' => $maxInitReclamationPeriod
         ];
-        file_put_contents('c:/laragon/www/pontage/api_log.txt', print_r($response, true) . "\n", FILE_APPEND);
         echo json_encode($response);
         break;
 
@@ -3031,8 +3049,6 @@ switch ($action) {
         $companyKey = resolveCurrentCompanyIdSql();
         $period = $data['period'] ?? '';
         $totalNet = $data['totalNet'] ?? 0;
-        
-        file_put_contents('c:/laragon/www/pontage/api_log.txt', "save_period_total called: period=$period, totalNet=$totalNet, company=$companyKey\n", FILE_APPEND);
         
         if ($period && $totalNet > 0) {
             $cached_totals = getServiceDataSql($companyKey, 'period_totals', []);

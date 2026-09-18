@@ -22,10 +22,10 @@ if (!function_exists('getReclamations')) {
                 id, company_id, service_declarant, agent_nom, agent_matricule, agent_site,
                 agent_fonction, date_entree, reclamation_categorie, reclamation_categorie_autre,
                 categorie, declarant_nom, declarant_prenom, declarant_matricule, declarant_fonction,
-                declarant_service, type_erreur, type_erreur_autre, mois_concerne, jours_concernes,
+                declarant_service, type_erreur, type_erreur_autre, mois_concerne, periode, jours_concernes,
                 premiere_reclamation, ponction_precedente_correcte, montant_estime, action_demandee,
                 description, radio_code, radio_signature, statut, avis_secretariat, avis_comptabilite, created_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ')->execute([
             $record['id'],
             $record['company_id'],
@@ -46,6 +46,7 @@ if (!function_exists('getReclamations')) {
             $record['type_erreur']                 ?? '',
             $record['type_erreur_autre']            ?? '',
             $record['mois_concerne']               ?? '',
+            $record['periode']                     ?? ($record['mois_concerne'] ?? ''),
             $record['jours_concernes']             ?? '',
             $record['premiere_reclamation']         ?? 'Oui',
             $record['ponction_precedente_correcte'] ?? 'Non',
@@ -71,7 +72,7 @@ if (!function_exists('getReclamations')) {
             'declarant_nom','declarant_prenom','declarant_matricule','declarant_fonction','declarant_service',
             'type_erreur','type_erreur_autre','mois_concerne','jours_concernes',
             'premiere_reclamation','ponction_precedente_correcte','montant_estime','action_demandee',
-            'description','radio_code','radio_signature','statut','statut_final','motif_refus','services_cibles','avis_secretariat','avis_comptabilite'];
+            'description','radio_code','radio_signature','statut','statut_final','motif_refus','services_cibles','avis_secretariat','avis_comptabilite','numero_fiche'];
         foreach ($updates as $k => $v) {
             if (!in_array($k, $allowed)) continue;
             if ($k === 'services_cibles' && is_array($v)) $v = json_encode($v);

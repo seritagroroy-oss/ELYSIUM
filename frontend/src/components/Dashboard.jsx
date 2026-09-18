@@ -156,6 +156,9 @@ export default function Dashboard({ isVerificationMode = false, archiveData = nu
 
   // Sync selectedKpiAgent quand les données changent (ex: changement de fonction ou de pointage)
   useEffect(() => {
+    // Expose reload function for external triggers (e.g. from modals)
+    window.loadDashboardData = loadDashboardData;
+
     if (selectedKpiAgent && siteData.length > 0) {
       let found = null;
       siteData.some(subsite => {

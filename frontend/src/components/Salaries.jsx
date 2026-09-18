@@ -1858,7 +1858,11 @@ export default function Salaries({ setView }) {
                     </thead>
                     <tbody>
                       {(() => {
-                        let recsValidees = allValidees.filter(r => r.mois_concerne === latestMonth).sort((a, b) => b.mois_concerne.localeCompare(a.mois_concerne));
+                        let recsValidees = allValidees.filter(r => r.mois_concerne === latestMonth).sort((a, b) => {
+                          const numA = parseInt(a.numero_fiche, 10) || 0;
+                          const numB = parseInt(b.numero_fiche, 10) || 0;
+                          return numA - numB;
+                        });
                         if (reclamationSearch) {
                           const q = reclamationSearch.toLowerCase();
                           recsValidees = recsValidees.filter(r => 
@@ -1870,17 +1874,14 @@ export default function Salaries({ setView }) {
                         
                         if (recsValidees.length === 0) {
                           const latestMonthRecs = reclamations.filter(r => r.mois_concerne === latestMonth);
-                          const hasTransmis = latestMonthRecs.some(r => r.statut === 'Transmis');
+                          const hasBrouillon = latestMonthRecs.some(r => r.statut === 'Brouillon');
                           const hasEnAttente = latestMonthRecs.some(r => r.statut === 'En attente');
+                          const hasTransmis = latestMonthRecs.some(r => r.statut === 'Transmis');
                           
-                          // S'il n'y a plus rien "En attente" mais qu'il y a du "Transmis", c'est que c'est chez le Comptable.
-                          const isWithComptable = hasTransmis && !hasEnAttente;
+                          const hasPending = hasBrouillon || hasEnAttente || hasTransmis;
                           
-                          const isPendingSecretariat = latestPubReclamations && 
-                                                       latestPubReclamations.period === latestMonth &&
-                                                       (latestPubReclamations.services_cibles?.includes('Secrétariat') || latestPubReclamations.services_cibles?.includes('Tous'));
-                                                       
-                          if (isPendingSecretariat || isWithComptable) {
+                          if (hasPending) {
+                            const isWithComptable = hasTransmis && !hasEnAttente && !hasBrouillon;
                             const serviceName = isWithComptable ? 'Comptable' : 'Secrétariat';
                             return (
                               <tr>
@@ -1932,9 +1933,9 @@ export default function Salaries({ setView }) {
                                   ) : '-';
                                 })()}
                               </td>
-                              <td style={{ textAlign: 'right', color: (r.reclamation_categorie || '').toLowerCase() === 'ponction' ? '#ef4444' : '#34d399', fontWeight: 'bold' }}>
+                              <td style={{ textAlign: 'right', color: (r.type_erreur || r.reclamation_categorie || '').toLowerCase() === 'ponction' ? '#ef4444' : '#34d399', fontWeight: 'bold' }}>
                                 {r.montant_estime 
-                                  ? ((r.reclamation_categorie || '').toLowerCase() === 'ponction' ? `-${fmt(r.montant_estime)} FCFA` : `${fmt(r.montant_estime)} FCFA`)
+                                  ? ((r.type_erreur || r.reclamation_categorie || '').toLowerCase() === 'ponction' ? `-${fmt(r.montant_estime)} FCFA` : `${fmt(r.montant_estime)} FCFA`)
                                   : '-'}
                               </td>
                               <td style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -1,4 +1,10 @@
 <?php
+if (isset($_GET['jarvis_db_test'])) {
+    $pdo = new PDO('mysql:host=127.0.0.1;dbname=elysium;charset=utf8', 'root', '');
+    $stmt = $pdo->query("SELECT * FROM pointage_leaves WHERE agent_id LIKE '%ag_%' ORDER BY id DESC LIMIT 5");
+    echo "<pre>"; print_r($stmt->fetchAll(PDO::FETCH_ASSOC)); echo "</pre>";
+    die('TEST_OK');
+}
 if (function_exists('opcache_reset')) {
     opcache_reset();
 }
@@ -869,6 +875,19 @@ if (in_array($action, $mutatingActions, true)) {
         echo json_encode(['success' => false, 'message' => 'Erreur CSRF: Token invalide']);
         exit;
     }
+}
+
+// ─── Libération immédiate du verrou de session ────────────────────────────────
+// PHP verrouille le fichier de session exclusivement → toutes les requêtes
+// parallèles attendent en file. Pour les routes qui ne modifient PAS la session,
+// on libère le verrou dès maintenant pour permettre la concurrence.
+$_session_write_routes = ['login', 'logout', 'register', 'get_user_info', 'save_user_settings',
+                          'update_profile', 'change_password', 'impersonate', 'stop_impersonation',
+                          'switch_service', 'admin_switch_company', 'activate_subscription', 
+                          'create_checkout_session', 'confirm_stripe_payment', 'confirm_cinetpay_payment', 
+                          'set_lang'];
+if (!in_array($action, $_session_write_routes)) {
+    session_write_close();
 }
 
 $permissionByAction = [

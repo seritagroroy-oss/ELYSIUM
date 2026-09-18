@@ -38,18 +38,21 @@ export default function PointageCalendarModal({ isOpen, onClose, period }) {
     fetchProgress();
   }, [period]);
 
-  const toggleDay = async (dateStr) => {
-    const newChecked = { ...checkedDays, [dateStr]: !checkedDays[dateStr] };
-    setCheckedDays(newChecked);
-    if (period) {
-      // Sauvegarde instantanée dans le cache local
-      localStorage.setItem(`calendar_fast_cache_${period}`, JSON.stringify(newChecked));
-      try {
-        await apiCall('save_calendar_progress', { period, progress: newChecked }, 'POST');
-      } catch (e) {
-        console.error("Erreur sauvegarde calendrier:", e);
+  const toggleDay = (dateStr) => {
+    setCheckedDays(prev => {
+      const newChecked = { ...prev, [dateStr]: !prev[dateStr] };
+      
+      if (period) {
+        // Sauvegarde instantanée dans le cache local
+        localStorage.setItem(`calendar_fast_cache_${period}`, JSON.stringify(newChecked));
+        // Lancer la sauvegarde API en arrière-plan avec le bon état
+        apiCall('save_calendar_progress', { period, progress: newChecked }, 'POST').catch(e => {
+          console.error("Erreur sauvegarde calendrier:", e);
+        });
       }
-    }
+      
+      return newChecked;
+    });
   };
 
   const getFormattedPeriod = () => {

@@ -11,6 +11,7 @@ const ALL_MODULES = {
   employees: { label: 'Gestion des Employés', icon: '👥', desc: 'Gérer la base de données de tous vos employés, leurs contrats et informations.' },
   payroll: { label: 'État de Paie', icon: '🧾', desc: 'Génération, consultation et gestion des fiches de paie.' },
   leave: { label: 'Gestion des Congés', icon: '✈️', desc: 'Suivi et validation des demandes de congés et absences.' },
+  leave_calculator: { label: 'Calculateur de Congés', icon: '🧮', desc: 'Calcul automatique de la durée des permissions et congés.' },
 
   dashboard: { label: 'Pointage du Mois', icon: '🗓️', desc: 'Gérer les plannings et les pointages des agents sur les différents sites.' },
   fluctuation: { label: 'Fluctuation Salariale', icon: '📈', desc: 'Suivi et analyse des variations salariales et des primes/retenues.' },

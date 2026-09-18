@@ -274,7 +274,7 @@ function getDb()
         $db = new ElysiumPdoDb($dsn, $user, $pass);
         
         // Optimisation : Ne pas exécuter les lourdes requêtes DDL à chaque requête API (crée un goulet d'étranglement)
-        $migration_flag = __DIR__ . '/mysql_migrated_v2.flag';
+        $migration_flag = __DIR__ . '/mysql_migrated_v3.flag';
         if (!file_exists($migration_flag)) {
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN statut_final VARCHAR(255) DEFAULT ''"); } catch (Exception $e) {}
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN motif_refus TEXT"); } catch (Exception $e) {}
@@ -282,6 +282,9 @@ function getDb()
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN agent_nom TEXT"); } catch (Exception $e) {}
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN agent_matricule TEXT"); } catch (Exception $e) {}
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN reclamation_categorie TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN numero_fiche VARCHAR(50)"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN avis_secretariat VARCHAR(255) DEFAULT ''"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN avis_comptabilite VARCHAR(255) DEFAULT ''"); } catch (Exception $e) {}
             // Unified definition for archives_pointage table – MySQL only
             try {
                 $db->exec("CREATE TABLE IF NOT EXISTS archives_pointage (
@@ -386,6 +389,40 @@ function getDb()
                 )");
                 // Migration: corriger le type si la table existait déjà avec user_id INT
                 try { $db->exec("ALTER TABLE user_column_prefs MODIFY COLUMN user_id VARCHAR(255) NOT NULL"); } catch (Exception $ex) {}
+            } catch (Exception $e) {}
+
+            // Migration: table pointage_delegations — délégation temporaire de site à un contrôleur
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS pointage_delegations (
+                    id              INT AUTO_INCREMENT PRIMARY KEY,
+                    company_id      VARCHAR(100) NOT NULL,
+                    period          VARCHAR(20)  NOT NULL,
+                    site_id         VARCHAR(100) NOT NULL,
+                    site_name       VARCHAR(255) NOT NULL,
+                    delegated_by    VARCHAR(255) NOT NULL,
+                    delegated_to    VARCHAR(255) NOT NULL,
+                    status          VARCHAR(20)  NOT NULL DEFAULT 'active',
+                    delegated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    returned_at     DATETIME DEFAULT NULL,
+                    notes           TEXT DEFAULT NULL,
+                    UNIQUE KEY uk_delegation_site_period (company_id, site_id, period, status)
+                )");
+            } catch (Exception $e) {}
+
+            // Migration: table system_notifications — notifications système en temps réel
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS system_notifications (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    user_email  VARCHAR(255) NOT NULL,
+                    company_id  VARCHAR(100) NOT NULL,
+                    type        VARCHAR(50)  NOT NULL,
+                    title       VARCHAR(255) NOT NULL,
+                    message     TEXT         NOT NULL,
+                    data        TEXT         DEFAULT NULL,
+                    is_read     TINYINT(1)   DEFAULT 0,
+                    created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_notif_user (user_email, company_id, is_read)
+                )");
             } catch (Exception $e) {}
 
             // Marquer la migration initiale comme effectuée
@@ -1226,6 +1263,24 @@ function initSchema(ElysiumDb $pdo): void
 
     try {
         $pdo->exec("ALTER TABLE agent_loans ADD COLUMN agent_id TEXT");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN statut_final TEXT DEFAULT ''");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN motif_refus TEXT DEFAULT ''");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN numero_fiche TEXT");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN services_cibles TEXT DEFAULT '[]'");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN avis_secretariat TEXT DEFAULT ''");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN avis_comptabilite TEXT DEFAULT ''");
     } catch(Exception $e) {}
 }
 

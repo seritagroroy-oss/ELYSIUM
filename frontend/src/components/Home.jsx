@@ -3,12 +3,13 @@ import {
   Search, CalendarDays, Printer, FileText, TrendingUp, 
   Table, MessageSquareWarning, PlusCircle, Users, 
   UserCheck, Package, Hammer, X, MapPin, Loader2, CheckCircle, AlertTriangle, Contact, Banknote, Plane, BarChart3, Shield, Briefcase, Clock, Database, Bell, DollarSign, MessageSquare, Archive, ShieldAlert,
-  Phone, Car, CreditCard, Paperclip, Crown, Siren, Eye, ScrollText, Target, ShieldOff, Megaphone, Sparkles, Scale, Network, BookOpen, Globe, PenTool, Map, Key, BarChart, Lock, Zap, Video, Radio, ClipboardList, Crosshair, Route, Star, Building2
+  Phone, Car, CreditCard, Paperclip, Crown, Siren, Eye, ScrollText, Target, ShieldOff, Megaphone, Sparkles, Scale, Network, BookOpen, Globe, PenTool, Map, Key, BarChart, Lock, Zap, Video, Radio, ClipboardList, Crosshair, Route, Star, Building2, Calculator
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { apiCall } from '../api';
+import { MASTER_MODULES } from '../modulesConfig';
 
-export default function Home({ setView, user }) {
+export default function Home({ setView, user, homeLayout, moveModule }) {
   const { hasPermission, hasWritePermission } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showDevModal, setShowDevModal] = useState(false);
@@ -63,219 +64,39 @@ export default function Home({ setView, user }) {
     loadRHAlerts();
   }, [user]);
 
-  // Définition des 10 cartes demandées
-  const cards = [
-    {
-      id: 'employes',
-      title: 'GESTION DES EMPLOYÉS',
-      description: 'Gérer la base de données de tous vos employés, leurs contrats et informations.',
-      icon: Contact,
-      color: '#f97316',
-      onClick: () => setView('employees'),
-      perm: 'employees'
-    },
-    {
-      id: 'fiche_paie',
-      title: 'ÉTAT DE PAIE',
-      description: 'Génération, consultation et gestion des fiches de paie.',
-      icon: Banknote,
-      color: '#10b981',
-      onClick: () => setView('payroll'),
-      perm: 'payroll'
-    },
-    {
-      id: 'conge',
-      title: 'GESTION DES CONGÉS',
-      description: 'Suivi et validation des demandes de congés et absences.',
-      icon: Plane,
-      color: '#0ea5e9',
-      onClick: () => setView('leave_admin'),
-      perm: 'leave'
-    },
+  const [contextMenu, setContextMenu] = useState(null);
 
-    {
-      id: 'pointage',
-      title: 'Pointage du mois',
-      description: 'Gérer les plannings et les pointages des agents sur les différents sites.',
-      icon: CalendarDays,
-      color: '#38bdf8',
-      onClick: () => setView('dashboard'),
-      perm: 'dashboard'
-    },
-    
-    {
-      id: 'fluctuation',
-      title: 'FLUTUATION SALARIALE',
-      description: 'Suivi et analyse des variations salariales et des primes/retenues.',
-      icon: TrendingUp,
-      color: '#fbbf24',
-      onClick: () => setView('fluctuation'),
-      perm: 'fluctuation'
-    },
-    {
-      id: 'company_config',
-      title: 'CONFIGURATION ENTREPRISE',
-      description: 'Gérer les postes, fonctions et salaires de base des agents.',
-      icon: Building2,
-      color: '#8b5cf6',
-      onClick: () => setView('company_config'),
-      perm: 'company_config'
-    },
-    {
-      id: 'calcul_salaires',
-      title: 'CALCUL DES SALAIRES',
-      description: 'Génération et validation du calcul global des salaires.',
-      icon: DollarSign,
-      color: '#2dd4bf',
-      onClick: () => setView('calcul_salaires'),
-      perm: 'calcul_salaires'
-    },
-    {
-      id: 'verification',
-      title: 'TRAITEMENT DU POINTAGE',
-      description: 'Vérification, validation et traitement des pointages.',
-      icon: CheckCircle,
-      color: '#818cf8',
-      onClick: () => setView('verification'),
-      perm: 'verification'
-    },
-    {
-      id: 'facturation',
-      title: 'FACTURATION CLIENTS',
-      description: 'Gérer les contrats et la facturation des sites clients.',
-      icon: Briefcase,
-      color: '#10b981',
-      onClick: () => setView('facturation'),
-      perm: 'facturation'
-    },
-    {
-      id: 'grille_salariale',
-      title: 'GRILLE SALARIALE',
-      description: 'Consulter et modifier la grille de rémunération par fonction/poste.',
-      icon: Table,
-      color: '#f472b6',
-      onClick: () => setView('grille_salariale'),
-      perm: 'salaries'
-    },
-    {
-      id: 'permissions_absence',
-      title: 'GESTION DES PERMISSIONS',
-      description: 'Suivi et historique des agents ayant obtenu une permission exceptionnelle d\'absence.',
-      icon: Clock,
-      color: '#f59e0b',
-      onClick: () => setView('permissions_absence'),
-      perm: 'permissions'
-    },
-    {
-      id: 'contrats',
-      title: 'GESTION DES CONTRATS',
-      description: 'Gérez les contrats de travail, les renouvellements et les périodes d\'essai.',
-      icon: Briefcase,
-      color: '#f43f5e',
-      onClick: () => setView('contracts'),
-      perm: 'contracts'
-    },
-    {
-      id: 'registry',
-      title: 'REGISTRE GÉNÉRAL',
-      description: 'Consulter l\'effectif total de l\'entreprise (actifs, sortis, incertains).',
-      icon: Database,
-      color: '#60a5fa',
-      onClick: () => setView('registry'),
-      perm: 'registry'
-    },
-    {
-      id: 'reclamation',
-      title: 'RECLAMATION PAIE',
-      description: 'Gérer les erreurs de pointage et les réclamations liées aux salaires.',
-      icon: MessageSquareWarning,
-      color: '#fb7185',
-      onClick: () => setView('reclamations'),
-      perm: 'reclamation_view'
-    },
-    
-    {
-      id: 'suivi_personnel',
-      title: 'SUIVI DU PERSONNEL',
-      description: 'Dossiers des agents, sanctions, absences prolongées, mutations.',
-      icon: UserCheck,
-      color: '#e879f9',
-      onClick: () => setView('suivi_personnel'),
-      perm: 'suivi_personnel'
-    },
-    {
-      id: 'archives',
-      title: 'ARCHIVES & RAPPORTS',
-      description: 'Consulter l\'historique des rapports passés.',
-      icon: Archive,
-      color: '#9ca3af',
-      onClick: () => setView('archives'),
-      perm: 'archives'
-    },
-    {
-      id: 'services',
-      title: 'GESTION DES PROFILS',
-      description: 'Gérer les accès et habilitations des services.',
-      icon: ShieldAlert,
-      color: '#ef4444',
-      onClick: () => setView('services'),
-      perm: 'services'
-    },
+  const handleContextMenuHome = (e, moduleId) => {
+    e.preventDefault();
+    setContextMenu({
+      type: 'home',
+      moduleId,
+      x: e.clientX,
+      y: e.clientY
+    });
+  };
 
-    {
-      id: 'registre_visiteurs',
-      title: 'REGISTRE DES VISITEURS',
-      description: 'Enregistrer l\'arrivée et le départ des visiteurs extérieurs.',
-      icon: Users,
-      color: '#fb923c',
-      onClick: () => setView('registre_visiteurs'),
-      perm: 'registre_visiteurs'
-    },
-    {
-      id: 'pointage_courriers',
-      title: 'POINTAGE COURRIERS / COLIS',
-      description: 'Enregistrer les arrivées de colis et notifier les collaborateurs.',
-      icon: Package,
-      color: '#a78bfa',
-      onClick: () => setView('pointage_courriers'),
-      perm: 'pointage_courriers'
-    },
-    
-    {
-      id: 'dg_audit',
-      title: 'AUDIT & TRAÇABILITÉ',
-      description: 'Journal complet des actions sensibles de l\'entreprise.',
-      icon: ScrollText,
-      color: '#64748b',
-      onClick: () => setView('dg_audit'),
-      perm: 'dg_audit'
-    },
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    {
-      id: 'pc_main_courante',
-      title: 'REGISTRE CENTRAL INCIDENTS',
-      description: 'Supervision globale des mains courantes de tous les sites.',
-      icon: ClipboardList,
-      color: '#3b82f6',
-      onClick: () => setView('pc_main_courante'),
-      perm: 'pc_main_courante'
-    },
-    
-    
+  const closeContextMenu = () => setContextMenu(null);
 
-    
-    
-    
-  ];
+  useEffect(() => {
+    const handleClickOutside = () => closeContextMenu();
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Définition des cartes demandées via l'état global
+  const cards = (homeLayout || []).map(id => {
+    const mod = MASTER_MODULES.find(m => m.id === id);
+    if (!mod) return null;
+    return {
+      ...mod,
+      onClick: () => {
+        if (mod.id === 'gps') setShowGPSModal(true);
+        else if (['pc_main_courante', 'dg_audit', 'pointage_courriers', 'registre_visiteurs'].includes(mod.id)) setShowDevModal(true);
+        else setView(mod.viewId);
+      }
+    };
+  }).filter(Boolean);
 
   // Filtrage des cartes par rapport à la recherche et aux permissions
   const filteredCards = cards.filter(card => {
@@ -286,8 +107,8 @@ export default function Home({ setView, user }) {
         if (!hasPermission('reclamation_view') && !hasPermission('reclamation_edit')) return false;
       }
       else if (card.perm !== 'admin') {
-        // Appliquer globalement la règle : s'affiche sur l'accueil UNIQUEMENT s'il a un droit de modification
-        if (!hasWritePermission(card.perm)) return false;
+        // Si l'utilisateur a au moins le droit de voir le module, on l'affiche sur l'accueil
+        if (!hasPermission(card.perm)) return false;
       }
     }
     // Filtrage par texte
@@ -401,18 +222,15 @@ export default function Home({ setView, user }) {
           {filteredCards.map((card, idx) => {
             const Icon = card.icon;
             return (
-              <div
-                key={card.id}
-                data-tour={
-                  card.id === 'analytics' ? 'home_dashboard' :
-                  card.id === 'fiche_paie' ? 'home_payroll' :
-                  card.id === 'verification' ? 'home_verification' : undefined
-                }
+              <div 
+                key={card.id} 
+                className="home-module-card"
                 onClick={card.onClick}
+                onContextMenu={(e) => handleContextMenuHome(e, card.id)}
                 style={{
                   background: 'var(--card)',
+                  borderRadius: '24px',
                   border: `1px solid ${card.color}60`,
-                  borderRadius: '16px',
                   padding: '24px',
                   cursor: 'pointer',
                   position: 'relative',
@@ -630,6 +448,30 @@ export default function Home({ setView, user }) {
           color: rgba(255, 255, 255, 0.7) !important;
         }
       `}</style>
+
+      {/* Menu contextuel pour les cartes de l'accueil */}
+      {contextMenu && contextMenu.type === 'home' && (
+        <div 
+          style={{ 
+            position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 100000,
+            background: '#1e293b', border: '1px solid #475569', borderRadius: '12px',
+            padding: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', minWidth: '220px'
+          }}
+          onMouseLeave={closeContextMenu}
+        >
+          <button 
+            onClick={() => { moveModule(contextMenu.moduleId, 'home'); closeContextMenu(); }}
+            style={{ 
+              width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', 
+              color: 'white', textAlign: 'left', cursor: 'pointer', borderRadius: '8px', fontSize: '0.95rem'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            Déplacer vers le Menu
+          </button>
+        </div>
+      )}
     </div>
   );
 }

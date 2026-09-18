@@ -157,19 +157,10 @@ switch ($action) {
 
 
         // Inject default sites
-        $has_extras = false;
         $has_releves = false;
-        $has_admin = false;
-        $has_itc = false;
-        $has_extras_sur_site = false;
         foreach ($sites as $s) {
-            if ($s['id'] === 'site_extras') $has_extras = true;
-            if ($s['id'] === 'site_extras_sur_site') $has_extras_sur_site = true;
             if ($s['id'] === 'site_releves') $has_releves = true;
-            if ($s['id'] === 'site_administration') $has_admin = true;
-            if ($s['id'] === 'site_itc') $has_itc = true;
         }
-        
 
 
         if (!$has_releves) {
@@ -204,12 +195,8 @@ switch ($action) {
                     }
 
                     if (empty($custom_subsites)) {
-                        if ($site_ref['id'] === 'site_extras') {
-                            $site_ref['subsites'] = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
-                        } elseif ($site_ref['id'] === 'site_releves') {
+                        if ($site_ref['id'] === 'site_releves') {
                             $site_ref['subsites'] = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-                        } elseif ($site_ref['id'] === 'site_administration') {
-                            $site_ref['subsites'] = [['id' => 'site_admin_1', 'name' => 'Bureau']];
                         } else {
                             $site_ref['subsites'] = [['id' => 'default_' . $site_ref['id'], 'name' => 'Zone Principale']];
                         }
@@ -219,81 +206,23 @@ switch ($action) {
                     }
                     continue;
                 }
-                // Pour site_itc : isolation complète par company_id
-                if ($site_ref['id'] === 'site_itc') {
-                    try {
-                        $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($company_id)), 0, 12);
-                        $itc_zones = [];
-                        if (isset($allSubsitesBySite['site_itc'])) {
-                            foreach ($allSubsitesBySite['site_itc'] as $sub) {
-                                if (isset($sub['company_id']) && $sub['company_id'] === $company_id) {
-                                    $itc_zones[] = $sub;
-                                }
-                            }
-                        }
-                        
-                        if (!empty($itc_zones)) {
-                            $site_ref['subsites'] = $itc_zones;
-                        } else {
-                            // Première ouverture pour cette entreprise → créer les zones par défaut
-                            $default_zones = [
-                                ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Reguliere'],
-                                ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
-                                ['id' => 'itc_as_' . $comp_suffix, 'name' => 'Agent Special'],
-                                ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS']
-                            ];
-                            try {
-                                $stmtIns = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, ?, ?, ?)");
-                                foreach ($default_zones as $dz) {
-                                    $stmtIns->execute([$dz['id'], $dz['name'], $serviceKey, $company_id]);
-                                }
-                            } catch (Exception $e2) { /* Ignore */ }
-                            $site_ref['subsites'] = $default_zones;
-                        }
-                    } catch (Exception $e) {
-                        $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($company_id)), 0, 12);
-                        $site_ref['subsites'] = [
-                            ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Reguliere'],
-                            ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
-                            ['id' => 'itc_as_' . $comp_suffix, 'name' => 'Agent Special'],
-                            ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS']
-                        ];
-                    }
-                    continue;
-                }
+
                 $site_ref['subsites'] = $allSubsitesBySite[$site_ref['id']] ?? [];
             }
 
             // Calculate agents_count for all sites
             // Option A: Exclude agents from relay/extras pools (site_releves)
             // Option B: Exclude agents who ONLY have deployment statuses this period (passing through)
-            // Uses LEFT JOIN + HAVING in a derived table for performance
+            // Uses direct COUNT from agents table for performance
             try {
                 $stmtAgCountAll = $sqlite->prepare("
-                    SELECT subsite_id, COUNT(*) as cnt FROM (
-                        SELECT a.subsite_id, a.id
-                        FROM agents a
-                        JOIN subsites sub ON a.subsite_id = sub.id
-                        LEFT JOIN attendance att
-                            ON att.agent_id = a.id
-                            AND att.period = ?
-                            AND att.company_id = a.company_id
-                        WHERE a.company_id = ?
-                        AND (a.archived_period IS NULL OR a.archived_period = '' OR a.archived_period >= ?)
-                        AND sub.site_id NOT IN ('site_releves')
-                        GROUP BY a.subsite_id, a.id
-                        HAVING
-                            COUNT(att.id) = 0
-                            OR SUM(
-                                CASE WHEN att.status NOT LIKE 'Suppl|%'
-                                      AND att.status NOT LIKE 'M|%'
-                                      AND att.status NOT LIKE 'PM|%'
-                                THEN 1 ELSE 0 END
-                            ) > 0
-                    ) titulaires
+                    SELECT subsite_id, COUNT(id) as cnt
+                    FROM agents
+                    WHERE company_id = ?
+                    AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?)
                     GROUP BY subsite_id
                 ");
-                $stmtAgCountAll->execute([$period, $company_id, $period]);
+                $stmtAgCountAll->execute([$company_id, $period]);
                 $allCounts = $stmtAgCountAll->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 $countsBySubsite = [];
                 foreach ($allCounts as $row) {
@@ -358,17 +287,11 @@ switch ($action) {
                     $subsites_rows = $stmt->fetchAll();
 
                     // Inject default subsites for special sites if empty
-                    $is_hardcoded = in_array($site_id, ['site_extras', 'site_releves']);
+                    $is_hardcoded = in_array($site_id, ['site_releves']);
                     if ($is_hardcoded) {
                         if (empty($subsites_rows)) {
-                            if ($site_id === 'site_extras') {
-                                $subsites_rows = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
-                            } elseif ($site_id === 'site_extras_sur_site') {
-                                $subsites_rows = [['id' => 'default_site_extras_sur_site', 'name' => 'Zone Principale']];
-                            } elseif ($site_id === 'site_releves') {
+                            if ($site_id === 'site_releves') {
                                 $subsites_rows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-                            } elseif ($site_id === 'site_administration') {
-                                $subsites_rows = [['id' => 'site_admin_1', 'name' => 'Staff Administratif']];
                             } else {
                                 $subsites_rows = [['id' => 'default_' . $site_id, 'name' => 'Zone Principale']];
                             }
@@ -752,7 +675,7 @@ switch ($action) {
                         $is_relevant = false;
                         $target_subsite_id = null;
                         foreach ($raw_att2 as $att) {
-                            if (strpos($att['status'], 'M|' . $clean_site_name) === 0 || strpos($att['status'], 'M|%' . $clean_site_name) === 0 || (strpos($att['status'], 'M|') === 0 && strpos($att['status'], $clean_site_name) !== false) || strpos($att['status'], 'PM|' . $clean_site_name) === 0 || (strpos($att['status'], 'PM|') === 0 && strpos($att['status'], $clean_site_name) !== false)) {
+                            if (strpos($att['status'], 'M|' . $site_name) === 0 || strpos($att['status'], 'M|%' . $site_name) === 0 || (strpos($att['status'], 'M|') === 0 && strpos($att['status'], $site_name) !== false) || strpos($att['status'], 'PM|' . $site_name) === 0 || (strpos($att['status'], 'PM|') === 0 && strpos($att['status'], $site_name) !== false)) {
                                 // Muted fully
                                 $filtered_att[] = [
                                     'date' => $att['date'],
@@ -760,7 +683,7 @@ switch ($action) {
                                     'status' => ''
                                 ];
                                 $is_relevant = true;
-                            } else if ((strpos($att['status'], 'EXT_1|') === 0 || strpos($att['status'], 'REL_1|') === 0 || strpos($att['status'], 'M_1|') === 0 || strpos($att['status'], 'REL_T|') === 0) && strpos($att['status'], $clean_site_name) !== false) {
+                            } else if ((strpos($att['status'], 'EXT_1|') === 0 || strpos($att['status'], 'REL_1|') === 0 || strpos($att['status'], 'M_1|') === 0 || strpos($att['status'], 'REL_T|') === 0) && strpos($att['status'], $site_name) !== false) {
                                 // Ignore same-site standard mutations from mutated_agents
                                 if ($orig_site && $orig_site['id'] === $site_id) {
                                     continue;
@@ -1016,7 +939,7 @@ switch ($action) {
         $global_agents = [];
         try {
             $stmtGlobal = $sqlite->prepare("
-                SELECT a.id, a.name, a.function, a.subsite_id, sub.name as subsite_name, s.name as site_name, sub.site_id as site_id 
+                SELECT a.id, a.name, a.function, a.subsite_id, a.profile_data, sub.name as subsite_name, s.name as site_name, sub.site_id as site_id 
                 FROM agents a 
                 LEFT JOIN subsites sub ON a.subsite_id = sub.id 
                 LEFT JOIN sites s ON sub.site_id = s.id 
@@ -1057,7 +980,8 @@ switch ($action) {
                     'site_name' => $computed_site_name ?: 'Site',
                     'site_id' => $computed_site_id,
                     'raw_site_id' => $a['site_id'],
-                    'raw_subsite_id' => $a['subsite_id']
+                    'raw_subsite_id' => $a['subsite_id'],
+                    'profile_data' => $a['profile_data']
                 ];
             }, $raw_globals);
             
@@ -1077,219 +1001,6 @@ switch ($action) {
             'permissions' => []
         ]);
         break;
-
-    case 'get_dashboard_init':
-        $sqlite = getDb();
-        $service_id = $_SESSION['service_id'] ?? null;
-        if (!$service_id) {
-            echo json_encode([
-                'success' => false, 
-                'message' => 'No service selected', 
-                'totals' => ['agents' => 0, 'sites' => 0, 'incidents' => 0, 'absences' => 0],
-                'chart_data' => []
-            ]);
-            break;
-        }
-
-        $period = $_GET['period'] ?? date('Y-m');
-
-        // Settings du cycle
-        $settings_raw = getServiceDataSql($service_id, 'settings', ['cycle_start' => 21, 'cycle_end' => 20]);
-        if (!is_array($settings_raw)) $settings_raw = ['cycle_start' => 21, 'cycle_end' => 20];
-        $start_day = (int)($settings_raw['cycle_start'] ?? 21);
-        $end_day = (int)($settings_raw['cycle_end'] ?? 20);
-        $dates = getPeriodDates($period, $start_day, $end_day);
-
-        // Salary config
-        $companyId = resolveCurrentCompanyIdSql();
-        $stmtGrid = $sqlite->prepare("SELECT poste, taux_horaire FROM salary_grid WHERE company_id = ? ORDER BY id ASC");
-        $stmtGrid->execute([$companyId]);
-        $salary_config_raw = [];
-        while($row = $stmtGrid->fetch()) {
-            $salary_config_raw[$row['poste']] = (int)$row['taux_horaire'];
-        }
-
-        // 1. Agents par site (réel) - Mapping PHP pour gérer les sites virtuels
-        $stmtSubsites = $sqlite->prepare("SELECT id, site_id FROM subsites WHERE service_id = ?");
-        $stmtSubsites->execute([$service_id]);
-        $subsitesMap = [];
-        foreach ($stmtSubsites->fetchAll() ?: [] as $sub) {
-            $subsitesMap[$sub['id']] = $sub['site_id'];
-        }
-        
-        $stmtAllAgents = $sqlite->prepare("SELECT * FROM agents WHERE service_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?)");
-        $stmtAllAgents->execute([$service_id, $period]);
-        $allAgents = $stmtAllAgents->fetchAll() ?: [];
-
-        $agentsBySiteCounts = [];
-        $totalAgents = count($allAgents);
-
-        foreach ($allAgents as $agent) {
-            $subId = $agent['subsite_id'] ?? '';
-            $siteId = $subsitesMap[$subId] ?? null;
-            if (!$siteId) {
-                if (strpos($subId, 'site_extras') !== false) $siteId = 'site_extras';
-                elseif (strpos($subId, 'site_releves') !== false) $siteId = 'site_releves';
-                elseif (strpos($subId, 'site_admin') !== false) $siteId = 'site_administration';
-                else $siteId = 'Inconnu';
-            }
-            if (!isset($agentsBySiteCounts[$siteId])) $agentsBySiteCounts[$siteId] = 0;
-            $agentsBySiteCounts[$siteId]++;
-        }
-
-        // Noms des sites
-        $stmtSites = $sqlite->prepare("SELECT id, name FROM sites WHERE service_id = ? AND source_module != 'FACTURATION'");
-        $stmtSites->execute([$service_id]);
-        $sitesData = $stmtSites->fetchAll() ?: [];
-        $siteNames = [];
-        foreach ($sitesData as $s) {
-            $siteNames[$s['id']] = $s['name'];
-        }
-
-        $agentsBySiteFormatted = [];
-        foreach ($agentsBySiteCounts as $siteId => $total) {
-            $name = $siteNames[$siteId] ?? $siteId;
-            if ($siteId === 'site_extras') $name = 'Vivier Extras';
-            if ($siteId === 'site_releves') $name = 'Vivier Relèves';
-            if ($siteId === 'site_administration') $name = 'Administration';
-            $agentsBySiteFormatted[] = ['name' => $name, 'value' => $total];
-        }
-
-        $totalPresences = 0;
-        $totalAbsences = 0;
-        $totalMasseSalariale = 0;
-
-        // Calcul par semaine pour le graphique barres
-        $weekData = [];
-        $weekSize = max(1, intval(count($dates) / 4));
-        for ($w = 0; $w < 4; $w++) {
-            $weekData[$w] = ['Présents' => 0, 'Absents' => 0];
-        }
-
-        $agentMap = [];
-        foreach ($allAgents as $ag) {
-            $agentMap[$ag['id']] = true;
-        }
-        
-        $all_attendances = [];
-        $stmtAttAll = $sqlite->prepare("SELECT agent_id, date, shift_code, status FROM attendance WHERE period = ?");
-        $stmtAttAll->execute([$period]);
-        while ($att = $stmtAttAll->fetch(PDO::FETCH_ASSOC)) {
-            if (isset($agentMap[$att['agent_id']])) {
-                $all_attendances[$att['agent_id']][] = $att;
-            }
-        }
-
-        foreach ($allAgents as $agent) {
-            $agent_id = $agent['id'];
-            $func_id = $agent['function'] ?? 'AS';
-            $base = isset($agent['salary']) && (int)$agent['salary'] > 0
-                ? (int)$agent['salary']
-                : (isset($salary_config_raw[$func_id]) ? (int)$salary_config_raw[$func_id] : 75000);
-
-            $att_rows = $all_attendances[$agent_id] ?? [];
-
-            $att_map = [];
-            foreach ($att_rows as $att) {
-                $att_map[$att['shift_code']][$att['date']] = $att['status'];
-            }
-
-            $agent_absences = 0;
-            $agent_sp = 0;
-            foreach ($dates as $idx => $date) {
-                $weekIdx = min(3, intval($idx / $weekSize));
-                $dayPresent = false;
-                $dayAbsent = false;
-
-                // Vérifier Jour
-                $statusJ = $att_map['J'][$date] ?? '';
-                if ($statusJ === 'A' || in_array($statusJ, ['ABANDON', 'DEMISSION'])) { $agent_absences++; $dayAbsent = true; }
-                elseif ($statusJ === '1' || $statusJ === 'P') { $dayPresent = true; }
-
-                // Vérifier Nuit
-                $statusN = $att_map['N'][$date] ?? '';
-                if ($statusN === 'A' || in_array($statusN, ['ABANDON', 'DEMISSION'])) { $agent_absences++; $dayAbsent = true; }
-                elseif ($statusN === '1' || $statusN === 'P') { $dayPresent = true; }
-
-                // Supplémentaires
-                foreach (['S', 'SJ', 'SN'] as $sp_key) {
-                    $sp_status = $att_map[$sp_key][$date] ?? '';
-                    if ($sp_status !== '' && $sp_status !== 'A' && $sp_status !== 'R') {
-                        $agent_sp++;
-                    }
-                }
-
-                if ($dayPresent) $weekData[$weekIdx]['Présents']++;
-                if ($dayAbsent) $weekData[$weekIdx]['Absents']++;
-            }
-
-            $totalAbsences += $agent_absences;
-            $deductions = (int)round($agent_absences * ($base / 30));
-            $gains = (int)round($agent_sp * ($base / 30));
-            $totalMasseSalariale += ($base - $deductions + $gains);
-        }
-
-        // Nombre total de jours potentiels travaillés
-        $totalPossibleDays = $totalAgents * count($dates);
-        $presenceRate = $totalPossibleDays > 0 ? round((1 - ($totalAbsences / $totalPossibleDays)) * 100, 1) : 0;
-        $totalPresences = $totalPossibleDays - $totalAbsences;
-
-        $monthlyAttendance = [];
-        for ($w = 0; $w < 4; $w++) {
-            $monthlyAttendance[] = [
-                'name' => 'Semaine ' . ($w + 1),
-                'Présents' => $weekData[$w]['Présents'],
-                'Absents' => $weekData[$w]['Absents']
-            ];
-        }
-
-        // 3. Évolution masse salariale (6 derniers mois — estimation rapide par nombre d'agents)
-        $salaryFluctuation = [];
-        $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-        for ($i = 5; $i >= 0; $i--) {
-            $pastDate = date('Y-m', strtotime("-$i months"));
-            $pastYear = date('Y', strtotime("-$i months"));
-            $pastMonth = (int)date('m', strtotime("-$i months")) - 1;
-            $label = $monthNames[$pastMonth] . ' ' . substr($pastYear, 2);
-
-            // Compter les agents actifs pour ce mois
-            $stmtPast = $sqlite->prepare("SELECT COUNT(*) as cnt FROM agents WHERE service_id = ? AND (archived_period IS NULL OR archived_period = '' OR archived_period >= ?)");
-            $stmtPast->execute([$service_id, $pastDate]);
-            $pastRow = $stmtPast->fetch();
-            $pastCount = (int)($pastRow['cnt'] ?? 0);
-
-            // Estimation : nombre d'agents * salaire moyen (75000 par défaut)
-            $avgSalary = 75000;
-            if (!empty($salary_config_raw)) {
-                $vals = array_values($salary_config_raw);
-                $numericVals = array_filter($vals, 'is_numeric');
-                if (!empty($numericVals)) {
-                    $avgSalary = (int)(array_sum($numericVals) / count($numericVals));
-                }
-            }
-            $salaryFluctuation[] = ['month' => $label, 'MasseSalariale' => $pastCount * $avgSalary];
-        }
-
-        // Formater la masse salariale
-        $masseSalarialeLabel = $totalMasseSalariale;
-        if ($totalMasseSalariale >= 1000000) {
-            $masseSalarialeLabel = round($totalMasseSalariale / 1000000, 1) . 'M';
-        } elseif ($totalMasseSalariale >= 1000) {
-            $masseSalarialeLabel = round($totalMasseSalariale / 1000, 0) . 'K';
-        }
-
-        echo json_encode([
-            'success' => true,
-            'period' => $period,
-            'totalAgents' => $totalAgents,
-            'presenceRate' => $presenceRate,
-            'totalAbsences' => $totalAbsences,
-            'masseSalariale' => $totalMasseSalariale,
-            'masseSalarialeLabel' => $masseSalarialeLabel,
-            'agentsBySite' => $agentsBySiteFormatted,
-            'monthlyAttendance' => $monthlyAttendance,
-            'salaryFluctuation' => $salaryFluctuation
-        ]);
         break;
 
     case 'get_pointage_for_archive':

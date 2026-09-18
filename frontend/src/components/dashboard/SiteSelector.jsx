@@ -9,6 +9,8 @@ import StatsPanel from '../StatsPanel';
 import BlacklistModal from '../BlacklistModal';
 import DeleteSiteModal from '../modals/DeleteSiteModal';
 import PublishReportModal from '../modals/PublishReportModal';
+import DeleguerSiteModal from '../modals/DeleguerSiteModal';
+import RestitutionModal from '../modals/RestitutionModal';
 
 const SITE_EMOJIS = ['🏢', '🏗', '🏭', '🏬', '🏪', '🏦', '🏥', '🏨', '🏫', '🏛', '🗼', '🗽', '⛪', '🕌', '🕍', '🛕', '🏠', '🏡', '🏚', '🏰', '🏯', '⚓', '🚒', '🚑', '🚔', '🧱', '🔒', '🛡', '⚙️', '🔧', '🔑', '📡', '💡', '🌍', '🌿', '⭐', '🔥', '💎', '🎯', '📊'];
 
@@ -47,6 +49,23 @@ export default function SiteSelector({ state, actions }) {
 
   // Ref pour le champ de recherche
   const searchInputRef = React.useRef(null);
+
+  // Modal délégation
+  const [showDeleguerModal, setShowDeleguerModal] = React.useState(false);
+
+  // Modal restitution
+  const [showRestitutionModal, setShowRestitutionModal] = React.useState(false);
+  const [restitutionError, setRestitutionError] = React.useState(null);
+  const [isRestituting, setIsRestituting] = React.useState(false);
+
+  // Toast notification
+  const [toastMsg, setToastMsg] = React.useState(null);
+  const showToast = React.useCallback((message, type = 'success') => {
+    setToastMsg({ message, type });
+    setTimeout(() => setToastMsg(null), 4000);
+  }, []);
+
+  const isControllerMode = sites.some(s => s.is_controller_mode);
 
   // Raccourci clavier universel Ctrl + K
   React.useEffect(() => {
@@ -615,39 +634,98 @@ export default function SiteSelector({ state, actions }) {
               )}
 
               {!isVerificationMode && !isArchiveMode && viewMode === 'current' && !isEmptyMonth && (
-                <div className="sites-action-buttons" style={{ position: 'relative' }}>
-                  <button
-                    className={`btn ${publishedPeriods.includes(period) ? 'btn-secondary' : ''}`}
-                    onClick={() => setShowPublishModal(true)}
-                    disabled={publishedPeriods.includes(period)}
-                    style={publishedPeriods.includes(period) ? { padding: '8px 16px', fontSize: '0.9rem' } : {
-                      padding: '8px 16px', fontSize: '0.9rem',
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
-                      border: '1px solid rgba(16, 185, 129, 0.6)',
-                      fontWeight: 'bold',
-                      color: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      transition: 'all 0.3s ease'
-                    }}
-                    onMouseEnter={e => {
-                      if (!publishedPeriods.includes(period)) {
+                <div className="sites-action-buttons" style={{ position: 'relative', display: 'flex', gap: '10px' }}>
+                  {isControllerMode ? (
+                    <button
+                      className="btn"
+                      onClick={() => setShowRestitutionModal(true)}
+                      style={{
+                        padding: '8px 16px', fontSize: '0.9rem',
+                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                        boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)',
+                        border: '1px solid rgba(245, 158, 11, 0.6)',
+                        fontWeight: 'bold',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onMouseEnter={e => {
                         e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.6)';
-                      }
-                    }}
-                    onMouseLeave={e => {
-                      if (!publishedPeriods.includes(period)) {
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(245, 158, 11, 0.6)';
+                      }}
+                      onMouseLeave={e => {
                         e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.4)';
-                      }
-                    }}
-                  >
-                    <Check size={18} style={{ strokeWidth: 3 }} />
-                    {publishedPeriods.includes(period) ? `Pointage publié ✅` : `PUBLIER LE POINTAGE`}
-                  </button>
+                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(245, 158, 11, 0.4)';
+                      }}
+                    >
+                      <span style={{ fontSize: '1.1rem' }}>↩️</span>
+                      RESTITUER LE SITE
+                    </button>
+                  ) : (
+                    <button
+                      className="btn"
+                      onClick={() => setShowDeleguerModal(true)}
+                      style={{
+                        padding: '8px 16px', fontSize: '0.9rem',
+                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                        boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
+                        border: '1px solid rgba(59, 130, 246, 0.6)',
+                        fontWeight: 'bold',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.6)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.4)';
+                      }}
+                    >
+                      <span style={{ fontSize: '1.1rem' }}>🤝</span>
+                      DÉLÉGUER
+                    </button>
+                  )}
+                  {!isControllerMode && (
+                    <button
+                      className={`btn ${publishedPeriods.includes(period) ? 'btn-secondary' : ''}`}
+                      onClick={() => setShowPublishModal(true)}
+                      disabled={publishedPeriods.includes(period)}
+                      style={publishedPeriods.includes(period) ? { padding: '8px 16px', fontSize: '0.9rem' } : {
+                        padding: '8px 16px', fontSize: '0.9rem',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
+                        border: '1px solid rgba(16, 185, 129, 0.6)',
+                        fontWeight: 'bold',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onMouseEnter={e => {
+                        if (!publishedPeriods.includes(period)) {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.6)';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!publishedPeriods.includes(period)) {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.4)';
+                        }
+                      }}
+                    >
+                      <Check size={18} style={{ strokeWidth: 3 }} />
+                      {publishedPeriods.includes(period) ? `Pointage publié ✅` : `PUBLIER LE POINTAGE`}
+                    </button>
+                  )}
                   {publishedPeriods.includes(period) && (
                     <button
                       onClick={() => setShowPublishReport(true)}
@@ -663,13 +741,16 @@ export default function SiteSelector({ state, actions }) {
                   )}
                   {!publishedPeriods.includes(period) ? (
                     <>
-
-                      <button className="btn btn-primary" onClick={() => setShowBlacklist(true)} style={{ background: '#ef4444', padding: '8px 16px', fontSize: '0.9rem' }}>
-                        <ShieldAlert size={16} /> Liste Noire
-                      </button>
-                      <button className="btn btn-primary" onClick={() => setShowAddSite(true)} style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
-                        <Plus size={16} /> Nouveau Site
-                      </button>
+                      {!isControllerMode && (
+                        <>
+                          <button className="btn btn-primary" onClick={() => setShowBlacklist(true)} style={{ background: '#ef4444', padding: '8px 16px', fontSize: '0.9rem' }}>
+                            <ShieldAlert size={16} /> Liste Noire
+                          </button>
+                          <button className="btn btn-primary" onClick={() => setShowAddSite(true)} style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
+                            <Plus size={16} /> Nouveau Site
+                          </button>
+                        </>
+                      )}
                       <div style={{ 
                         position: 'absolute',
                         top: 'calc(100% + 20px)',
@@ -678,37 +759,38 @@ export default function SiteSelector({ state, actions }) {
                         gap: '10px',
                         zIndex: 50
                       }}>
-                        <button 
-                          className="btn hover-scale" 
-                          onClick={(e) => { 
-                            e.preventDefault(); 
-                            e.stopPropagation(); 
-                            setShowCalendar(true); 
-                          }} 
-                          style={{ 
-                            padding: '8px 16px', fontSize: '0.85rem', width: 'max-content', 
-                            background: 'linear-gradient(135deg, #0d9488, #0f766e)', 
-                            border: '1px solid #14b8a6', color: 'white', borderRadius: '8px',
-                            display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center',
-                            boxShadow: '0 8px 20px rgba(13, 148, 136, 0.4)',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'linear-gradient(135deg, #14b8a6, #0d9488)';
-                            e.currentTarget.style.boxShadow = '0 12px 28px rgba(13, 148, 136, 0.7)';
-                            e.currentTarget.style.transform = 'translateY(-3px) scale(1.03)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'linear-gradient(135deg, #0d9488, #0f766e)';
-                            e.currentTarget.style.boxShadow = '0 8px 20px rgba(13, 148, 136, 0.4)';
-                            e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                          }}
-                        >
-                          📅 Suivi Pointage
-                        </button>
-
+                        {!isControllerMode && (
+                          <button 
+                            className="btn hover-scale" 
+                            onClick={(e) => { 
+                              e.preventDefault(); 
+                              e.stopPropagation(); 
+                              setShowCalendar(true); 
+                            }} 
+                            style={{ 
+                              padding: '8px 16px', fontSize: '0.85rem', width: 'max-content', 
+                              background: 'linear-gradient(135deg, #0d9488, #0f766e)', 
+                              border: '1px solid #14b8a6', color: 'white', borderRadius: '8px',
+                              display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center',
+                              boxShadow: '0 8px 20px rgba(13, 148, 136, 0.4)',
+                              cursor: 'pointer',
+                              fontWeight: 'bold',
+                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'linear-gradient(135deg, #14b8a6, #0d9488)';
+                              e.currentTarget.style.boxShadow = '0 12px 28px rgba(13, 148, 136, 0.7)';
+                              e.currentTarget.style.transform = 'translateY(-3px) scale(1.03)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'linear-gradient(135deg, #0d9488, #0f766e)';
+                              e.currentTarget.style.boxShadow = '0 8px 20px rgba(13, 148, 136, 0.4)';
+                              e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                            }}
+                          >
+                            📅 Suivi Pointage
+                          </button>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -1842,6 +1924,77 @@ export default function SiteSelector({ state, actions }) {
           onClose={() => setShowCalendar(false)} 
           period={period} 
         />
+      )}
+
+      {/* ============ MODAL DÉLÉGATION ============ */}
+      {showDeleguerModal && (
+        <DeleguerSiteModal
+          sites={sites}
+          currentPeriod={period}
+          onClose={() => setShowDeleguerModal(false)}
+          onSuccess={(site, user) => {
+            if (window.loadDashboardData) window.loadDashboardData(period);
+            showToast(`Site « ${site.name} » délégué avec succès à ${user.name} !`, 'success');
+            setShowDeleguerModal(false);
+          }}
+        />
+      )}
+
+      {/* ============ MODAL RESTITUTION ============ */}
+      <RestitutionModal
+        isOpen={showRestitutionModal}
+        onClose={() => setShowRestitutionModal(false)}
+        siteName={(sites.find(s => s.id === activeSiteId) || sites.find(s => s.is_controller_mode))?.name || 'ce site'}
+        isLoading={isRestituting}
+        error={restitutionError}
+        onConfirm={async () => {
+          setIsRestituting(true);
+          setRestitutionError(null);
+          const siteIdToReturn = activeSiteId || sites.find(s => s.is_controller_mode)?.id;
+          const siteNameToReturn = (sites.find(s => s.id === siteIdToReturn) || sites.find(s => s.is_controller_mode))?.name || 'ce site';
+          try {
+            const res = await apiCall('return_delegated_site', { period, site_id: siteIdToReturn });
+            if (res.success) {
+              showToast(`Site « ${siteNameToReturn} » restitué avec succès !`, 'success');
+              if (sites.length <= 1) {
+                window.location.reload();
+              } else {
+                if (window.loadDashboardData) window.loadDashboardData(period);
+                setShowRestitutionModal(false);
+              }
+            } else {
+              setRestitutionError(res.message || 'Erreur lors de la restitution.');
+              setIsRestituting(false);
+            }
+          } catch(e) {
+            setRestitutionError('Erreur réseau.');
+            setIsRestituting(false);
+          }
+        }}
+      />
+
+      {/* ============ TOAST NOTIFICATION ============ */}
+      {toastMsg && (
+        <div style={{
+          position: 'fixed', bottom: '32px', right: '32px', zIndex: 999999,
+          display: 'flex', alignItems: 'center', gap: '12px',
+          padding: '14px 20px', borderRadius: '14px',
+          background: toastMsg.type === 'success'
+            ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+            : toastMsg.type === 'error'
+            ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+            : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+          color: 'white', fontWeight: 700, fontSize: '0.95rem',
+          maxWidth: '420px', animation: 'slideInToast 0.3s ease'
+        }}>
+          <style>{`@keyframes slideInToast { from { opacity:0; transform:translateY(20px) scale(0.95); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span style={{ flex: 1 }}>{toastMsg.message}</span>
+          <button onClick={() => setToastMsg(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.7, padding: 0, display: 'flex' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       )}
     </>
     );

@@ -1148,12 +1148,7 @@ export default function SiteSelector({ state, actions }) {
                               <span>📍</span> {site.subsites ? site.subsites.length : 0} zone{site.subsites && site.subsites.length > 1 ? 's' : ''}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b' }}>
-                              <Users size={14} color="#f59e0b" /> {(() => {
-                                return (site.subsites || []).reduce((acc, sub) => acc + (sub.agents ? sub.agents.length : 0), 0);
-                              })()} agent{(() => {
-                                const total = (site.subsites || []).reduce((acc, sub) => acc + (sub.agents ? sub.agents.length : 0), 0);
-                                return total > 1 ? 's' : '';
-                              })()}
+                              <Users size={14} color="#f59e0b" /> {site.agents_count || 0} agent{(site.agents_count || 0) > 1 ? 's' : ''}
                             </div>
                           </div>
                         )}
@@ -1773,7 +1768,7 @@ export default function SiteSelector({ state, actions }) {
           }}
           onConfirm={async () => {
             try {
-              const res = await apiCall('delete_site', { site_id: deleteSiteData.id, motif: 'Suppression depuis dashboard' });
+              const res = await apiCall('delete_site', { site_id: deleteSiteData.id, motif: 'Suppression depuis dashboard', period });
               if (res.success) {
                 const newSites = sites.filter(s => s.id !== deleteSiteData.id);
                 setSites(newSites);

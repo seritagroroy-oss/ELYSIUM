@@ -43,30 +43,15 @@ switch ($action) {
         $stmt = $sqlite->prepare($query);
         $stmt->execute($params);
         $sites_rows = $stmt->fetchAll();
-
-        // Inject virtual sites
-        $has_extras = false;
+        
         $has_releves = false;
-        $has_admin = false;
-        $has_itc = false;
         foreach ($sites_rows as $s) {
-            if ($s['id'] === 'site_extras')
-                $has_extras = true;
-            if ($s['id'] === 'site_releves')
-                $has_releves = true;
-            if ($s['id'] === 'site_administration')
-                $has_admin = true;
-            if ($s['id'] === 'site_itc')
-                $has_itc = true;
+            if ($s['id'] === 'site_releves') $has_releves = true;
         }
         if (($is_billed === null || $is_billed != '0') && $module !== 'FACTURATION') {
-
-            if (!$has_releves)
+            if (!$has_releves) {
                 $sites_rows[] = ['id' => 'site_releves', 'name' => '🔄 Vivier des relèves', 'is_billed' => 1];
-            if (!array_filter($sites_rows, fn($s) => $s['id'] === 'site_extras_sur_site'))
-                $sites_rows[] = ['id' => 'site_extras_sur_site', 'name' => '🌟 EXTRA SUR SITE', 'is_billed' => 1];
-
-
+            }
         }
 
         $sites = $sites_rows;
@@ -356,6 +341,18 @@ switch ($action) {
         $sqlite->prepare("DELETE FROM subsites WHERE site_id = ?")->execute([$site_id]);
         $sqlite->prepare("DELETE FROM sites WHERE id = ?")->execute([$site_id]);
         error_log("DEBUG delete_site: finished deleting site_id = " . $site_id);
+        
+        if (function_exists('logBlackBox')) {
+            $period = $data['period'] ?? date('Y-m');
+            // Chercher le serviceKey lié à ce site
+            $stmtSvc = $sqlite->prepare("SELECT id FROM services WHERE company_id = ? LIMIT 1");
+            $stmtSvc->execute([$company_id]);
+            $svcRow = $stmtSvc->fetch();
+            $serviceKey = $svcRow['id'] ?? resolveCurrentServiceKeySql();
+            $log_details = "Site: {$site_name}";
+            logBlackBox($sqlite, $company_id, $serviceKey, $period, 'DELETE_SITE', $log_details);
+        }
+
         echo json_encode(['success' => true]);
         break;
     case 'rename_subsite':
@@ -467,8 +464,28 @@ switch ($action) {
             echo json_encode(['success' => false, 'message' => 'Accès refusé']);
             break;
         }
-        $serviceKey = $_SESSION['service_id'] ?? null;
         $subsite_id = $data['subsite_id'] ?? '';
+        $site_name_to_log = $subsite_id;
+        $snapshot_data = !empty($data['screenshot']) ? saveScreenshot($data['screenshot']) : null;
+        if ($subsite_id) {
+            // Récupère à la fois le nom de la zone et le nom du site parent
+            $stmt = getDb()->prepare("SELECT sub.*, s.name as site_name FROM subsites sub LEFT JOIN sites s ON sub.site_id = s.id WHERE sub.id = ?");
+            $stmt->execute([$subsite_id]);
+            $res = $stmt->fetch();
+            if ($res) {
+                if (!$snapshot_data) $snapshot_data = json_encode($res, JSON_UNESCAPED_UNICODE);
+                $parent_name = !empty($res['site_name']) ? $res['site_name'] : '';
+                $zone_name = !empty($res['name']) ? $res['name'] : '';
+                
+                if ($parent_name && $zone_name) {
+                    $site_name_to_log = $parent_name . ' / ' . $zone_name;
+                } elseif ($zone_name) {
+                    $site_name_to_log = $zone_name;
+                }
+            }
+        }
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_SUBSITE', "Site: " . $site_name_to_log, $snapshot_data);
+        $serviceKey = $_SESSION['service_id'] ?? null;
         if (!$subsite_id) {
             echo json_encode(['success' => false, 'message' => 'Sous-site manquant']);
             break;
@@ -548,59 +565,21 @@ switch ($action) {
         $site_data = [];
 
         if ($site_id !== null && $site_id !== '' && $serviceKey) {
-            $is_hardcoded = in_array($site_id, ['site_extras', 'site_extras_sur_site', 'site_releves', 'site_administration']);
+            $is_hardcoded = in_array($site_id, ['site_releves']);
 
             if ($is_hardcoded) {
                 $site = ['id' => $site_id, 'name' => ''];
-                if ($site_id === 'site_extras')
-                    $site['name'] = '🌟 EXTRA BUREAU';
-                if ($site_id === 'site_extras_sur_site')
-                    $site['name'] = '⭐ EXTRA SUR SITE';
                 if ($site_id === 'site_releves')
                     $site['name'] = '🔄 Vivier des relèves';
-                if ($site_id === 'site_administration')
-                    $site['name'] = '🏢 Administration';
-                if ($site_id === 'site_itc')
-                    $site['name'] = 'ITC / IFM';
 
-                // Fetch subsites avec isolation complète par company_id
-                if ($site_id === 'site_itc') {
-                    // ITC/IFM : chaque entreprise a ses propres zones, filtrées par company_id
-                    $comp_suffix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($company_id)), 0, 12);
-                    $stmtItcComp = $sqlite->prepare("SELECT * FROM subsites WHERE site_id = 'site_itc' AND company_id = ? ORDER BY created_at ASC");
-                    $stmtItcComp->execute([$company_id]);
-                    $itc_comp = $stmtItcComp->fetchAll();
-                    if (!empty($itc_comp)) {
-                        $subsites_rows = $itc_comp;
+                $stmt = $sqlite->prepare("SELECT * FROM subsites WHERE site_id = ? AND (service_id = ? OR company_id = ? OR service_id IS NULL OR service_id = '')");
+                $stmt->execute([$site_id, $serviceKey, $company_id]);
+                $subsites_rows = $stmt->fetchAll();
+
+                if (empty($subsites_rows)) {
+                    if ($site_id === 'site_releves') {
+                        $subsites_rows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
                     } else {
-                        // Première ouverture pour cette entreprise → créer les 3 zones par défaut
-                        $default_zones = [
-                            ['id' => 'itc_tenue_' . $comp_suffix, 'name' => 'Tenue Reguliere'],
-                            ['id' => 'itc_costume_' . $comp_suffix, 'name' => 'Costume'],
-                            ['id' => 'itc_as_' . $comp_suffix, 'name' => 'Agent Special'],
-                            ['id' => 'itc_ots_' . $comp_suffix, 'name' => 'OTS']
-                        ];
-                        try {
-                            $stmtIns = $sqlite->prepare("INSERT IGNORE INTO subsites (id, name, site_id, service_id, company_id) VALUES (?, ?, '', ?)");
-                            foreach ($default_zones as $dz) {
-                                $stmtIns->execute([$dz['id'], $dz['name'], $company_id]);
-                            }
-                        } catch (Exception $e) { /* Ignore */ }
-                        $subsites_rows = $default_zones;
-                    }
-                } else {
-                    $stmt = $sqlite->prepare("SELECT * FROM subsites WHERE site_id = ? AND (service_id = ? OR company_id = ? OR service_id IS NULL OR service_id = '')");
-                    $stmt->execute([$site_id, $serviceKey, $company_id]);
-                    $subsites_rows = $stmt->fetchAll();
-
-                    if (empty($subsites_rows)) {
-                        if ($site_id === 'site_extras') {
-                            $subsites_rows = [['id' => 'site_extras_1', 'name' => 'Agents Disponibles']];
-                        } elseif ($site_id === 'site_releves') {
-                            $subsites_rows = [['id' => 'site_releves_1', 'name' => 'Agents Disponibles']];
-                        } elseif ($site_id === 'site_administration') {
-                            $subsites_rows = [['id' => 'site_admin_1', 'name' => 'Bureau']];
-                        } else {
                             $subsites_rows = [['id' => 'default_' . $site_id, 'name' => 'Zone Principale']];
                         }
                     } else {
@@ -739,7 +718,11 @@ switch ($action) {
                         }
                         $agent['profile_data'] = json_decode($agent['profile_data'] ?? '{}', true);
 
-                        
+                        // Propager is_releve depuis profile_data (agent marqué "Agent Relève" à la création)
+                        if (!empty($agent['profile_data']['is_releve']) || $site_id === 'site_releves') {
+                            $agent['is_releve'] = true;
+                        }
+
                         $agent['attendance'] = $all_attendances[$agent['id']] ?? [];
 
                         if (strpos($agent['id'], 'ag_') === 0) {
@@ -966,15 +949,7 @@ switch ($action) {
                         $mutated_agent['days_consumed_by_origin'] = $origin_base;
                         $mutated_agent['origin_absences'] = $origin_total_A + $origin_total_Exit;
 
-                        if (strpos($orig_site['id'], 'site_extras') !== false) {
-                            $mutated_agent['is_extra'] = true;
-                            $deployed_extras[] = $mutated_agent;
-                        } elseif (strpos($orig_site['id'], 'site_releves') !== false) {
-                            $mutated_agent['is_releve'] = true;
-                            $deployed_extras[] = $mutated_agent;
-                        } else {
-                            $mutated_agents[] = $mutated_agent;
-                        }
+                        $mutated_agents[] = $mutated_agent;
                     }
                 }
 
@@ -1116,8 +1091,7 @@ switch ($action) {
 
                 $site_data = $subsites;
             }
-        }
-
+            
         echo json_encode($site_data);
         break;
     case 'add_agent':
@@ -1183,12 +1157,15 @@ switch ($action) {
         $entrant_date_raw = $data['entrantDate'] ?? '';
         $entrant_motif = $data['entrantMotif'] ?? 'ENTRANT';
         
+        $is_releve_flag = isset($data['isReleve']) && $data['isReleve'] ? true : false;
+
         $profile_data = json_encode([
             'admin_schedule' => $admin_schedule,
             'admin_schedule_days' => $admin_schedule_days,
             'special_service' => $special_service,
             'special_service_base' => $special_service_base,
-            'special_service_days' => $special_service_days
+            'special_service_days' => $special_service_days,
+            'is_releve' => $is_releve_flag
         ]);
 
         $hire_date = $data['hire_date'] ?? date('Y-m-d');
@@ -1363,6 +1340,23 @@ switch ($action) {
             }
         }
 
+        // ─── Log Boîte Noire ───────────────────────────────────────────────────
+        $zone_name_for_log = $subsite_id;
+        if ($subsite_id) {
+            $stmtZone = $sqlite->prepare("SELECT sub.name as zone_name, s.name as site_name FROM subsites sub LEFT JOIN sites s ON sub.site_id = s.id WHERE sub.id = ?");
+            $stmtZone->execute([$subsite_id]);
+            $zoneRow = $stmtZone->fetch();
+            if ($zoneRow) {
+                $parts = [];
+                if (!empty($zoneRow['site_name'])) $parts[] = $zoneRow['site_name'];
+                if (!empty($zoneRow['zone_name'])) $parts[] = $zoneRow['zone_name'];
+                $zone_name_for_log = implode(' / ', $parts);
+            }
+        }
+        $log_details = "Agent: {$name} | Fonction: {$function} | Vacation: {$shift_type} | Zone: {$zone_name_for_log}";
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $company_id, $serviceKey, $period ?: date('Y-m'), 'ADD_AGENT', $log_details);
+        // ───────────────────────────────────────────────────────────────────────
+
         saveScopedData($db, $serviceKey);
         echo json_encode(['success' => true, 'agent_id' => $new_agent_id]);
         break;
@@ -1397,6 +1391,18 @@ switch ($action) {
         break;
     case 'delete_agent':
         $agent_id = $data['agent_id'] ?? '';
+        $agent_name_to_log = !empty($data['name']) ? $data['name'] : ($agent_id ?: 'Inconnu');
+        $snapshot_data = !empty($data['screenshot']) ? saveScreenshot($data['screenshot']) : null;
+        if ($agent_id) {
+            $stmt = getDb()->prepare("SELECT * FROM agents WHERE id = ?");
+            $stmt->execute([$agent_id]);
+            $res = $stmt->fetch();
+            if ($res) {
+                if (!$snapshot_data) $snapshot_data = json_encode($res, JSON_UNESCAPED_UNICODE);
+                if (empty($data['name']) && !empty($res['name'])) $agent_name_to_log = $res['name'];
+            }
+        }
+        if(function_exists('logBlackBox')) logBlackBox(getDb(), $_SESSION['company_id']??'comp_default_1', $_SESSION['service_id']??null, $data['period']??date('Y-m'), 'DELETE_AGENT', "Agent: " . $agent_name_to_log, $snapshot_data);
         $delete_all_sites = !empty($data['delete_all_sites']);
         $agent_name = $data['name'] ?? '';
         
@@ -1434,10 +1440,28 @@ switch ($action) {
         saveScopedData($db, $serviceKey);
         echo json_encode(['success' => true]);
         break;
+    case 'get_blackbox_logs':
+        $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
+        $sqlite = getDb();
+        $stmt = $sqlite->prepare("SELECT * FROM activity_logs WHERE company_id = ? ORDER BY action_date DESC");
+        $stmt->execute([$company_id]);
+        echo json_encode(['success' => true, 'logs' => $stmt->fetchAll()]);
+        break;
+
     case 'get_archived_agents':
         $company_id = $_SESSION['company_id'] ?? 'comp_default_1';
         $sqlite = getDb();
-        $stmt = $sqlite->prepare("SELECT id, name, `function`, exit_date, exit_reason, is_blacklisted FROM agents WHERE company_id = ? AND exit_date IS NOT NULL ORDER BY exit_date DESC");
+        $stmt = $sqlite->prepare("
+            SELECT
+                a.id, a.name, a.`function`, a.exit_date, a.exit_reason, a.is_blacklisted,
+                s.name  AS site_name,
+                sub.name AS subsite_name
+            FROM agents a
+            LEFT JOIN subsites sub ON a.subsite_id = sub.id
+            LEFT JOIN sites s ON sub.site_id = s.id
+            WHERE a.company_id = ? AND a.exit_date IS NOT NULL
+            ORDER BY a.exit_date DESC
+        ");
         $stmt->execute([$company_id]);
         $agents = $stmt->fetchAll();
         echo json_encode(['success' => true, 'agents' => $agents]);

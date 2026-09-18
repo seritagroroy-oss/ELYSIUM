@@ -247,6 +247,7 @@ const ALL_MODULES = {
   employees: '👥 Gestion des Employés',
   payroll: '🧾 État de Paie',
   leave: '✈️ Gestion des Congés',
+  leave_calculator: '🧮 Calculateur de Congés',
 
   dashboard: '📅 Pointage du Mois',
   fluctuation: '📈 Fluctuation Salariale',
@@ -1269,7 +1270,7 @@ export default function ServiceManagement() {
       {/* Modal Modifier Permissions */}
       {editingUser && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '30px' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '700px', padding: '30px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Modifier les permissions</h3>
               <button onClick={() => setEditingUser(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}><X size={20} /></button>

@@ -274,7 +274,7 @@ function getDb()
         $db = new ElysiumPdoDb($dsn, $user, $pass);
         
         // Optimisation : Ne pas exécuter les lourdes requêtes DDL à chaque requête API (crée un goulet d'étranglement)
-        $migration_flag = __DIR__ . '/mysql_migrated.flag';
+        $migration_flag = __DIR__ . '/mysql_migrated_v3.flag';
         if (!file_exists($migration_flag)) {
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN statut_final VARCHAR(255) DEFAULT ''"); } catch (Exception $e) {}
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN motif_refus TEXT"); } catch (Exception $e) {}
@@ -282,6 +282,9 @@ function getDb()
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN agent_nom TEXT"); } catch (Exception $e) {}
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN agent_matricule TEXT"); } catch (Exception $e) {}
             try { $db->exec("ALTER TABLE reclamations ADD COLUMN reclamation_categorie TEXT"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN numero_fiche VARCHAR(50)"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN avis_secretariat VARCHAR(255) DEFAULT ''"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE reclamations ADD COLUMN avis_comptabilite VARCHAR(255) DEFAULT ''"); } catch (Exception $e) {}
             // Unified definition for archives_pointage table – MySQL only
             try {
                 $db->exec("CREATE TABLE IF NOT EXISTS archives_pointage (
@@ -373,8 +376,24 @@ function getDb()
             try { $db->exec("ALTER TABLE agent_loans ADD COLUMN agent_id VARCHAR(100)"); } catch (Exception $e) {}
             try { $db->exec("ALTER TABLE agent_loans ADD COLUMN already_paid INTEGER DEFAULT 0"); } catch (Exception $e) {}
             
+            // Migration: table user_column_prefs pour les préférences de colonnes par utilisateur
+            try {
+                $db->exec("CREATE TABLE IF NOT EXISTS user_column_prefs (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id     VARCHAR(255) NOT NULL,
+                    company_id  VARCHAR(100) NOT NULL,
+                    view_key    VARCHAR(50) NOT NULL DEFAULT 'payroll_table',
+                    prefs       TEXT NOT NULL,
+                    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_user_column_prefs (user_id, company_id, view_key)
+                )");
+                // Migration: corriger le type si la table existait déjà avec user_id INT
+                try { $db->exec("ALTER TABLE user_column_prefs MODIFY COLUMN user_id VARCHAR(255) NOT NULL"); } catch (Exception $ex) {}
+            } catch (Exception $e) {}
+
             // Marquer la migration initiale comme effectuée
             @file_put_contents($migration_flag, date('Y-m-d H:i:s'));
+
         }
     } else {
         $db = new ElysiumDb(SQLITE_FILE);
@@ -582,6 +601,16 @@ function initSchema(ElysiumDb $pdo): void
             motif TEXT,
             period TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_column_prefs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            company_id  TEXT NOT NULL,
+            view_key    TEXT NOT NULL DEFAULT 'payroll_table',
+            prefs       TEXT NOT NULL,
+            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, company_id, view_key)
         );
 
         CREATE TABLE IF NOT EXISTS agent_sanctions (
@@ -1201,6 +1230,24 @@ function initSchema(ElysiumDb $pdo): void
     try {
         $pdo->exec("ALTER TABLE agent_loans ADD COLUMN agent_id TEXT");
     } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN statut_final TEXT DEFAULT ''");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN motif_refus TEXT DEFAULT ''");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN numero_fiche TEXT");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN services_cibles TEXT DEFAULT '[]'");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN avis_secretariat TEXT DEFAULT ''");
+    } catch(Exception $e) {}
+    try {
+        $pdo->exec("ALTER TABLE reclamations ADD COLUMN avis_comptabilite TEXT DEFAULT ''");
+    } catch(Exception $e) {}
 }
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
@@ -1340,4 +1387,47 @@ function getAttendanceStats(string $companyId, string $period = ''): array
         'turnover'      => $turnover,
         'period'        => $period,
     ];
+}
+
+function saveScreenshot($base64) {
+    if (empty($base64)) return null;
+    if (preg_match('/^data:image\/(\w+);base64,/', $base64, $type)) {
+        $base64 = substr($base64, strpos($base64, ',') + 1);
+        $type = strtolower($type[1]);
+        if ($type === 'jpeg') $type = 'jpg'; // normaliser l'extension
+        if (!in_array($type, ['jpg', 'png', 'gif', 'webp'])) return null;
+        $base64 = str_replace(' ', '+', $base64);
+        $data = base64_decode($base64);
+        if ($data === false) return null;
+        $filename = uniqid('snap_') . '.' . $type;
+        $dir = dirname(__DIR__) . '/uploads/snapshots';
+        if (!is_dir($dir)) mkdir($dir, 0777, true);
+        file_put_contents($dir . '/' . $filename, $data);
+        return 'uploads/snapshots/' . $filename;
+    }
+    return null;
+}
+
+function logBlackBox($db, $company_id, $service_id, $period, $action_type, $details, $snapshot_data = null) {
+    if (!$db || !$company_id || !$period || !$action_type) return false;
+    
+    $user = $_SESSION['user_name'] ?? 'SYSTEM';
+    
+    try {
+        $now = date('Y-m-d H:i:s');
+        $stmt = $db->prepare("INSERT INTO activity_logs (company_id, service_id, period, action_date, user, action_type, details, snapshot_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        return $stmt->execute([
+            $company_id,
+            $service_id,
+            $period,
+            $now,
+            $user,
+            $action_type,
+            $details,
+            $snapshot_data
+        ]);
+    } catch (Exception $e) {
+        error_log("BlackBox Error: " . $e->getMessage());
+        return false;
+    }
 }
